@@ -1,42 +1,31 @@
-# Connex Lab v0.3.6
+# Connex Lab v0.3.7
 
-Interaction and connection-geometry stabilization release.
+Rotation-island and right-panel state fix.
 
-### Attachment selection reliability
-- selected attachment points now remain live references to their piece instead of stale world-space coordinates;
-- rod-body points are recomputed from their saved axial position whenever the rod moves;
-- discrete point hit radius is increased and supplemented by a physical raycast fallback when rods/connectors overlap on screen;
-- a selected source stays selected until a valid compatible target succeeds or the user explicitly deselects it;
-- reconnecting a connector preserves/rebuilds its primary mount record so later rotation still knows which real connection is the pivot.
+### XYZ gizmo no longer breaks on moved/off-axis constructions
+- X/Y/Z remain fixed WORLD axes and still snap to exact 45-degree increments;
+- the normal XYZ gizmo now behaves like a game-engine transform gizmo: it rotates the entire connected construction island rigidly around the selected piece;
+- socket, CROSS, axle and O-Ring relationships inside that island receive the same rigid transform, so their relative geometry cannot be altered by the XYZ operation;
+- the gizmo no longer cuts the selected connector's primary mount edge and then tries to validate an arbitrarily oriented branch against old world/rest geometry;
+- previous movement, reattachment, arbitrary world angle, or an already off-axis build therefore cannot make the XYZ rings stop working;
+- disconnected constructions remain independent: only the selected piece's connected island moves;
+- dedicated Roll remains the mount-relative operation for changing a connector around its real rod/axle/CROSS axis.
 
-### Rotation gizmo stabilization
-- the selected-piece gizmo remains fixed to WORLD X/Y/Z axes;
-- drag tracking no longer integrates a screen tangent that can flip after assemblies are moved/rotated;
-- the drag follows the actual projected ring parameter continuously and unwraps its angle;
-- the resulting transform still snaps to exact 45° world-axis states and still validates the connection graph before committing;
-- invalid rotation directions remain disabled/greyed.
+### Rotate / Move accordion hardened
+- Rotate and Move now have one authoritative state variable instead of two independently visible panel bodies;
+- opening Rotate always closes Move, and opening Move always closes Rotate;
+- entering ROTATE sets the accordion to Rotate;
+- every UI refresh re-applies the authoritative state;
+- a final per-frame invariant repairs any inherited visibility change before both panels can remain open;
+- Reset Placement Rotation preserves the current accordion state explicitly, fixing the case where pressing Reset opened Move underneath Rotate.
 
-### Rotate / Move accordion
-- Rotate and Move are now a strict one-open-at-a-time accordion;
-- entering ROTATE automatically opens Rotate and closes Move;
-- manually opening either utility always collapses the other;
-- panel bounds are recalculated from the viewport and clipped so their contents cannot draw through each other.
-
-### Reset Placement Rotation fixed
-- reset no longer relies on the connector's stale absolute world-space creation basis;
-- socket reset reconstructs the default orientation from the connector's current mounted rod/socket;
-- axle reset reconstructs orientation from the current axle axis while preserving axial slide position;
-- cross reset reconstructs orientation from the current cross rod and socket;
-- previous 45° Roll steps are therefore actually removed while the current mount stays attached.
-
-### True CROSS geometry
-- CROSS is corrected to match the intended physical connection: the rod is perpendicular to the connector's flat face, parallel to the connector's axle axis, but passes through a side clamp rather than the center hub;
-- creation, explicit attachment, validation and automatic cross-fusion all use this same rule;
-- the old in-plane cross rule is removed.
+### Reset behavior retained
+- v0.3.7 inherits the v0.3.6 mount-relative home orientation store;
+- Reset Placement Rotation still restores a connector relative to its current host rod rather than an old absolute world basis.
 
 ### Signing / update compatibility
-- Android versionCode is 17;
+- Android versionCode is 18;
 - package ID remains `com.pixel375.connex`;
-- v0.3.6 uses the same permanent signing certificate as v0.2.1+;
+- v0.3.7 uses the same permanent signing certificate as v0.2.1+;
 - it updates in place over permanently signed earlier builds and preserves app data/settings;
 - GitHub Actions verifies the signing certificate before publishing.

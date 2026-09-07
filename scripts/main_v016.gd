@@ -79,6 +79,32 @@ func _refresh_mode_segment_v016() -> void:
 	edit_mode_button_v016.add_theme_stylebox_override("hover", _button_style(active_hover if edit_mode else inactive_hover))
 
 
+# Connector/rod rebuilds queue the old MeshInstance3D children for deletion.
+# v0.1.5 refreshed the outline in the same frame and accidentally cloned those
+# queued meshes as well as the new ones, so an old 8-way highlight could remain
+# around a newly changed 1-way connector. Build the outline only from live mesh
+# children and always destroy the previous highlight first.
+func _refresh_selection_highlight() -> void:
+	_clear_selection_highlight()
+	if not edit_mode or not is_instance_valid(selected_piece):
+		return
+	var body: RigidBody3D = selected_piece
+	var highlight: Node3D = Node3D.new()
+	highlight.name = "SelectionHighlight"
+	highlighted_body = body
+	body.add_child(highlight)
+	for child_value in body.get_children():
+		var source: MeshInstance3D = child_value as MeshInstance3D
+		if source == null or source.mesh == null or source.is_queued_for_deletion():
+			continue
+		var outline: MeshInstance3D = MeshInstance3D.new()
+		outline.mesh = source.mesh
+		outline.transform = source.transform
+		outline.scale = source.scale * 1.16
+		outline.material_override = _selection_mat()
+		highlight.add_child(outline)
+
+
 func _update_ui() -> void:
 	super._update_ui()
 	# The old toggle stays hidden; the two explicit buttons are the only mode UI.

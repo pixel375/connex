@@ -4,9 +4,9 @@
 
 > K'NEX is a trademark of its respective owner. This project is unofficial, unaffiliated, and does not ship official artwork or copied 3D assets.
 
-## Current version — v0.3.5
+## Current version — v0.3.6
 
-v0.3.5 corrects the two main v0.3.4 regressions: rotation is world-axis based again with the gizmo drawn on the selected object, and ATTACH is a strict SOCKET / AXLE / CROSS state machine instead of a generic point-inference tool.
+v0.3.6 stabilizes ATTACH selection and the world rotation gizmo, makes Rotate/Move a strict accordion, fixes Reset Placement Rotation, and corrects CROSS so its rod is perpendicular to the connector face rather than lying in the connector plane.
 
 ## Pieces
 
@@ -44,17 +44,18 @@ ROTATE uses a game-engine-style X/Y/Z ring gizmo around the selected piece:
 - red X, green Y and blue Z rings are fixed **WORLD axes**;
 - the gizmo is attached visually to the selected piece, not embedded in a menu;
 - the gizmo root is forced to world identity orientation every frame;
-- camera angle only changes the projection of the visible rings, never the physical axis;
-- drag distance selects an integer number of exact 45° steps;
-- the applied transform is always an exact world-axis 45° multiple;
+- camera angle changes only how the rings are projected on screen, never which physical axis is used;
+- v0.3.6 tracks the continuous parameter around the projected ring instead of integrating a screen tangent, preventing drag direction from breaking after assemblies are moved or rotated;
+- the applied transform is always an exact 45° world-axis multiple;
 - invalid directions are greyed by the connection-graph validator;
-- **Roll** remains a separate operation around the actual socket/cross/axle mount axis.
+- **Roll** remains a separate operation around the actual socket/cross/axle mount axis;
+- **Reset Placement Rotation** reconstructs the connector's default orientation from its current mount instead of using a stale world-space creation basis.
 
 Ordinary world taps do not create pieces in ROTATE mode. Use the one-shot **Select** button when you need to choose another piece.
 
 ### ATTACH
 
-ATTACH follows the bottom connection mode explicitly instead of inferring a mode from arbitrary point combinations.
+ATTACH follows the bottom connection mode explicitly.
 
 **SOCKET**
 - visible points: rod ends + connector sockets only;
@@ -69,7 +70,8 @@ ATTACH follows the bottom connection mode explicitly instead of inferring a mode
 **CROSS**
 - visible discrete points: connector sockets;
 - tap the exact desired position on a physical rod shaft for the rod-side point;
-- valid pair: connector socket ↔ rod shaft.
+- valid pair: connector side socket ↔ rod shaft;
+- the rod is **perpendicular to the connector's flat face**, parallel to the connector's axle axis, but passes through a side clamp instead of the center hole.
 
 Workflow:
 
@@ -77,19 +79,20 @@ Workflow:
 2. tap one valid source point;
 3. Connex keeps that source selected in yellow;
 4. only a compatible counterpart is accepted for the second tap;
-5. unrelated taps do not silently change the source;
-6. press **Deselect Point** to clear the source explicitly.
+5. the selected point is recomputed from the piece's current transform if the piece moves;
+6. point picking uses larger projected targets plus a physical raycast fallback for crowded/overlapping geometry;
+7. press **Deselect Point** to clear the source explicitly.
 
-If the chosen rod and connector already have a different connection type, Connex can replace that existing pair edge. The old SOCKET/CROSS/AXLE connection is excluded from rigid-component validation first, the replacement geometry is calculated, and the old edge is removed only after the new state validates. Invalid attempts leave the original connection intact.
+If the chosen rod and connector already have a different connection type, Connex can replace that existing pair edge. The old connection is excluded from rigid-component validation first, the replacement geometry is calculated, and the old edge is removed only after the new state validates. Invalid attempts leave the original connection intact.
 
-Rod-shaft picking can ray past an overlapping connector to find the rod behind it, improving AXLE/CROSS selection near existing joints.
+When a connector's primary mount is replaced, the new connection becomes its primary pivot when appropriate so later Roll/world-gizmo operations continue to use the correct topology.
 
 ## Connection graph
 
 Connex explicitly records:
 
 - socket/end snap — a specific rod end ↔ a specific connector socket;
-- cross snap — a specific connector socket ↔ an exact recorded rod-body position;
+- cross snap — a specific connector socket ↔ an exact recorded rod-body position, with rod axis parallel to the connector normal;
 - hub axle — connector hub ↔ rod with axial slide/rotation DOFs;
 - O-Ring Stop — rigid axle stop ↔ host axle rod;
 - automatic fusion — compatible overlaps create the same graph records as explicit attachments.
@@ -99,7 +102,7 @@ Connex explicitly records:
 - **Top toolbar:** Select, Undo, Redo, Simulate/Build, Restore, Restart, Center, Options, Help.
 - **Status strip:** a separate line directly below the toolbar for version/runtime messages.
 - **Left:** CREATE / ROTATE / ATTACH, Delete Selected, ATTACH point deselection.
-- **Right:** collapsible Rotate and Move panels. Rotate contains only selected-piece info, world-gizmo guidance, real-mount Roll and Reset; the gizmo itself is in the 3D viewport.
+- **Right:** Rotate and Move are a strict one-open-at-a-time accordion. Entering ROTATE opens Rotate and closes Move; manually opening either closes the other.
 - **Bottom:** permanent rod/connector palette and creation connection mode.
 
 ## Camera and Options
@@ -112,11 +115,11 @@ Connex explicitly records:
 - camera sensitivity and grid visibility;
 - settings persist in `user://connex_settings.cfg`.
 
-Camera movement changes the view only. Placement orientation and normal X/Y/Z rotation no longer derive their physical axes or connector roll from the camera.
+Camera movement changes the view only. Placement orientation and X/Y/Z rotation never derive their physical axes or connector roll from the camera.
 
 ## Updates and signing
 
-Starting with v0.2.1, release APKs use one permanent Android signing certificate and package ID `com.pixel375.connex`. v0.3.5 uses the same certificate and Android versionCode 16, so it installs in place over permanently signed earlier versions and preserves settings/data.
+Starting with v0.2.1, release APKs use one permanent Android signing certificate and package ID `com.pixel375.connex`. v0.3.6 uses the same certificate and Android versionCode 17, so it installs in place over permanently signed earlier versions and preserves settings/data.
 
 Options contains **App Updates**. Since v0.3.3, Connex reads the latest GitHub Release, downloads the APK with Godot `HTTPRequest` into `user://`, displays progress, verifies the GitHub Release SHA-256 digest when available, then opens the verified APK through Godot's Android FileProvider / normal package installer path.
 

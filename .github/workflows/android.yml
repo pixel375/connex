@@ -133,7 +133,9 @@ jobs:
           fi
           test -s "build/${APK_NAME}"
           sha256sum "build/${APK_NAME}" > "build/${APK_NAME}.sha256"
-          apksigner verify --verbose --print-certs "build/${APK_NAME}" | tee "build/${APK_NAME}.signing.txt"
+          APKSIGNER="$ANDROID_HOME/build-tools/35.0.1/apksigner"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs "build/${APK_NAME}" | tee "build/${APK_NAME}.signing.txt"
           if [[ "${{ github.event_name }}" == "push" && "${{ contains(github.event.head_commit.message, '[release]') }}" == "true" ]]; then
             grep -F "Signer #1 certificate SHA-256 digest: $(echo "$EXPECTED_RELEASE_CERT_SHA256" | tr -d ':' | tr '[:upper:]' '[:lower:]')" "build/${APK_NAME}.signing.txt"
           fi

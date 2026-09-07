@@ -1,4 +1,4 @@
-extends "res://scripts/main_v036.gd"
+extends "res://scripts/main_v036_mount_home.gd"
 
 const VERSION_037 := "0.3.7"
 

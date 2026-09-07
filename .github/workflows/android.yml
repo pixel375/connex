@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -100,9 +100,17 @@ jobs:
       - name: Parse project and smoke-test main scene
         shell: bash
         run: |
-          set -euxo pipefail
-          godot --headless --path . --editor --quit
-          godot --headless --path . --quit-after 2
+          set -euo pipefail
+          godot --headless --path . --editor --quit 2>&1 | tee /tmp/godot-editor.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|Failed to load script" /tmp/godot-editor.log; then
+            echo "Godot parser reported a script error."
+            exit 1
+          fi
+          godot --headless --path . --quit-after 2 2>&1 | tee /tmp/godot-smoke.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|Failed to load script" /tmp/godot-smoke.log; then
+            echo "Godot smoke run reported a script error."
+            exit 1
+          fi
 
       - name: Export Android APK
         shell: bash

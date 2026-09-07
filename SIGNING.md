@@ -2,9 +2,11 @@
 
 Connex Lab uses package ID `com.pixel375.connex`.
 
-Starting with v0.2.1, release APKs are intended to be signed by one permanent release key. The public certificate SHA-256 fingerprint is:
+Starting with v0.2.1, release APKs are signed by one permanent release key. The authoritative public certificate SHA-256 fingerprint is:
 
-`24:A4:0D:73:4E:EC:AF:5B:E2:75:CF:C1:4C:71:7C:B0:F7:51:D7:E7:C1:DF:99:E8:89:5E:F6:27:12:A2:A4:55`
+`BF:CD:2B:59:70:91:E4:AA:FE:4F:27:93:FD:14:A7:9A:2A:D4:94:0D:D1:06:9D:18:74:9C:E7:A9:99:50:D4:22`
+
+This fingerprint was independently re-verified from the published v0.3.7 APK with Android `apksigner`. The release workflow verifies the decoded release keystore against the same fingerprint before export and verifies the finished APK again after signing. CI also checks that this documented fingerprint stays synchronized with the workflow value.
 
 The private keystore and passwords must never be committed to this repository.
 

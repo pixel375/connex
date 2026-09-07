@@ -1,43 +1,35 @@
-# Connex Lab v0.3.2
+# Connex Lab v0.3.3
 
-Editor workflow simplification focused on making construction, rotation, and connection editing easier to understand on a phone.
+Updater and phone-layout reliability release.
 
-### Three editor modes
-- replaces the v0.3 Re-seat / Detach / Attach / Cancel tool stack with three large persistent modes on the left: **CREATE**, **ROTATE**, and **ATTACH**;
-- **CREATE** performs normal construction only; rotation gizmos and attachment handles are hidden;
-- **ROTATE** shows the fixed-world XYZ gizmo and real-mount Roll controls; ordinary world taps do not accidentally create parts;
-- **ATTACH** shows connection points directly and uses a simple tap-point → tap-compatible-point workflow;
-- **Delete Selected** moves to the left-side mode panel;
-- Move and Rotate utility panels now live on the right and start collapsed; opening one collapses the other.
+### Android updater rebuilt
+- removes the failing JavaClassWrapper / Android `DownloadManager.Request` construction path used by v0.3.1/v0.3.2;
+- downloads update APKs directly with Godot `HTTPRequest` into Connex's private `user://` storage;
+- shows live bytes/percentage while downloading;
+- validates successful HTTP completion and rejects missing or implausibly small files;
+- reads the SHA-256 digest published on the GitHub Release asset and verifies the downloaded APK before installation;
+- hands the verified local APK to Android through Godot `OS.shell_open()`, which uses Godot's built-in Android FileProvider integration;
+- keeps a verified APK available so **Install** can be tapped again if Android first asks the user to allow installs from Connex Lab;
+- failed transfers clean up the partial APK and restore **Retry Download** instead of getting stuck.
 
-### Point-based ATTACH mode
-- shows rod ends, multiple rod-body mount points, every connector socket, connector axle hubs, and O-Rings;
-- point colors are deliberately distinct: cyan rod ends, blue rod-body points, green sockets, purple hubs/O-Rings, orange occupied points, and a large yellow marker/label for the selected point;
-- tapping a point selects it; tapping it again or pressing **Deselect Point** clears it;
-- tapping another incompatible/occupied point moves the point selection rather than invoking another hidden tool state;
-- tapping a compatible free counterpart performs the connection;
-- SOCKET / CROSS / AXLE topology is inferred from the two point types instead of requiring the old attach-tool mode;
-- the first-selected side is the side that moves to the target.
+### Top toolbar no longer gets squeezed by status text
+- runtime/version/status messages have been moved out of the toolbar HBox;
+- a dedicated status strip now sits directly below the top toolbar;
+- toolbar buttons retain their own horizontal space even when a status message is long;
+- the left editor-mode panel and right Move/Rotate accordion are shifted below the new status strip.
 
-### Atomic reconnect
-- an already-connected first point can be moved/reconnected directly to a compatible free target;
-- Connex validates the candidate movement against every other recorded connection before removing the old edge;
-- an invalid reconnect leaves the original connection completely untouched;
-- a valid reconnect removes only that one old edge, moves the selected rigid component, creates the replacement edge, and stores the result as one Undo/Redo action;
-- occupied targets cannot accept a second connection;
-- intentionally replaced connections retain the anti-auto-refuse block so the old touching pair cannot silently reconnect itself.
-
-### Existing systems retained
-- fixed-world X/Y/Z 45-degree rotation gizmo and real-mount Roll;
-- explicit authoritative connection graph and automatic overlap fusion;
-- SOCKET / AXLE / CROSS creation modes and O-Ring Stop;
-- simulation stabilization;
-- persistent camera/options settings;
-- v0.3.1 DownloadManager updater reliability fix.
+### Existing editor retained
+- CREATE / ROTATE / ATTACH editor modes from v0.3.2;
+- point-based attachment/reconnection workflow;
+- fixed-world XYZ 45-degree gizmo and real-mount Roll;
+- explicit connection graph, automatic overlap fusion, O-Ring Stop and simulation stabilization;
+- persistent camera/options settings.
 
 ### Signing / update compatibility
-- Android versionCode is 13;
+- Android versionCode is 14;
 - package ID remains `com.pixel375.connex`;
-- v0.3.2 uses the same permanent signing certificate introduced in v0.2.1;
-- it installs in place over v0.2.1, v0.3.0, or v0.3.1 and preserves app data/settings;
+- v0.3.3 uses the same permanent signing certificate introduced in v0.2.1;
+- it installs in place over permanently signed earlier builds and preserves app data/settings;
 - GitHub Actions verifies the permanent certificate before publishing.
+
+**Important for v0.3.1/v0.3.2 users affected by the broken downloader:** the updater bug is in the already-installed old APK, so that old copy cannot repair its own download routine. Install v0.3.3 manually once from this Release. Future releases then use the rebuilt updater.

@@ -1,22 +1,22 @@
 # Connex Lab
 
-**Connex Lab** is an unofficial Android 3D construction simulator inspired by the mechanical geometry of classic K'NEX rods and connectors. It is built with Godot 4.6.3 and compiled on GitHub Actions.
+**Connex Lab** is an unofficial Android 3D construction simulator inspired by the mechanical geometry of classic K'NEX rods and connectors. It is built with Godot 4.6.3 and compiled with GitHub Actions.
 
-> K'NEX is a trademark of its respective owner. This open-source project is unofficial, unaffiliated, and does not ship official artwork or copied 3D assets.
+> K'NEX is a trademark of its respective owner. This project is unofficial, unaffiliated, and does not ship official artwork or copied 3D assets.
 
-## v0.1.0 — first playable prototype
+## Current version — v0.1.5
 
-The first version focuses on the mechanical rules that make the classic system distinctive instead of treating pieces like generic blocks:
+The simulator models the connection rules rather than treating the pieces like generic blocks:
 
-- **Socket/end snap:** rods join connector sockets laterally and are keyed as a rigid connection.
-- **Cross snap:** a connector can snap sideways onto the intermediate rod body at 90°.
-- **Hub axle:** a rod can pass through a connector's central hole and remains free to rotate and slide along that axis.
-- **45° connector geometry:** classic planar socket directions are represented in 45° increments.
-- **Classic rod scale:** six standard rod sizes are represented using measured physical lengths.
-- **Rigid-body physics:** gravity and joint constraints run when switching from Build to Simulate.
-- **Procedural pieces:** all v0.1 geometry is generated in code; there are no imported K'NEX models.
+- **Socket/end snap** — rods connect to keyed radial connector sockets.
+- **Cross snap** — connectors can snap to the body of a rod at 90°.
+- **Hub axle** — rods through a connector's centre hole remain free to rotate and slide axially.
+- **Axle-on-existing-rod** — an existing connected rod can also receive a new sliding connector through its hub.
+- **O-Ring Stop** — a small axle stop can be placed on an axle rod to prevent a sliding connector from passing it.
+- **45° connector geometry** — classic socket directions use 45° increments.
+- **Rigid-body simulation** — build geometry is frozen during editing and released under gravity in SIMULATE.
 
-## Pieces in v0.1
+## Pieces
 
 ### Rods
 
@@ -29,7 +29,7 @@ The first version focuses on the mechanical rules that make the classic system d
 | Red 128 | 128 mm | 130 mm |
 | Gray 190 | 190 mm | 192 mm |
 
-The simulation uses a 10 mm = 1 world-unit scale and a roughly 10.1 mm connector-center-to-socket-end offset.
+The simulation uses a 10 mm = 1 world-unit scale and roughly a 10.1 mm connector-centre-to-socket-end offset.
 
 ### Connectors
 
@@ -40,58 +40,85 @@ The simulation uses a 10 mm = 1 world-unit scale and a roughly 10.1 mm connector
 - Green 4-way
 - Yellow 5-way
 - White 8-way
+- O-Ring Stop (special axle connector)
 
-Blue/purple perpendicular 3D interlocking connectors are documented in `RESEARCH.md` but intentionally deferred until the core placement/physics loop is proven on phones.
+## CREATE and EDIT
 
-## Phone controls
+v0.1.5 separates construction from manipulation to make touch interaction predictable.
 
-- **Drag empty space:** orbit camera.
-- **Pinch:** zoom.
-- **Rod / Conn arrows:** choose the next rod or connector.
-- **SOCKET:** tap near a free connector socket. A selected rod plus the selected connector is snapped into the exact geometric continuation. If an existing connector is already at the matching center, the simulator closes the connection instead.
-- **AXLE:** tap a connector to insert the selected rod through its hub.
-- **CROSS:** tap a rod to snap the selected connector onto its body at 90°.
-- **Twist:** rotate the plane of the newly attached connector around the incoming rod in 45° steps, enabling 3D structures with planar connectors.
-- **Undo:** remove the most recent connection.
-- **Reset:** restore the authored build pose after a physics run.
-- **Simulate / Build:** release physics or return to the frozen construction pose.
+### CREATE
 
-The first white connector is an anchored construction origin so a structure has something fixed to react against during physics testing.
+CREATE only places parts.
 
-## Architecture
+- The permanent bottom palette chooses the rod, connector, and connection mode.
+- **SOCKET:** tap a free connector socket to add the selected rod; tap a free rod end to add the selected connector.
+- **AXLE:** tap a connector to insert the selected rod through its hub, or tap an existing rod to place the selected connector on that rod as a sliding axle connector.
+- **CROSS:** tap a rod body to cross-snap the selected connector.
+- Select **O-Ring Stop** from the normal connector list and tap an axle rod to place it.
 
-Godot was selected over a custom Android renderer or a UI-only approach because this project needs both mobile 3D interaction and joint physics. A `Generic6DOFJoint3D` maps well to the connection model: socket and cross-snap joints lock all six degrees of freedom, while an axle joint locks transverse translation and tilt but leaves axial translation and axial rotation free.
+### EDIT
 
-Everything in v0.1 is GDScript/procedural geometry. This keeps the repository small, avoids licensing ambiguity around third-party piece meshes, and makes the mechanical dimensions easy to tune from measured data.
+EDIT only selects/manipulates; taps do not create parts.
 
-## What “physics accurate” means in v0.1
+- A vivid cyan emissive outline marks the selected piece.
+- The collapsible right panel provides **X− / X+ / Y− / Y+ / Z− / Z+** rotation, **Mount** rotation, **Reset Rotation**, and **Delete**.
+- Cross-mounted connectors rotate around the actual host-rod cross axis and orbit the snap point instead of rotating incorrectly around their own centre.
+- Invalid rotations are transactional: if a change would break socket, cross, or axle geometry, nothing is mutated.
+- The collapsible left panel moves the selected fixed component in the camera plane or vertically.
+- **Axle − / Axle +** slides compatible rods/connectors through an axle and repositions O-Ring Stops along their host axle.
 
-The **connection topology, geometric spacing, gravity, rigid-body behavior, and hub degrees of freedom** are modeled. Real rods and connectors also flex, deform locally when snapped, have manufacturing tolerances, friction, wear, and connection pull-out forces. Reliable public engineering constants for all of those are not available, so v0.1 does **not** pretend to simulate them exactly. Those are calibration targets for later versions.
+## Camera and Options
 
-Current simplifications:
+- One-finger drag orbits.
+- Two-finger drag pans.
+- Pinch zooms.
+- The workspace is 500 × 500 world units.
+- **Options** can independently reverse horizontal/vertical orbit and horizontal/vertical pan directions.
+- Camera sensitivity and grid visibility are configurable.
+- Options are saved immediately to `user://connex_settings.cfg` and persist between launches.
 
-- rods are rigid bodies (no bending/flex yet);
+## UI layout
+
+- **Top:** CREATE/EDIT, Undo, Redo, Simulate/Build, Restore, Restart, Center, Options, Help.
+- **Bottom:** permanent rod/connector palette and SOCKET/AXLE/CROSS mode.
+- **Right:** collapsible rotation/edit panel.
+- **Left:** collapsible movement/axle-slide panel.
+
+## Physics
+
+Godot's `Generic6DOFJoint3D` maps to the connection model: socket/cross joints lock six degrees of freedom, while axle joints lock transverse motion and tilt but leave axial translation and axial rotation free.
+
+Before simulation, Connex reduces redundant fixed-joint cycles into a spanning rigid graph and disables self-collision inside rigidly fixed components. This is intended to avoid the delayed oscillation/explosion failure that can occur when multiple mathematically redundant constraints and internal collision impulses fight each other.
+
+The first connector is **not pinned**. All normal construction pieces use the same gravity rules.
+
+The model still intentionally simplifies real plastic behavior:
+
+- rods are rigid rather than flexible;
 - snap joints do not detach under load;
-- collision shapes are simplified for mobile performance;
-- hub friction/clearance is approximated as an unconstrained axial/rotary joint;
-- gears, wheels, motors, chain, spacers, clips and flexi-rods are not yet implemented;
-- blue/purple 3D connector interlock is not yet implemented.
+- collision shapes are simplified for phone performance;
+- manufacturing tolerance, wear, friction, pull-out force, and plastic deformation are not yet calibrated;
+- gears, motors, chain, wheels, flexi-rods, and blue/purple 3D interlocking connectors are future work.
+
+## Procedural visuals
+
+All piece geometry is generated in code. v0.1.5 refines the silhouettes with fluted rod shafts, keyed rod ends, thinner open connector hubs/collars, and more recognizable open-jaw socket geometry. This avoids licensing ambiguity from third-party meshes while keeping dimensions easy to tune.
 
 ## Build and APK
 
-Every pull request is parsed, smoke-tested headlessly and exported to an ARM64 Android APK by `.github/workflows/android.yml`. The v0.1.0 release workflow publishes `Connex-v0.1.0.apk` plus its SHA-256 checksum to GitHub Releases.
+Every pull request is parsed, smoke-tested headlessly, and exported to an ARM64 Android APK by `.github/workflows/android.yml`. Release merges publish the APK and SHA-256 checksum to GitHub Releases.
 
-The v0.1 APK is **debug-signed for direct testing**, not signed with a persistent Play Store production key.
+The APK is **debug-signed for direct sideload/testing**, not with a persistent Play Store production key.
 
 ## Research basis
 
-The mechanical model is documented in detail in [`RESEARCH.md`](RESEARCH.md). Key primary/reference material includes:
+The mechanical model is documented in [`RESEARCH.md`](RESEARCH.md). Reference material includes:
 
 - US Patent 5,350,331 — *Construction toy system*: https://patents.google.com/patent/US5350331
 - US Patent application 2019/0160390 — connector/rod geometry and material discussion: https://patents.google.com/patent/US20190160390A1/en
-- Basic Building Set manual — the three fundamental rod/connector assembly methods: https://d2npjmct0hwe3x.cloudfront.net/wp-content/uploads/manuals/Basic-Building-Set-30010.pdf
-- MIT legacy K'NEX overview — classic connector colors/types and center-hole behavior: https://web.mit.edu/~naha/Public/knex/about/Basic/knex.html
-- K'NEX part catalogue/community references for classic piece taxonomy and dimensions: https://catalogue.knexchange.org/
+- Basic Building Set manual: https://d2npjmct0hwe3x.cloudfront.net/wp-content/uploads/manuals/Basic-Building-Set-30010.pdf
+- MIT legacy K'NEX overview: https://web.mit.edu/~naha/Public/knex/about/Basic/knex.html
+- K'NEX part catalogue/community references: https://catalogue.knexchange.org/
 
 ## License
 

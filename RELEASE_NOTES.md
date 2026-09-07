@@ -1,49 +1,76 @@
-# Connex Lab v0.1.4
+# Connex Lab v0.1.5
 
-Selection, rotation controls, deletion, axle stops, and physics-stability update.
+UI, persistent controls, edit tools, axle placement, cross-rotation geometry, and procedural visual refinement.
 
-### Selection and connector controls
-- tapping a connector body/hub now selects it instead of rotating it;
-- the selected piece gets a bright outline/halo so the edit target is obvious;
-- connector rotation moved to explicit `Rotate Y` and `Rotate X` buttons using local connector axes and 45° steps;
-- `Reset Rotation` returns the selected connector to the orientation it had when first placed;
-- all rotations and rotation resets still validate existing rod/socket directions and axle alignment before being accepted;
-- in SOCKET mode, tapping an actual free outer socket still places a rod;
-- AXLE mode now selects a connector first and uses a separate `Insert Axle` action, keeping connector body taps as selection gestures.
+### CREATE / EDIT separation
+- added a top-bar `CREATE / EDIT` switch;
+- CREATE taps only place parts and never rotate/select by accident;
+- EDIT taps only select parts and never create something by accident;
+- the selected EDIT target receives a vivid cyan emissive outline that remains visible on white connectors.
 
-### O-Ring axle-stop connector
-- added a physical `O-Ring Connector` intended for axle rods;
-- press `Place O-Ring Connector`, then tap an existing axle rod at the desired position;
-- the ring locks to that axle rod and physically prevents a sliding hub/axle connector from travelling past it during simulation;
-- multiple O-rings can be placed on the same axle, including one on each side of a sliding connector;
-- O-rings can be selected, highlighted, deleted, restored through Undo/Redo, and participate in simulation with the axle;
-- placement is rejected on ordinary non-axle rods.
+### Reorganized UI
+- permanent top utility bar: CREATE/EDIT, Undo, Redo, Simulate/Build, Restore, Restart, Center, Options, Help;
+- permanent bottom rod/connector palette with SOCKET / AXLE / CROSS mode;
+- collapsible right rotation/edit panel;
+- collapsible left movement/axle-slide panel;
+- rounded dark panels, stronger visual hierarchy, consistent button states, and cleaner mobile spacing.
 
-### Delete
-- `Delete` removes the selected rod, connector, or O-ring axle stop;
-- joints involving the deleted piece are removed;
-- occupied connector sockets, rod ends, and axle-hub state are recalculated from the remaining graph so freed connection points become usable again;
-- deleting the final main construction piece creates a new editable starting connector;
-- delete operations are included in Undo/Redo history.
+### Persistent Options
+- new Options panel backed by `user://connex_settings.cfg`;
+- reverse horizontal orbit;
+- reverse vertical orbit;
+- reverse horizontal pan;
+- reverse vertical pan;
+- camera sensitivity slider;
+- build-grid visibility toggle;
+- rotation/move panel collapsed state also persists;
+- changes save immediately and survive app restarts.
 
-### Starting connector / gravity
-- the starting connector is no longer pinned during simulation;
-- every rod and connector, including the first piece, is released under the same gravity and rigid-body rules.
+### Rotation
+- X, Y, and Z rotation are all available in both directions using 45° steps;
+- explicit Mount-axis rotation added for the actual physical connection axis;
+- Reset Rotation retained;
+- failed rotations are transactional: if validation fails, transform/occupancy/joints are left untouched;
+- this specifically avoids the intermittent state corruption seen after blocked rotations on highly symmetric 8-way connectors.
 
-### Physics stability
-The delayed shaking/explosion seen in closed and highly connected builds was traced to redundant rigid constraints plus internal collision impulses.
+### Cross-mounted connector fix
+- cross connectors now remember the rod and snap anchor that created the cross mount;
+- rotation around the cross mount uses the host rod axis, not the connector's own hub axis;
+- the connector centre orbits around the cross snap point while its basis rotates, keeping the snapped jaw on the rod;
+- whichever local X/Y/Z axis is actually aligned with the cross rod can perform the rotation, while the dedicated Mount buttons always use the correct mount axis;
+- invalid off-axis rotations are rejected without mutating the build.
 
-v0.1.4 changes the simulation graph before physics release:
-- fixed-joint cycles are reduced to a spanning rigid graph, so redundant closed-loop fixed constraints do not fight each other;
-- all bodies belonging to the same fixed rigid component ignore collision with each other, matching the behavior of one rigid assembly and preventing internal overlap impulses;
-- axle joints that are already redundant because both endpoints belong to the same rigid component are suppressed for the simulation run;
-- duplicate axle constraints between the same two rigid components are also suppressed;
-- unrelated bodies and unrelated cross/axle pieces continue to collide physically;
-- O-ring axle stops remain rigidly attached to their host axle and collide with sliding axle connectors as physical end-stops;
-- all pieces are velocity-cleared and kept frozen for several physics frames while the stabilized graph initializes, then released simultaneously;
-- returning to BUILD restores the full construction joint graph and original collision behavior.
+### O-Ring Stop
+- removed the separate O-Ring placement button;
+- `O-Ring Stop` is now a normal choice in the connector palette;
+- selecting it in CREATE and tapping an axle rod places the stop;
+- the O-Ring outer diameter is smaller and more proportional to a real axle stop/spacer;
+- O-Rings remain selectable, deletable, Undo/Redo-restorable, movable along their axle, and physical during simulation.
 
-This is intended to fix the pattern where a model looks correct for the first few seconds, then one rod begins to shake and the oscillation spreads until the entire model flies apart.
+### Axle construction
+- AXLE mode can still insert the selected rod through a connector hub;
+- AXLE mode can now also place the selected connector onto an existing rod as a sliding axle connector;
+- this works even when the rod is already connected into a larger construction;
+- `Axle − / Axle +` in EDIT slides compatible rods/connectors along the actual axle axis;
+- O-Ring Stops can be repositioned along their host axle with the same controls.
+
+### Movement
+- collapsible left EDIT panel adds camera-plane Forward/Back/Left/Right movement plus world Y+/Y−;
+- fixed-connected pieces move as one rigid component so normal socket connections remain intact;
+- generic movement is rejected when it would pull a component sideways through an axle;
+- axle-aligned movement is handled by the dedicated Axle controls.
+
+### Piece visuals
+- rods now use a more K'NEX-like fluted/cross shaft profile;
+- rod ends include narrower necks, stop collars, and flattened keyed locking tongues;
+- connector hubs are thinner/open and include a raised axle collar;
+- radial sockets use a clearer open two-jaw shape with mouth gap, tip rounding, and stop ridge;
+- all geometry remains procedural; no copied third-party K'NEX meshes are included.
+
+### Physics
+- v0.1.4's stabilized simulation graph remains in use: redundant fixed cycles are suppressed for the simulation run and rigidly fixed components avoid internal self-collision;
+- the first connector remains unpinned; all construction pieces use the same gravity rules;
+- O-Ring Stops remain rigidly attached to their axle and physically block sliding connectors.
 
 ### APK signing
 The attached APK is debug-signed for direct sideload/testing. It is not a Play Store production-signed package.

@@ -1,39 +1,44 @@
-# Connex Lab v0.3.4
+# Connex Lab v0.3.5
 
-Rotation and attachment interaction rebuild focused on removing the two most confusing editor behaviors from v0.3.3.
+World-rotation and attachment-state-machine correction release.
 
-### Camera-independent rotation dial
-- removes the projected 3D world-ring drag input path;
-- adds a fixed screen-space X/Y/Z rotation dial in the Rotate panel;
-- the dial never moves or reorients with the 3D camera, so changing the view cannot change the meaning of the gesture;
-- X/Y/Z use the selected piece's deterministic local axes and the existing connection-aware pivot/rigid-branch solver;
-- every rotation snaps to exact 45-degree increments;
-- left half of a ring is negative, right half is positive;
-- invalid plus/minus directions are grey before use based on the connection graph;
-- multi-step drag still validates the final snapped state transactionally;
-- Roll remains separate and still uses the real socket/cross/axle mount axis.
+### Rotation moved back onto the selected object
+- removes the v0.3.4 screen-space dial from the right-side menu;
+- restores a game-engine-style X/Y/Z ring gizmo around the selected piece;
+- the gizmo root is forced to identity/world orientation every frame, so X/Y/Z are fixed WORLD axes rather than part-local or camera axes;
+- rotation candidates continue to use the connection-aware pivot/rigid-component validator;
+- drag distance only chooses an integer step count; the actual transform is always an exact world-axis 45-degree multiple;
+- invalid + / - directions remain greyed using graph validation;
+- Roll remains separate and rotates around the real socket/cross/axle mount axis.
 
-### ATTACH mode simplified
-- removes the five artificial rod-body dots that previously covered every rod;
-- visible markers are now only real discrete ports: rod ends, connector sockets, connector hubs, and O-Rings;
-- port markers are much smaller and act as guides rather than debug spheres covering the model;
-- CROSS/AXLE positions are chosen by tapping directly on the physical rod shaft at the exact desired position;
-- only that one temporary rod-body point is highlighted in yellow;
-- source -> target remains a two-tap workflow;
-- occupied targets cannot accept a second connection and become the new selected source instead;
-- reconnect stays atomic: old topology is removed only after the replacement geometry validates;
-- O-Ring attachment remains a special axle-stop operation.
+### Creation orientation is no longer camera-derived
+- connector-on-rod-end placement no longer uses `camera.global_transform.basis.y` to choose connector roll;
+- the inherited placement orientation solver now ignores camera vectors and constructs connector roll from stable world axes;
+- axle connector orientation is likewise built from deterministic world axes;
+- CROSS placement inherits the same stable world-perpendicular rule.
 
-### Existing systems retained
-- CREATE / ROTATE / ATTACH editor modes;
-- explicit connection graph, auto-fusion, Undo/Redo and simulation stabilization;
-- separate runtime status strip below the top toolbar;
-- v0.3.3 Godot-native updater with SHA-256 verification;
-- persistent camera/options settings.
+### ATTACH now obeys SOCKET / AXLE / CROSS
+- SOCKET exposes only rod ends and connector sockets; tapping a rod shaft can no longer create a fake body point in SOCKET mode;
+- AXLE exposes connector hubs / O-Rings and accepts an exact tap on a rod shaft;
+- CROSS exposes connector sockets and accepts an exact tap on a rod shaft;
+- after a source is selected, only the compatible counterpart type is accepted; unrelated taps no longer silently move the selection;
+- Deselect Point explicitly clears the source;
+- rod-shaft picking can ray past an overlapping connector to find the rod behind it, improving reliability near joints.
+
+### Re-attachment fixed
+- switching an existing rod/connector pair from SOCKET to CROSS or AXLE now treats the old pair edge as the connection being replaced even when the newly selected rod-body/hub point was not itself marked occupied;
+- the old edge is excluded from rigid-component and geometry validation before calculating the replacement;
+- occupied targets belonging to unrelated connections remain blocked;
+- replacement is still atomic: the old connection is removed only after the new snapped geometry validates.
+
+### Right-side layout
+- the rotation utility menu contains only selection info, world-gizmo guidance, real-mount Roll, and Reset;
+- the obsolete v0.3.4 dial is hidden with its parent so it consumes no layout space;
+- Rotate and Move retain accordion behavior with non-overlapping fixed bounds below the status strip.
 
 ### Signing / update compatibility
-- Android versionCode is 15;
+- Android versionCode is 16;
 - package ID remains `com.pixel375.connex`;
-- v0.3.4 uses the same permanent signing certificate introduced in v0.2.1;
-- it installs in place over permanently signed earlier builds and preserves app data/settings;
-- GitHub Actions verifies the permanent certificate before publishing.
+- v0.3.5 uses the same permanent release signing certificate as v0.2.1+;
+- it updates in place over permanently signed earlier versions and preserves app data/settings;
+- GitHub Actions verifies the signing certificate before publishing.

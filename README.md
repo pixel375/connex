@@ -4,9 +4,9 @@
 
 > K'NEX is a trademark of its respective owner. This project is unofficial, unaffiliated, and does not ship official artwork or copied 3D assets.
 
-## Current version — v0.3.3
+## Current version — v0.3.4
 
-v0.3.3 keeps the v0.3.2 three-mode editor and replaces the unreliable Android DownloadManager updater path with a Godot-native download/verification/install flow. Runtime status text also has its own strip so it can no longer squeeze the top toolbar buttons.
+v0.3.4 rebuilds the two editor areas that were still confusing in v0.3.3: rotation input and ATTACH point selection.
 
 ## Pieces
 
@@ -29,65 +29,65 @@ Gray 1-way, Orange straight 2-way, Light gray angled 2-way, Red 3-way, Green 4-w
 
 ## Editor modes
 
-Large buttons on the left choose one of three modes:
+Large buttons on the left choose one of three modes.
 
 ### CREATE
 
-Normal construction mode. The bottom palette chooses rod/connector types and the usual SOCKET / AXLE / CROSS creation behavior. Rotation gizmos and attachment-point overlays are hidden so a normal build tap cannot be confused with editing.
+Normal construction mode. The bottom palette chooses rod/connector types and SOCKET / AXLE / CROSS creation behavior. Rotation and attachment overlays are hidden.
 
 ### ROTATE
 
-The selected piece/rigid branch uses the v0.3 fixed-world rotation gizmo:
+v0.3.4 no longer interprets rotation by dragging projected 3D rings in the world. The right Rotate panel contains a **fixed screen-space X/Y/Z dial**:
 
-- red X, green Y, blue Z circular rings;
-- camera movement changes only the view, never the physical axis;
-- ray-to-plane drag geometry;
-- exact 45° snapping;
-- invalid snapped states remain blocked;
-- mounted connectors retain real-mount Roll around the actual incoming socket rod, cross rod, or axle.
+- the dial never changes orientation when the camera moves;
+- X/Y/Z use the selected piece's deterministic local axes, not camera axes;
+- each ring snaps to exact 45° steps;
+- tap the left half for negative, right half for positive, or drag around the ring for multiple snapped steps;
+- invalid +/- directions are greyed before use;
+- the selected rigid branch is rotated around its connection-aware pivot only after the candidate state validates;
+- **Roll** remains a separate control around the actual socket/cross/axle mount axis.
 
-Ordinary world taps do not create pieces while ROTATE is active. Use the one-shot **Select** button when you need to choose an older piece.
+Ordinary world taps do not create pieces in ROTATE mode. Use the one-shot **Select** button when you need to choose another piece.
 
 ### ATTACH
 
-ATTACH replaces the older Re-seat / Detach / Attach button stack with direct point selection.
-
-Visible points include:
+ATTACH now exposes only real discrete ports:
 
 - rod ends — cyan;
-- rod-body mount points — blue;
 - connector sockets — green;
 - connector axle hubs and O-Rings — purple;
-- occupied points — orange;
-- currently selected point — large yellow marker with a label.
+- occupied ports — orange;
+- selected source — yellow with a label.
+
+The old row of arbitrary rod-body points is gone. For CROSS or AXLE placement, tap directly on the physical rod shaft where you want the connection. Connex creates one temporary rod-body point at that exact location.
 
 Workflow:
 
-1. tap one point;
+1. tap a port or rod shaft to select the source;
 2. tap a compatible free counterpart;
 3. Connex infers SOCKET / CROSS / AXLE from the two point types;
-4. the first-selected side moves to the target only if every existing connection still validates.
+4. the selected side moves only if the candidate geometry validates against the rest of the connection graph.
 
-Tap the same point again or press **Deselect Point** to clear it. Tapping another incompatible or occupied point simply moves the point selection.
+Tap the same selected point again or press **Deselect Point** to clear it. Tapping an incompatible or occupied point simply moves the selection to that point. Occupied targets never accept a second connection.
 
-If the first-selected point is already connected, ATTACH acts as an atomic reconnect: Connex validates the replacement before removing the old edge. Invalid attempts leave the original connection untouched. Successful reconnects are one Undo/Redo action.
+If the selected source is already connected, ATTACH performs an atomic reconnect: the old edge is removed only after the new geometry validates. Failed attempts leave the old connection unchanged.
 
 ## Connection graph
 
 Connex explicitly records:
 
 - socket/end snap — a specific rod end ↔ a specific connector socket;
-- cross snap — a specific connector socket ↔ a recorded rod-body position;
+- cross snap — a specific connector socket ↔ an exact recorded rod-body position;
 - hub axle — connector hub ↔ rod with axial slide/rotation DOFs;
 - O-Ring Stop — rigid axle stop ↔ host axle rod;
 - automatic fusion — compatible overlaps create the same graph records as explicit attachments.
 
 ## UI layout
 
-- **Top toolbar:** Select, Undo, Redo, Simulate/Build, Restore, Restart, Center, Options, Help. It contains buttons only.
-- **Status strip:** a separate line directly below the toolbar for version/runtime messages, so long messages cannot steal button space.
-- **Left:** CREATE / ROTATE / ATTACH, Delete Selected, and ATTACH point deselection.
-- **Right:** collapsible Rotate and Move utility panels. Both start collapsed and operate as an accordion.
+- **Top toolbar:** Select, Undo, Redo, Simulate/Build, Restore, Restart, Center, Options, Help.
+- **Status strip:** a separate line directly below the toolbar for version/runtime messages.
+- **Left:** CREATE / ROTATE / ATTACH, Delete Selected, ATTACH point deselection.
+- **Right:** collapsible Rotate and Move panels.
 - **Bottom:** permanent rod/connector palette and creation connection mode.
 
 ## Camera and Options
@@ -100,21 +100,13 @@ Connex explicitly records:
 - camera sensitivity and grid visibility;
 - settings persist in `user://connex_settings.cfg`.
 
+Camera movement changes the view only. The v0.3.4 rotation dial is screen-space and the actual rotation axes come from the selected piece, so viewing angle is not part of the rotation calculation.
+
 ## Updates and signing
 
-Starting with v0.2.1, release APKs use one permanent Android signing certificate and package ID `com.pixel375.connex`. v0.3.3 uses the same certificate and Android versionCode 14, so it installs in place over permanently signed earlier versions and preserves settings/data.
+Starting with v0.2.1, release APKs use one permanent Android signing certificate and package ID `com.pixel375.connex`. v0.3.4 uses the same certificate and Android versionCode 15, so it installs in place over permanently signed earlier versions and preserves settings/data.
 
-Options contains **App Updates**. v0.3.3 no longer constructs Android `DownloadManager.Request` objects through `JavaClassWrapper`. Instead it:
-
-1. reads the latest public GitHub Release metadata;
-2. downloads the APK with Godot `HTTPRequest` into `user://`;
-3. shows transfer progress;
-4. verifies the downloaded APK against the SHA-256 digest published by GitHub Releases when available;
-5. opens the verified local APK through Godot `OS.shell_open()`, whose Android implementation uses the app FileProvider and Android's normal package installer.
-
-A verified APK remains available for another **Install** tap if Android first requires the user to grant “install unknown apps” permission. Failed or partial downloads are removed and the UI returns to **Retry Download**.
-
-Users whose installed v0.3.1/v0.3.2 copy hits the old `Android could not create the download request` failure need to install v0.3.3 manually once, because the bug is inside that already-installed updater code. Later updates use the rebuilt path.
+Options contains **App Updates**. Since v0.3.3, Connex reads the latest GitHub Release, downloads the APK with Godot `HTTPRequest` into `user://`, displays progress, verifies the GitHub Release SHA-256 digest when available, then opens the verified APK through Godot's Android FileProvider / normal package installer path.
 
 While this repository remains public, release metadata/APKs come directly from GitHub Releases without embedding a token. If source development later moves private, releases should move to a separate public update feed/release repository rather than embedding private GitHub credentials in the APK.
 

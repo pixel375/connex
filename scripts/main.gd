@@ -347,7 +347,7 @@ func _make_rod(def_index: int, start: Vector3, finish: Vector3) -> RigidBody3D:
 	body.set_meta("build_transform", xform)
 
 	var color: Color = definition["color"]
-	var shaft_length := max(0.20, length - 0.76)
+	var shaft_length: float = maxf(0.20, length - 0.76)
 	for rotation in [45.0, -45.0]:
 		var rib := MeshInstance3D.new()
 		var box := BoxMesh.new()
@@ -395,7 +395,7 @@ func _make_rod(def_index: int, start: Vector3, finish: Vector3) -> RigidBody3D:
 	var col := CollisionShape3D.new()
 	var capsule := CapsuleShape3D.new()
 	capsule.radius = ROD_RADIUS
-	capsule.height = max(length, ROD_RADIUS * 2.0)
+	capsule.height = maxf(length, ROD_RADIUS * 2.0)
 	col.shape = capsule
 	body.add_child(col)
 	bodies.append(body)
@@ -490,8 +490,8 @@ func _find_target_connector(expected: Vector3, incoming_dir: Vector3, source: Ri
 			var slot := int(slot_value)
 			if occupied.has(slot):
 				continue
-			var global_dir := (body.global_transform.basis * _slot_dir(slot)).normalized()
-			var score := global_dir.dot(incoming_dir)
+			var global_dir: Vector3 = (body.global_transform.basis * _slot_dir(slot)).normalized()
+			var score: float = global_dir.dot(incoming_dir)
 			if score > best_dot:
 				best_dot = score
 				best_slot = slot
@@ -576,9 +576,9 @@ func _cross_snap(rod: RigidBody3D, hit_pos: Vector3) -> void:
 	var basis := Basis(axis, angle) * base
 	var radial := (basis * local_slot).normalized()
 	var half_len := float(rod.get_meta("visual_length")) * 0.5 - 0.42
-	var along := clamp((hit_pos - rod.global_position).dot(axis), -half_len, half_len)
-	var snap_point := rod.global_position + axis * along
-	var connector_center := snap_point - radial * CONNECTOR_D
+	var along: float = clampf((hit_pos - rod.global_position).dot(axis), -half_len, half_len)
+	var snap_point: Vector3 = rod.global_position + axis * along
+	var connector_center: Vector3 = snap_point - radial * CONNECTOR_D
 	var new_connector := _make_connector(selected_connector, Transform3D(basis, connector_center))
 	_set_occupied(new_connector, slot, true)
 	var joint := _make_fixed_joint(rod, new_connector, snap_point)

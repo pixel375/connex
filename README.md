@@ -4,178 +4,137 @@
 
 > K'NEX is a trademark of its respective owner. This project is unofficial, unaffiliated, and does not ship official artwork or copied 3D assets.
 
-## Current version — v0.2.0
+## Current version — v0.3.0
 
-v0.2.0 replaces the older CREATE/EDIT and incremental X/Y/Z rotation model with a connection-first construction system.
+v0.3.0 separates **piece transforms** from **connection topology**. Rotation no longer decides which connector socket owns a rod, and camera orientation no longer determines a physical rotation axis.
 
-The simulator models these connection types explicitly:
+### Core connection graph
 
-- **Socket/end snap** — a specific rod end connects to a specific radial connector socket.
-- **Cross snap** — a specific connector socket clips across a rod body at a recorded position along that rod.
-- **Hub axle** — a rod through a connector's centre hole can rotate and slide axially.
-- **Axle-on-existing-rod** — an already-connected rod can receive another connector through its hub as a sliding axle connection.
-- **O-Ring Stop** — a small axle stop mounts to an axle rod and moves with that rod.
-- **Automatic fusion** — compatible overlapping free rod ends and connector sockets become the same structural connection records as manually placed connections.
+The simulator explicitly records:
+
+- **Socket/end snap** — a specific rod end ↔ a specific connector socket.
+- **Cross snap** — a specific connector socket ↔ a recorded point along a rod body.
+- **Hub axle** — connector hub ↔ rod with axial slide/rotation DOFs.
+- **O-Ring Stop** — rigid axle stop ↔ host axle rod.
+- **Automatic fusion** — compatible overlaps create the same graph records as manual attachments.
 
 ## Pieces
 
 ### Rods
 
-| Simulator name | Nominal classic size | Physical length used |
-|---|---:|---:|
-| Green 16 | 16 mm | 17.5 mm |
-| White 32 | 32 mm | 33 mm |
-| Blue 54 | 54 mm | 55 mm |
-| Yellow 86 | 86 mm | 86 mm |
-| Red 128 | 128 mm | 130 mm |
-| Gray 190 | 190 mm | 192 mm |
+| Simulator name | Physical length used |
+|---|---:|
+| Green 16 | 17.5 mm |
+| White 32 | 33 mm |
+| Blue 54 | 55 mm |
+| Yellow 86 | 86 mm |
+| Red 128 | 130 mm |
+| Gray 190 | 192 mm |
 
-The simulation uses a 10 mm = 1 world-unit scale and roughly a 10.1 mm connector-centre-to-socket-end offset.
+The simulator uses roughly 10 mm = 1 world unit and a 10.1 mm connector-centre-to-socket-end offset.
 
 ### Connectors
 
-- Gray 1-way
-- Orange straight 2-way
-- Light gray angled 2-way
-- Red 3-way
-- Green 4-way
-- Yellow 5-way
-- White 8-way
-- O-Ring Stop (special axle part)
+Gray 1-way, Orange straight 2-way, Light gray angled 2-way, Red 3-way, Green 4-way, Yellow 5-way, White 8-way, and the special **O-Ring Stop** axle part.
 
-## Building and selection
+## Selection and building
 
-There is **no CREATE / EDIT switch** in v0.2.0.
+There is no CREATE / EDIT switch.
 
-- Construction taps always perform the currently selected SOCKET / AXLE / CROSS placement action when the tapped geometry is valid.
-- The **newest created piece becomes selected automatically**.
-- The selected piece stays selected until another piece is created or the user explicitly changes selection.
-- To select an older piece, press **Select** once and tap it. Select is a one-shot action and immediately ends after that tap.
-- Normal construction taps do not silently change the persistent selection.
-- The strong cyan outline always marks the current selected piece.
+- The newest created piece becomes selected automatically.
+- Selection persists until another piece is created or **Select** is pressed once and an older piece is tapped.
+- Normal construction taps do not silently change selection.
+- The cyan outline marks the selected piece.
+- Bottom Rod/Conn arrows edit the selected matching piece or choose the next placement type when another kind is selected.
 
-The bottom palette is context-sensitive:
+Construction modes remain **SOCKET / AXLE / CROSS**.
 
-- Rod arrows edit the selected rod when a rod is selected; otherwise they choose the next rod type to place.
-- Connector arrows edit the selected connector when a compatible connector is selected; otherwise they choose the next connector type to place.
-- O-Ring Stop remains part of the normal connector list.
+## v0.3 rotation gizmo
 
-### SOCKET
+The old camera-relative arrow rotation controls are removed.
 
-- Tap a free connector socket to add exactly one rod.
-- Tap a free rod end to add a connector.
-- A socket already occupied by a rod rejects another placement.
-- If a free rod end reaches a compatible free socket elsewhere in the build, the connection is automatically fused and recorded.
+- Red **X**, green **Y**, and blue **Z** circular rings are fixed world axes.
+- Moving the camera changes only how the gizmo is viewed, never what an axis means.
+- Dragging a ring uses ray-to-rotation-plane intersection.
+- Rotation snaps to exact **45°** states.
+- `X+ / X-`, `Y+ / Y-`, and `Z+ / Z-` validity is computed before interaction; blocked directions are greyed.
+- A cyan translucent ghost previews a valid snapped result; a red ghost shows a blocked candidate.
+- Nothing is committed until every recorded connection validates.
+- Mounted connectors keep **Roll -45° / +45°** around the actual incoming socket rod, cross rod, or axle.
+- Placement orientation is deterministic and no longer camera-dependent.
 
-### AXLE
+## Re-seat connection
 
-- Tap a connector hub to insert the selected rod through it.
-- Tap an existing rod to place the selected connector onto that rod as a sliding axle connector.
-- Existing rods can receive axle connectors even when their ends are already used by socket connections.
-- Select O-Ring Stop and tap an axle rod to add a physical axle stop.
+**Re-seat Mount Socket** explicitly changes which connector jaw owns an existing socket/cross mount.
 
-### CROSS
+- current mount socket = cyan;
+- valid alternatives = green;
+- invalid/occupied alternatives = grey.
 
-- Tap a rod body to cross-snap the selected connector.
-- The connection remembers the exact connector socket, host rod, and point along the host rod.
-- Compatible existing overlaps can also be recognized and fused as cross connections after normal rod-end/socket matches are considered first.
+Choosing a new socket keeps the host connection point fixed, computes the required rigid transform, validates the entire graph, then atomically changes the stored socket identity.
 
-## Connection-first rotation
+## Detach / Attach
 
-v0.2.0 no longer repeatedly rotates a connector around its changing local X/Y/Z axes and then tries to rediscover where its rods went.
+Topology changes are explicit rather than being overloaded onto rotation.
 
-Each connection records the real mount geometry. Rotation is previewed against that connection graph before anything changes.
+### Detach
 
-### Free/root assemblies
+Press **Detach Connection**, then tap one orange connection anchor on the selected piece. The graph edge is removed but both pieces stay exactly where they are. That pair is temporarily excluded from automatic overlap fusion so it does not instantly reconnect itself.
 
-A connector with no incoming mount can rotate its rigidly connected branch in **45° camera-relative steps** using the Up / Down / Left / Right controls. Roll rotates around the connector's own normal.
+### Attach / Re-attach
 
-### Mounted connectors
+Attach uses the current SOCKET / AXLE / CROSS mode.
 
-A mounted connector uses **Roll ⟲ / Roll ⟳** around its real mount axis:
+1. Select the source piece.
+2. Press **Attach / Re-attach**.
+3. Start a drag from a highlighted free source handle.
+4. Drag the tether to a compatible target and release.
 
-- socket-mounted connector → incoming rod axis;
-- cross-mounted connector → host cross-rod axis;
-- axle-mounted connector → axle axis.
+Free rod ends, connector sockets, hubs, and continuous rod-body targets are supported. The selected rigid component snaps only after all existing connections validate. If the target is already part of the same rigid component, the geometry must already line up; Connex will not distort a closed loop to force it.
 
-The rigid downstream branch moves with the selected connector around that pivot rather than leaving its attached rods behind and attempting to remap them afterward.
-
-### Validity and transactional behavior
-
-- Every exact socket, cross, axle, and O-Ring relationship is checked before a candidate transform is accepted.
-- Rotation controls that cannot produce a valid result are disabled before they are pressed.
-- A rejected rotation is a **true no-op**: it does not alter transforms, mount identity, socket occupancy, joint frames, auto-fuse state, or Undo/Redo history.
-- Closed rigid loops that cannot rotate around a single mount without breaking another connection are detected and locked rather than corrupted.
-- **Reset Rotation** uses the same validator to return a connector toward its placement orientation without breaking its recorded connections.
+Manual Attach produces the same authoritative connection records as normal placement and auto-fusion.
 
 ## Move controls
 
-The collapsible left panel operates on the persistent selected piece.
+The left panel operates on the persistent selected piece:
 
-- Forward / Back / Left / Right move its fixed component relative to the camera.
-- Y− / Y+ move vertically.
-- Axle − / Axle + slide compatible selected axle components along the axle axis.
-- O-Ring Stops can be repositioned along their host axle.
+- Forward / Back / Left / Right;
+- Y− / Y+;
+- Axle − / Axle + for sliding compatible axle-mounted parts and O-Rings.
 
 ## Camera and Options
 
-- One-finger drag orbits.
-- Two-finger drag pans.
-- Pinch zooms.
-- The workspace is 500 × 500 world units.
-- Options can independently reverse horizontal/vertical orbit and horizontal/vertical pan directions.
-- Camera sensitivity and grid visibility are configurable.
-- Options are saved immediately to `user://connex_settings.cfg` and persist between launches.
+- one-finger drag: orbit;
+- two-finger drag: pan;
+- pinch: zoom;
+- workspace: 500 × 500 world units;
+- independent reverse Orbit X/Y and Pan X/Y options;
+- camera sensitivity and grid visibility;
+- settings persist in `user://connex_settings.cfg`.
 
-## UI layout
+## Updates and signing
 
-- **Top:** Select, Undo, Redo, Simulate/Build, Restore, Restart, Center, Options, Help.
-- **Bottom:** permanent rod/connector palette and SOCKET/AXLE/CROSS mode.
-- **Right:** collapsible connection-aware rotation panel with camera arrows, mount Roll, Reset Rotation, and Delete Selected.
-- **Left:** collapsible movement/axle-slide panel.
+Starting with v0.2.1, release APKs use one permanent Android signing certificate and package ID `com.pixel375.connex`. v0.3.0 continues using that certificate, so an installed v0.2.1 can update in place.
+
+Options contains **App Updates**. While the repository is public, Connex checks the public GitHub Releases API, downloads a newer APK through Android DownloadManager, and hands it to Android's package installer. Android still requires its normal install confirmation. If source development later moves private, releases should move to a separate public update feed/release repository rather than embedding a private GitHub token in the APK.
 
 ## Physics
 
-Godot's `Generic6DOFJoint3D` is still used for runtime physical constraints: socket/cross joints lock six degrees of freedom, while axle joints lock transverse motion and tilt but leave axial translation and axial rotation free.
+Godot `Generic6DOFJoint3D` constraints remain the runtime physics representation. Fixed socket/cross connections lock all DOFs while axle joints retain axial translation and rotation. Before simulation Connex re-runs auto-fusion, rebuilds the authoritative graph, refreshes frames, suppresses redundant fixed cycles, and suppresses self-collision inside rigid fixed components.
 
-Before simulation, Connex v0.2.0:
-
-1. runs the same authoritative auto-connect scan used while building;
-2. rebuilds the explicit connection graph;
-3. refreshes joint frames from the recorded connection geometry;
-4. suppresses redundant fixed-joint cycles in the active solver;
-5. disables self-collision inside rigidly connected components;
-6. suppresses duplicate/redundant axle constraints.
-
-The first connector is **not pinned**. All normal construction pieces use the same gravity rules.
-
-The physical model still intentionally simplifies real plastic behavior:
-
-- rods are rigid rather than flexible;
-- snap joints do not detach under load;
-- collision shapes are simplified for phone performance;
-- manufacturing tolerance, wear, friction, pull-out force, and plastic deformation are not yet calibrated;
-- gears, motors, chain, wheels, flexi-rods, and blue/purple 3D interlocking connectors are future work.
+A later physics upgrade may collapse fully fixed assemblies into compound rigid bodies, leaving only real axle/sliding joints in the solver.
 
 ## Procedural visuals
 
-All piece geometry is generated in code rather than copied from official meshes. Current visuals use fluted rod shafts, keyed-looking rod ends, open connector hubs/collars, and open-jaw radial sockets while keeping geometry procedural and easy to tune.
+All piece geometry is generated in code rather than copied from official meshes. Rods use fluted shafts/keyed-looking ends; connectors use procedural open hubs and jaw-like radial sockets.
 
-## Build and APK
+## Build
 
-Every pull request is parsed, smoke-tested headlessly, and exported to an ARM64 Android APK by `.github/workflows/android.yml`. Release merges publish the APK and SHA-256 checksum to GitHub Releases.
-
-The APK is **debug-signed for direct sideload/testing**, not with a persistent Play Store production key.
+Every pull request is parsed, smoke-tested headlessly, and exported to an ARM64 Android APK by `.github/workflows/android.yml`. Release merges are signed with the permanent Connex keystore, certificate-verified, and published with a SHA-256 checksum.
 
 ## Research basis
 
-The mechanical model is documented in [`RESEARCH.md`](RESEARCH.md). Reference material includes:
-
-- US Patent 5,350,331 — *Construction toy system*: https://patents.google.com/patent/US5350331
-- US Patent application 2019/0160390 — connector/rod geometry and material discussion: https://patents.google.com/patent/US20190160390A1/en
-- Basic Building Set manual: https://d2npjmct0hwe3x.cloudfront.net/wp-content/uploads/manuals/Basic-Building-Set-30010.pdf
-- MIT legacy K'NEX overview: https://web.mit.edu/~naha/Public/knex/about/Basic/knex.html
-- K'NEX part catalogue/community references: https://catalogue.knexchange.org/
+See [`RESEARCH.md`](RESEARCH.md). Key references include US Patent 5,350,331, later connector/rod patent material, classic K'NEX manuals, MIT's legacy K'NEX overview, and community part catalogues.
 
 ## License
 

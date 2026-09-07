@@ -4,17 +4,18 @@
 
 > K'NEX is a trademark of its respective owner. This project is unofficial, unaffiliated, and does not ship official artwork or copied 3D assets.
 
-## Current version — v0.1.5
+## Current version — v0.2.0
 
-The simulator models the connection rules rather than treating the pieces like generic blocks:
+v0.2.0 replaces the older CREATE/EDIT and incremental X/Y/Z rotation model with a connection-first construction system.
 
-- **Socket/end snap** — rods connect to keyed radial connector sockets.
-- **Cross snap** — connectors can snap to the body of a rod at 90°.
-- **Hub axle** — rods through a connector's centre hole remain free to rotate and slide axially.
-- **Axle-on-existing-rod** — an existing connected rod can also receive a new sliding connector through its hub.
-- **O-Ring Stop** — a small axle stop can be placed on an axle rod to prevent a sliding connector from passing it.
-- **45° connector geometry** — classic socket directions use 45° increments.
-- **Rigid-body simulation** — build geometry is frozen during editing and released under gravity in SIMULATE.
+The simulator models these connection types explicitly:
+
+- **Socket/end snap** — a specific rod end connects to a specific radial connector socket.
+- **Cross snap** — a specific connector socket clips across a rod body at a recorded position along that rod.
+- **Hub axle** — a rod through a connector's centre hole can rotate and slide axially.
+- **Axle-on-existing-rod** — an already-connected rod can receive another connector through its hub as a sliding axle connection.
+- **O-Ring Stop** — a small axle stop mounts to an axle rod and moves with that rod.
+- **Automatic fusion** — compatible overlapping free rod ends and connector sockets become the same structural connection records as manually placed connections.
 
 ## Pieces
 
@@ -40,32 +41,81 @@ The simulation uses a 10 mm = 1 world-unit scale and roughly a 10.1 mm connector
 - Green 4-way
 - Yellow 5-way
 - White 8-way
-- O-Ring Stop (special axle connector)
+- O-Ring Stop (special axle part)
 
-## CREATE and EDIT
+## Building and selection
 
-v0.1.5 separates construction from manipulation to make touch interaction predictable.
+There is **no CREATE / EDIT switch** in v0.2.0.
 
-### CREATE
+- Construction taps always perform the currently selected SOCKET / AXLE / CROSS placement action when the tapped geometry is valid.
+- The **newest created piece becomes selected automatically**.
+- The selected piece stays selected until another piece is created or the user explicitly changes selection.
+- To select an older piece, press **Select** once and tap it. Select is a one-shot action and immediately ends after that tap.
+- Normal construction taps do not silently change the persistent selection.
+- The strong cyan outline always marks the current selected piece.
 
-CREATE only places parts.
+The bottom palette is context-sensitive:
 
-- The permanent bottom palette chooses the rod, connector, and connection mode.
-- **SOCKET:** tap a free connector socket to add the selected rod; tap a free rod end to add the selected connector.
-- **AXLE:** tap a connector to insert the selected rod through its hub, or tap an existing rod to place the selected connector on that rod as a sliding axle connector.
-- **CROSS:** tap a rod body to cross-snap the selected connector.
-- Select **O-Ring Stop** from the normal connector list and tap an axle rod to place it.
+- Rod arrows edit the selected rod when a rod is selected; otherwise they choose the next rod type to place.
+- Connector arrows edit the selected connector when a compatible connector is selected; otherwise they choose the next connector type to place.
+- O-Ring Stop remains part of the normal connector list.
 
-### EDIT
+### SOCKET
 
-EDIT only selects/manipulates; taps do not create parts.
+- Tap a free connector socket to add exactly one rod.
+- Tap a free rod end to add a connector.
+- A socket already occupied by a rod rejects another placement.
+- If a free rod end reaches a compatible free socket elsewhere in the build, the connection is automatically fused and recorded.
 
-- A vivid cyan emissive outline marks the selected piece.
-- The collapsible right panel provides **X− / X+ / Y− / Y+ / Z− / Z+** rotation, **Mount** rotation, **Reset Rotation**, and **Delete**.
-- Cross-mounted connectors rotate around the actual host-rod cross axis and orbit the snap point instead of rotating incorrectly around their own centre.
-- Invalid rotations are transactional: if a change would break socket, cross, or axle geometry, nothing is mutated.
-- The collapsible left panel moves the selected fixed component in the camera plane or vertically.
-- **Axle − / Axle +** slides compatible rods/connectors through an axle and repositions O-Ring Stops along their host axle.
+### AXLE
+
+- Tap a connector hub to insert the selected rod through it.
+- Tap an existing rod to place the selected connector onto that rod as a sliding axle connector.
+- Existing rods can receive axle connectors even when their ends are already used by socket connections.
+- Select O-Ring Stop and tap an axle rod to add a physical axle stop.
+
+### CROSS
+
+- Tap a rod body to cross-snap the selected connector.
+- The connection remembers the exact connector socket, host rod, and point along the host rod.
+- Compatible existing overlaps can also be recognized and fused as cross connections after normal rod-end/socket matches are considered first.
+
+## Connection-first rotation
+
+v0.2.0 no longer repeatedly rotates a connector around its changing local X/Y/Z axes and then tries to rediscover where its rods went.
+
+Each connection records the real mount geometry. Rotation is previewed against that connection graph before anything changes.
+
+### Free/root assemblies
+
+A connector with no incoming mount can rotate its rigidly connected branch in **45° camera-relative steps** using the Up / Down / Left / Right controls. Roll rotates around the connector's own normal.
+
+### Mounted connectors
+
+A mounted connector uses **Roll ⟲ / Roll ⟳** around its real mount axis:
+
+- socket-mounted connector → incoming rod axis;
+- cross-mounted connector → host cross-rod axis;
+- axle-mounted connector → axle axis.
+
+The rigid downstream branch moves with the selected connector around that pivot rather than leaving its attached rods behind and attempting to remap them afterward.
+
+### Validity and transactional behavior
+
+- Every exact socket, cross, axle, and O-Ring relationship is checked before a candidate transform is accepted.
+- Rotation controls that cannot produce a valid result are disabled before they are pressed.
+- A rejected rotation is a **true no-op**: it does not alter transforms, mount identity, socket occupancy, joint frames, auto-fuse state, or Undo/Redo history.
+- Closed rigid loops that cannot rotate around a single mount without breaking another connection are detected and locked rather than corrupted.
+- **Reset Rotation** uses the same validator to return a connector toward its placement orientation without breaking its recorded connections.
+
+## Move controls
+
+The collapsible left panel operates on the persistent selected piece.
+
+- Forward / Back / Left / Right move its fixed component relative to the camera.
+- Y− / Y+ move vertically.
+- Axle − / Axle + slide compatible selected axle components along the axle axis.
+- O-Ring Stops can be repositioned along their host axle.
 
 ## Camera and Options
 
@@ -73,26 +123,33 @@ EDIT only selects/manipulates; taps do not create parts.
 - Two-finger drag pans.
 - Pinch zooms.
 - The workspace is 500 × 500 world units.
-- **Options** can independently reverse horizontal/vertical orbit and horizontal/vertical pan directions.
+- Options can independently reverse horizontal/vertical orbit and horizontal/vertical pan directions.
 - Camera sensitivity and grid visibility are configurable.
 - Options are saved immediately to `user://connex_settings.cfg` and persist between launches.
 
 ## UI layout
 
-- **Top:** CREATE/EDIT, Undo, Redo, Simulate/Build, Restore, Restart, Center, Options, Help.
+- **Top:** Select, Undo, Redo, Simulate/Build, Restore, Restart, Center, Options, Help.
 - **Bottom:** permanent rod/connector palette and SOCKET/AXLE/CROSS mode.
-- **Right:** collapsible rotation/edit panel.
+- **Right:** collapsible connection-aware rotation panel with camera arrows, mount Roll, Reset Rotation, and Delete Selected.
 - **Left:** collapsible movement/axle-slide panel.
 
 ## Physics
 
-Godot's `Generic6DOFJoint3D` maps to the connection model: socket/cross joints lock six degrees of freedom, while axle joints lock transverse motion and tilt but leave axial translation and axial rotation free.
+Godot's `Generic6DOFJoint3D` is still used for runtime physical constraints: socket/cross joints lock six degrees of freedom, while axle joints lock transverse motion and tilt but leave axial translation and axial rotation free.
 
-Before simulation, Connex reduces redundant fixed-joint cycles into a spanning rigid graph and disables self-collision inside rigidly fixed components. This is intended to avoid the delayed oscillation/explosion failure that can occur when multiple mathematically redundant constraints and internal collision impulses fight each other.
+Before simulation, Connex v0.2.0:
+
+1. runs the same authoritative auto-connect scan used while building;
+2. rebuilds the explicit connection graph;
+3. refreshes joint frames from the recorded connection geometry;
+4. suppresses redundant fixed-joint cycles in the active solver;
+5. disables self-collision inside rigidly connected components;
+6. suppresses duplicate/redundant axle constraints.
 
 The first connector is **not pinned**. All normal construction pieces use the same gravity rules.
 
-The model still intentionally simplifies real plastic behavior:
+The physical model still intentionally simplifies real plastic behavior:
 
 - rods are rigid rather than flexible;
 - snap joints do not detach under load;
@@ -102,7 +159,7 @@ The model still intentionally simplifies real plastic behavior:
 
 ## Procedural visuals
 
-All piece geometry is generated in code. v0.1.5 refines the silhouettes with fluted rod shafts, keyed rod ends, thinner open connector hubs/collars, and more recognizable open-jaw socket geometry. This avoids licensing ambiguity from third-party meshes while keeping dimensions easy to tune.
+All piece geometry is generated in code rather than copied from official meshes. Current visuals use fluted rod shafts, keyed-looking rod ends, open connector hubs/collars, and open-jaw radial sockets while keeping geometry procedural and easy to tune.
 
 ## Build and APK
 

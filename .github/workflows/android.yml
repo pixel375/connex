@@ -16,7 +16,7 @@ concurrency:
 env:
   GODOT_VERSION: 4.6.3
   GODOT_TAG: 4.6.3-stable
-  APK_NAME: Connex-v0.1.1.apk
+  APK_NAME: Connex-v0.1.2.apk
 
 jobs:
   build:
@@ -54,19 +54,16 @@ jobs:
             "https://github.com/godotengine/godot/releases/download/${GODOT_TAG}/Godot_v${GODOT_TAG}_linux.x86_64.zip"
           curl -fL --retry 3 -o /tmp/templates.tpz \
             "https://github.com/godotengine/godot/releases/download/${GODOT_TAG}/Godot_v${GODOT_TAG}_export_templates.tpz"
-
           mkdir -p /tmp/godot
           unzip -q /tmp/godot.zip -d /tmp/godot
           GODOT_BIN="$(find /tmp/godot -maxdepth 1 -type f -name 'Godot*' | head -n 1)"
           chmod +x "$GODOT_BIN"
           sudo install -m 0755 "$GODOT_BIN" /usr/local/bin/godot
-
           mkdir -p /tmp/godot-templates
           unzip -q /tmp/templates.tpz -d /tmp/godot-templates
           TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
           mkdir -p "$TEMPLATE_DIR"
           cp -a /tmp/godot-templates/templates/. "$TEMPLATE_DIR/"
-
           godot --version
           test -f "$TEMPLATE_DIR/android_debug.apk"
 
@@ -82,7 +79,6 @@ jobs:
             -keypass android \
             -keyalg RSA -keysize 2048 -validity 10000 \
             -dname "CN=Android Debug,O=Connex,C=CA"
-
           mkdir -p "$HOME/.config/godot"
           cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
           [gd_resource type="EditorSettings" format=3]
@@ -127,18 +123,18 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Connex-Android-v0.1.1
+          name: Connex-Android-v0.1.2
           path: |
             build/${{ env.APK_NAME }}
             build/${{ env.APK_NAME }}.sha256
           if-no-files-found: error
 
-      - name: Publish GitHub Release v0.1.1
+      - name: Publish GitHub Release v0.1.2
         if: github.event_name == 'push' && contains(github.event.head_commit.message, '[release]')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.1.1
-          name: Connex Lab v0.1.1
+          tag_name: v0.1.2
+          name: Connex Lab v0.1.2
           body_path: RELEASE_NOTES.md
           make_latest: true
           files: |

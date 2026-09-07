@@ -2,3 +2,10 @@
 build/
 *.apk
 *.aab
+*.keystore
+*.jks
+keystore.b64
+keystore-password.txt
+key-password.txt
+key-alias.txt
+connex-signing*/

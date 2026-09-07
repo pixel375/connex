@@ -4,9 +4,9 @@
 
 > K'NEX is a trademark of its respective owner. This project is unofficial, unaffiliated, and does not ship official artwork or copied 3D assets.
 
-## Current version — v0.3.2
+## Current version — v0.3.3
 
-v0.3.2 simplifies the editor into three explicit phone-friendly modes while keeping the connection-first graph and fixed-world rotation architecture introduced in v0.3.
+v0.3.3 keeps the v0.3.2 three-mode editor and replaces the unreliable Android DownloadManager updater path with a Godot-native download/verification/install flow. Runtime status text also has its own strip so it can no longer squeeze the top toolbar buttons.
 
 ## Pieces
 
@@ -84,9 +84,10 @@ Connex explicitly records:
 
 ## UI layout
 
+- **Top toolbar:** Select, Undo, Redo, Simulate/Build, Restore, Restart, Center, Options, Help. It contains buttons only.
+- **Status strip:** a separate line directly below the toolbar for version/runtime messages, so long messages cannot steal button space.
 - **Left:** CREATE / ROTATE / ATTACH, Delete Selected, and ATTACH point deselection.
 - **Right:** collapsible Rotate and Move utility panels. Both start collapsed and operate as an accordion.
-- **Top:** Select, Undo, Redo, Simulate/Build, Restore, Restart, Center, Options, Help.
 - **Bottom:** permanent rod/connector palette and creation connection mode.
 
 ## Camera and Options
@@ -101,11 +102,21 @@ Connex explicitly records:
 
 ## Updates and signing
 
-Starting with v0.2.1, release APKs use one permanent Android signing certificate and package ID `com.pixel375.connex`. v0.3.2 continues using the same certificate and Android versionCode 13, so it installs in place over permanently signed earlier versions and preserves settings/data.
+Starting with v0.2.1, release APKs use one permanent Android signing certificate and package ID `com.pixel375.connex`. v0.3.3 uses the same certificate and Android versionCode 14, so it installs in place over permanently signed earlier versions and preserves settings/data.
 
-Options contains **App Updates**. The v0.3.1 reliability fix queries Android DownloadManager status directly, shows progress/paused/failure states, recovers to Retry after errors, and then hands a completed APK to Android's normal package installer. While this repository remains public, release metadata/APKs come directly from GitHub Releases without embedding a token.
+Options contains **App Updates**. v0.3.3 no longer constructs Android `DownloadManager.Request` objects through `JavaClassWrapper`. Instead it:
 
-If source development later moves private, releases should move to a separate public update feed/release repository rather than embedding private GitHub credentials in the APK.
+1. reads the latest public GitHub Release metadata;
+2. downloads the APK with Godot `HTTPRequest` into `user://`;
+3. shows transfer progress;
+4. verifies the downloaded APK against the SHA-256 digest published by GitHub Releases when available;
+5. opens the verified local APK through Godot `OS.shell_open()`, whose Android implementation uses the app FileProvider and Android's normal package installer.
+
+A verified APK remains available for another **Install** tap if Android first requires the user to grant “install unknown apps” permission. Failed or partial downloads are removed and the UI returns to **Retry Download**.
+
+Users whose installed v0.3.1/v0.3.2 copy hits the old `Android could not create the download request` failure need to install v0.3.3 manually once, because the bug is inside that already-installed updater code. Later updates use the rebuilt path.
+
+While this repository remains public, release metadata/APKs come directly from GitHub Releases without embedding a token. If source development later moves private, releases should move to a separate public update feed/release repository rather than embedding private GitHub credentials in the APK.
 
 ## Physics
 

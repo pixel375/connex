@@ -4,19 +4,9 @@
 
 > K'NEX is a trademark of its respective owner. This project is unofficial, unaffiliated, and does not ship official artwork or copied 3D assets.
 
-## Current version — v0.3.1
+## Current version — v0.3.2
 
-v0.3.1 is an updater reliability hotfix on top of the v0.3.0 editor architecture. v0.3.0 separates **piece transforms** from **connection topology** so rotation no longer decides which connector socket owns a rod, and camera orientation no longer determines a physical rotation axis.
-
-### Core connection graph
-
-The simulator explicitly records:
-
-- **Socket/end snap** — a specific rod end ↔ a specific connector socket.
-- **Cross snap** — a specific connector socket ↔ a recorded point along a rod body.
-- **Hub axle** — connector hub ↔ rod with axial slide/rotation DOFs.
-- **O-Ring Stop** — rigid axle stop ↔ host axle rod.
-- **Automatic fusion** — compatible overlaps create the same graph records as manual attachments.
+v0.3.2 simplifies the editor into three explicit phone-friendly modes while keeping the connection-first graph and fixed-world rotation architecture introduced in v0.3.
 
 ## Pieces
 
@@ -37,70 +27,67 @@ The simulator uses roughly 10 mm = 1 world unit and a 10.1 mm connector-centre-t
 
 Gray 1-way, Orange straight 2-way, Light gray angled 2-way, Red 3-way, Green 4-way, Yellow 5-way, White 8-way, and the special **O-Ring Stop** axle part.
 
-## Selection and building
+## Editor modes
 
-There is no CREATE / EDIT switch.
+Large buttons on the left choose one of three modes:
 
-- The newest created piece becomes selected automatically.
-- Selection persists until another piece is created or **Select** is pressed once and an older piece is tapped.
-- Normal construction taps do not silently change selection.
-- The cyan outline marks the selected piece.
-- Bottom Rod/Conn arrows edit the selected matching piece or choose the next placement type when another kind is selected.
+### CREATE
 
-Construction modes remain **SOCKET / AXLE / CROSS**.
+Normal construction mode. The bottom palette chooses rod/connector types and the usual SOCKET / AXLE / CROSS creation behavior. Rotation gizmos and attachment-point overlays are hidden so a normal build tap cannot be confused with editing.
 
-## v0.3 rotation gizmo
+### ROTATE
 
-The old camera-relative arrow rotation controls are removed.
+The selected piece/rigid branch uses the v0.3 fixed-world rotation gizmo:
 
-- Red **X**, green **Y**, and blue **Z** circular rings are fixed world axes.
-- Moving the camera changes only how the gizmo is viewed, never what an axis means.
-- Dragging a ring uses ray-to-rotation-plane intersection.
-- Rotation snaps to exact **45°** states.
-- `X+ / X-`, `Y+ / Y-`, and `Z+ / Z-` validity is computed before interaction; blocked directions are greyed.
-- A cyan translucent ghost previews a valid snapped result; a red ghost shows a blocked candidate.
-- Nothing is committed until every recorded connection validates.
-- Mounted connectors keep **Roll -45° / +45°** around the actual incoming socket rod, cross rod, or axle.
-- Placement orientation is deterministic and no longer camera-dependent.
+- red X, green Y, blue Z circular rings;
+- camera movement changes only the view, never the physical axis;
+- ray-to-plane drag geometry;
+- exact 45° snapping;
+- invalid snapped states remain blocked;
+- mounted connectors retain real-mount Roll around the actual incoming socket rod, cross rod, or axle.
 
-## Re-seat connection
+Ordinary world taps do not create pieces while ROTATE is active. Use the one-shot **Select** button when you need to choose an older piece.
 
-**Re-seat Mount Socket** explicitly changes which connector jaw owns an existing socket/cross mount.
+### ATTACH
 
-- current mount socket = cyan;
-- valid alternatives = green;
-- invalid/occupied alternatives = grey.
+ATTACH replaces the older Re-seat / Detach / Attach button stack with direct point selection.
 
-Choosing a new socket keeps the host connection point fixed, computes the required rigid transform, validates the entire graph, then atomically changes the stored socket identity.
+Visible points include:
 
-## Detach / Attach
+- rod ends — cyan;
+- rod-body mount points — blue;
+- connector sockets — green;
+- connector axle hubs and O-Rings — purple;
+- occupied points — orange;
+- currently selected point — large yellow marker with a label.
 
-Topology changes are explicit rather than being overloaded onto rotation.
+Workflow:
 
-### Detach
+1. tap one point;
+2. tap a compatible free counterpart;
+3. Connex infers SOCKET / CROSS / AXLE from the two point types;
+4. the first-selected side moves to the target only if every existing connection still validates.
 
-Press **Detach Connection**, then tap one orange connection anchor on the selected piece. The graph edge is removed but both pieces stay exactly where they are. That pair is temporarily excluded from automatic overlap fusion so it does not instantly reconnect itself.
+Tap the same point again or press **Deselect Point** to clear it. Tapping another incompatible or occupied point simply moves the point selection.
 
-### Attach / Re-attach
+If the first-selected point is already connected, ATTACH acts as an atomic reconnect: Connex validates the replacement before removing the old edge. Invalid attempts leave the original connection untouched. Successful reconnects are one Undo/Redo action.
 
-Attach uses the current SOCKET / AXLE / CROSS mode.
+## Connection graph
 
-1. Select the source piece.
-2. Press **Attach / Re-attach**.
-3. Start a drag from a highlighted free source handle.
-4. Drag the tether to a compatible target and release.
+Connex explicitly records:
 
-Free rod ends, connector sockets, hubs, and continuous rod-body targets are supported. The selected rigid component snaps only after all existing connections validate. If the target is already part of the same rigid component, the geometry must already line up; Connex will not distort a closed loop to force it.
+- socket/end snap — a specific rod end ↔ a specific connector socket;
+- cross snap — a specific connector socket ↔ a recorded rod-body position;
+- hub axle — connector hub ↔ rod with axial slide/rotation DOFs;
+- O-Ring Stop — rigid axle stop ↔ host axle rod;
+- automatic fusion — compatible overlaps create the same graph records as explicit attachments.
 
-Manual Attach produces the same authoritative connection records as normal placement and auto-fusion.
+## UI layout
 
-## Move controls
-
-The left panel operates on the persistent selected piece:
-
-- Forward / Back / Left / Right;
-- Y− / Y+;
-- Axle − / Axle + for sliding compatible axle-mounted parts and O-Rings.
+- **Left:** CREATE / ROTATE / ATTACH, Delete Selected, and ATTACH point deselection.
+- **Right:** collapsible Rotate and Move utility panels. Both start collapsed and operate as an accordion.
+- **Top:** Select, Undo, Redo, Simulate/Build, Restore, Restart, Center, Options, Help.
+- **Bottom:** permanent rod/connector palette and creation connection mode.
 
 ## Camera and Options
 
@@ -108,33 +95,27 @@ The left panel operates on the persistent selected piece:
 - two-finger drag: pan;
 - pinch: zoom;
 - workspace: 500 × 500 world units;
-- independent reverse Orbit X/Y and Pan X/Y options;
+- independent reverse Orbit X/Y and Pan X/Y settings;
 - camera sensitivity and grid visibility;
 - settings persist in `user://connex_settings.cfg`.
 
 ## Updates and signing
 
-Starting with v0.2.1, release APKs use one permanent Android signing certificate and package ID `com.pixel375.connex`. v0.3.1 continues using that certificate, so it installs in place over v0.2.1 or v0.3.0 and preserves app settings/data.
+Starting with v0.2.1, release APKs use one permanent Android signing certificate and package ID `com.pixel375.connex`. v0.3.2 continues using the same certificate and Android versionCode 13, so it installs in place over permanently signed earlier versions and preserves settings/data.
 
-Options contains **App Updates**. While the repository is public, Connex checks the public GitHub Releases API, downloads a newer APK through Android DownloadManager, and hands it to Android's package installer. Android still requires its normal install confirmation.
+Options contains **App Updates**. The v0.3.1 reliability fix queries Android DownloadManager status directly, shows progress/paused/failure states, recovers to Retry after errors, and then hands a completed APK to Android's normal package installer. While this repository remains public, release metadata/APKs come directly from GitHub Releases without embedding a token.
 
-v0.3.1 fixes the original updater's indefinite `Downloading…` state. The app now queries the actual Android DownloadManager job state, shows queued/running/paused/progress states, reports Android failure reasons, and restores a Retry button after failure. Update files are stored in Connex's app-specific external Downloads area with unique temporary names to avoid shared-download filename collisions.
-
-If source development later moves private, releases should move to a separate public update feed/release repository rather than embedding a private GitHub token in the APK.
+If source development later moves private, releases should move to a separate public update feed/release repository rather than embedding private GitHub credentials in the APK.
 
 ## Physics
 
-Godot `Generic6DOFJoint3D` constraints remain the runtime physics representation. Fixed socket/cross connections lock all DOFs while axle joints retain axial translation and rotation. Before simulation Connex re-runs auto-fusion, rebuilds the authoritative graph, refreshes frames, suppresses redundant fixed cycles, and suppresses self-collision inside rigid fixed components.
+Godot `Generic6DOFJoint3D` constraints remain the runtime representation. Fixed socket/cross connections lock all DOFs while axle joints retain axial translation and rotation. Before simulation Connex re-runs auto-fusion, rebuilds the authoritative graph, refreshes joint frames, suppresses redundant fixed cycles, and suppresses self-collision inside rigid fixed components.
 
-A later physics upgrade may collapse fully fixed assemblies into compound rigid bodies, leaving only real axle/sliding joints in the solver.
-
-## Procedural visuals
-
-All piece geometry is generated in code rather than copied from official meshes. Rods use fluted shafts/keyed-looking ends; connectors use procedural open hubs and jaw-like radial sockets.
+A future physics upgrade may collapse fully fixed assemblies into compound rigid bodies, leaving only true axle/sliding joints in the solver.
 
 ## Build
 
-Every pull request is parsed, smoke-tested headlessly, and exported to an ARM64 Android APK by `.github/workflows/android.yml`. Release merges are signed with the permanent Connex keystore, certificate-verified, and published with a SHA-256 checksum.
+Every pull request is parsed, smoke-tested headlessly, and exported to an ARM64 Android APK by `.github/workflows/android.yml`. Release merges use the permanent Connex keystore, verify the certificate fingerprint, and publish the APK plus SHA-256 checksum to GitHub Releases.
 
 ## Research basis
 

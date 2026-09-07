@@ -1,21 +1,28 @@
-# Connex Lab v0.1.6
+# Connex Lab v0.1.7
 
-Small UI clarity and selection-highlight patch on top of v0.1.5.
+Auto-connect reliability update on top of v0.1.6.
 
-### CREATE / EDIT mode selector
-- replaced the single mode button whose label changed between CREATE and EDIT;
-- CREATE and EDIT are now two separate buttons that are always visible side-by-side;
-- the active mode is highlighted with a bright accent and a dot indicator;
-- tapping CREATE always enters CREATE directly;
-- tapping EDIT always enters EDIT directly;
-- the Rotate and Move panel headers explicitly show `EDIT` while CREATE is active, making it clear why their edit controls are unavailable.
+### Robust rod-end / socket auto-fusing
+- valid rod ends that visually overlap a compatible free connector socket now become real fixed graph connections automatically;
+- the capture distance was expanded to match the newer, deeper procedural connector jaws rather than the older simplified connector visuals;
+- alignment remains strict, so nearby rods do not attach unless the rod axis and socket direction are physically compatible;
+- matching is bidirectional: every free rod end is checked against every free connector socket, regardless of which piece was placed first;
+- the closest valid socket wins when more than one candidate is nearby;
+- the joint is created from the existing BUILD pose without pulling the model into a preloaded/stressed solver position;
+- occupancy metadata for both the rod end and connector socket is updated at the same time.
 
-### Selection highlight rebuild fix
-- changing a selected connector or rod type now rebuilds the cyan outline only from the new live geometry;
-- old meshes queued for deletion are ignored when the highlight is regenerated;
-- fixes stale outlines such as an 8-way connector highlight remaining around a connector after changing it to 1-way.
+### Immediate BUILD-time fusion
+- auto-fusing now runs before every committed build-state snapshot, not only immediately before SIMULATE;
+- placement, connector changes, rod changes, rotations and edit movement can therefore create a real connection as soon as compatible geometry overlaps;
+- the same robust matcher runs again immediately before physics as a final safety pass.
 
-No construction, physics, rotation, axle, O-Ring, movement, or persistent-settings behavior is otherwise changed from v0.1.5.
+### Cross overlap capture
+- automatic rod-body cross capture is retained with a slightly more forgiving visual capture distance;
+- rod-end/socket matches are always evaluated first so a rod tip beside a connector jaw is not incorrectly treated as a cross connection.
+
+### v0.1.6 UI fixes retained
+- CREATE and EDIT remain separate, always-visible top-bar buttons;
+- stale selection outlines are rebuilt only from current live piece geometry.
 
 ### APK signing
 The attached APK is debug-signed for direct sideload/testing. It is not a Play Store production-signed package.

@@ -16,7 +16,7 @@ concurrency:
 env:
   GODOT_VERSION: 4.6.3
   GODOT_TAG: 4.6.3-stable
-  APK_NAME: Connex-v0.1.3.apk
+  APK_NAME: Connex-v0.1.4.apk
 
 jobs:
   build:
@@ -91,17 +91,17 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Connex-Android-v0.1.3
+          name: Connex-Android-v0.1.4
           path: |
             build/${{ env.APK_NAME }}
             build/${{ env.APK_NAME }}.sha256
           if-no-files-found: error
-      - name: Publish GitHub Release v0.1.3
+      - name: Publish GitHub Release v0.1.4
         if: github.event_name == 'push' && contains(github.event.head_commit.message, '[release]')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.1.3
-          name: Connex Lab v0.1.3
+          tag_name: v0.1.4
+          name: Connex Lab v0.1.4
           body_path: RELEASE_NOTES.md
           make_latest: true
           files: |

@@ -4,9 +4,9 @@
 
 > K'NEX is a trademark of its respective owner. This project is unofficial, unaffiliated, and does not ship official artwork or copied 3D assets.
 
-## Current version — v0.3.0
+## Current version — v0.3.1
 
-v0.3.0 separates **piece transforms** from **connection topology**. Rotation no longer decides which connector socket owns a rod, and camera orientation no longer determines a physical rotation axis.
+v0.3.1 is an updater reliability hotfix on top of the v0.3.0 editor architecture. v0.3.0 separates **piece transforms** from **connection topology** so rotation no longer decides which connector socket owns a rod, and camera orientation no longer determines a physical rotation axis.
 
 ### Core connection graph
 
@@ -114,9 +114,13 @@ The left panel operates on the persistent selected piece:
 
 ## Updates and signing
 
-Starting with v0.2.1, release APKs use one permanent Android signing certificate and package ID `com.pixel375.connex`. v0.3.0 continues using that certificate, so an installed v0.2.1 can update in place.
+Starting with v0.2.1, release APKs use one permanent Android signing certificate and package ID `com.pixel375.connex`. v0.3.1 continues using that certificate, so it installs in place over v0.2.1 or v0.3.0 and preserves app settings/data.
 
-Options contains **App Updates**. While the repository is public, Connex checks the public GitHub Releases API, downloads a newer APK through Android DownloadManager, and hands it to Android's package installer. Android still requires its normal install confirmation. If source development later moves private, releases should move to a separate public update feed/release repository rather than embedding a private GitHub token in the APK.
+Options contains **App Updates**. While the repository is public, Connex checks the public GitHub Releases API, downloads a newer APK through Android DownloadManager, and hands it to Android's package installer. Android still requires its normal install confirmation.
+
+v0.3.1 fixes the original updater's indefinite `Downloading…` state. The app now queries the actual Android DownloadManager job state, shows queued/running/paused/progress states, reports Android failure reasons, and restores a Retry button after failure. Update files are stored in Connex's app-specific external Downloads area with unique temporary names to avoid shared-download filename collisions.
+
+If source development later moves private, releases should move to a separate public update feed/release repository rather than embedding a private GitHub token in the APK.
 
 ## Physics
 

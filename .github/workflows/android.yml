@@ -1,0 +1,140 @@
+name: Android APK
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.6.3
+  GODOT_TAG: 4.6.3-stable
+  APK_NAME: Connex-v0.1.0.apk
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android packages
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platform-tools" \
+            "build-tools;35.0.1" \
+            "platforms;android-35" \
+            "cmdline-tools;latest" \
+            "cmake;3.10.2.4988404" \
+            "ndk;28.1.13356709"
+
+      - name: Install Godot and export templates
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -fL --retry 3 -o /tmp/godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_TAG}/Godot_v${GODOT_TAG}_linux.x86_64.zip"
+          curl -fL --retry 3 -o /tmp/templates.tpz \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_TAG}/Godot_v${GODOT_TAG}_export_templates.tpz"
+
+          mkdir -p /tmp/godot
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          GODOT_BIN="$(find /tmp/godot -maxdepth 1 -type f -name 'Godot*' | head -n 1)"
+          chmod +x "$GODOT_BIN"
+          sudo install -m 0755 "$GODOT_BIN" /usr/local/bin/godot
+
+          mkdir -p /tmp/godot-templates
+          unzip -q /tmp/templates.tpz -d /tmp/godot-templates
+          TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$TEMPLATE_DIR"
+          cp -a /tmp/godot-templates/templates/. "$TEMPLATE_DIR/"
+
+          godot --version
+          test -f "$TEMPLATE_DIR/android_debug.apk"
+
+      - name: Configure Android export
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p "$HOME/.android"
+          keytool -genkeypair -v \
+            -keystore "$HOME/.android/debug.keystore" \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Connex,C=CA"
+
+          mkdir -p "$HOME/.config/godot"
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/debug_keystore = "$HOME/.android/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
+
+      - name: Parse project and smoke-test main scene
+        shell: bash
+        run: |
+          set -euxo pipefail
+          godot --headless --path . --editor --quit
+          godot --headless --path . --quit-after 2
+
+      - name: Export Android APK
+        shell: bash
+        env:
+          GODOT_ANDROID_KEYSTORE_DEBUG_PATH: /home/runner/.android/debug.keystore
+          GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
+          GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
+        run: |
+          set -euxo pipefail
+          mkdir -p build
+          godot --headless --path . --export-debug "Android" "build/${APK_NAME}"
+          test -s "build/${APK_NAME}"
+          sha256sum "build/${APK_NAME}" > "build/${APK_NAME}.sha256"
+          ls -lh build/
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Connex-Android-v0.1.0
+          path: |
+            build/${{ env.APK_NAME }}
+            build/${{ env.APK_NAME }}.sha256
+          if-no-files-found: error
+
+      - name: Publish GitHub Release v0.1.0
+        if: github.event_name == 'push' && contains(github.event.head_commit.message, '[release]')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.0
+          name: Connex Lab v0.1.0
+          body_path: RELEASE_NOTES.md
+          make_latest: true
+          files: |
+            build/${{ env.APK_NAME }}
+            build/${{ env.APK_NAME }}.sha256

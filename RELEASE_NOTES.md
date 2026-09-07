@@ -1,55 +1,38 @@
-# Connex Lab v0.2.0
+# Connex Lab v0.2.1
 
-Major interaction, placement, and connection-system rewrite.
+Permanent Android signing and in-app update infrastructure.
 
-### Persistent selected-piece workflow
-- CREATE / EDIT modes are removed from the UI;
-- the newest rod, connector, or O-Ring becomes selected automatically;
-- selection remains on that piece until another piece is created or the user presses `Select` and taps one older piece;
-- `Select` is a one-shot action and cancels immediately after a successful selection;
-- normal construction taps do not silently change selection;
-- rotation, movement, delete, axle slide, and compatible type edits act on the persistent selected piece.
+### Permanent app signing
+- package ID remains `com.pixel375.connex`;
+- release APKs now use one permanent signing certificate instead of a freshly generated CI debug key;
+- release CI verifies the expected certificate SHA-256 fingerprint before publishing;
+- signing material is supplied only through GitHub Actions Secrets and is never committed to the repository;
+- the workflow refuses to publish a `[release]` build if any required signing secret is missing or the certificate does not match.
 
-### Explicit connection graph
-- socket, cross, axle, and O-Ring connections are now stored as explicit graph records;
-- socket records remember the exact connector socket and exact rod end instead of rediscovering them from the current transform;
-- cross records remember the exact socket, host rod, and position along the host rod;
-- axle records keep their real rod/hub relationship;
-- automatic overlap fusion produces the same connection records as manual placement;
-- occupancy is rebuilt from the connection graph so a socket that already contains a rod stays unavailable.
+Because all releases up through v0.2.0 used ephemeral debug signing keys, Android cannot update an already-installed v0.2.0 directly to this new permanent key. v0.2.1 therefore requires one final uninstall/reinstall. Once v0.2.1 is installed, future APKs signed by this same key can update it in place while retaining the same package ID and app data.
 
-### Mount-relative rotation solver
-- removed the old local X/Y/Z rotation workflow that could change meaning after each rotation;
-- free/root assemblies use camera-relative Up / Down / Left / Right 45-degree rotation controls;
-- mounted connectors use Roll left/right around the actual incoming socket rod, cross rod, or axle axis;
-- the selected connector's fixed downstream branch moves with it around the chosen pivot instead of trying to rotate the connector while leaving every attached child rod behind;
-- closed rigid loops are detected and block a pivot rotation rather than corrupting connection state;
-- every connection is preview-validated before any transform changes;
-- impossible rotation buttons are disabled before the user presses them;
-- invalid rotation attempts are literal no-ops: no transform, connection, home orientation, joint frame, occupancy, auto-fuse, or Undo/Redo state changes;
-- Reset Rotation returns to the connector's placement orientation through the same transactional solver.
+### In-app updater
+- Options now contains an App Updates section;
+- the app can automatically check the public `pixel375/connex` GitHub Releases feed at launch;
+- automatic checking can be enabled/disabled and the preference persists between launches;
+- `Check for Updates` compares the installed semantic version with the latest GitHub release;
+- when a newer APK is available, the button changes to `Update to vX.Y.Z`;
+- on Android, the APK is downloaded through Android DownloadManager and the system package installer is opened automatically when the download completes;
+- Android 8+ unknown-source permission is handled by opening the per-app `Install unknown apps` settings page when required, then continuing installation after the user returns;
+- Android still requires the normal package-install confirmation. Ordinary apps cannot silently replace themselves;
+- on non-Android platforms, the updater falls back to opening the release/download URL.
 
-### Placement upgrades
-- manual socket placement records exact socket/end identity immediately;
-- rod-end connector placement uses a stable mount frame aligned to the incoming rod;
-- cross placement creates a connector plane that contains the host rod and records the real cross axis;
-- AXLE can insert a rod through a connector or place a sliding connector on any existing rod, including rods already connected at their ends;
-- O-Ring Stop remains in the connector list and is placed directly on axle rods;
-- valid overlapping free rod ends and sockets are fused bidirectionally before every saved BUILD state and again before simulation;
-- valid automatic cross overlaps are retained after rod-end/socket matching gets priority.
+### Update source
+For now, update metadata and APKs come directly from the public `pixel375/connex` GitHub Releases API. No GitHub token is embedded in the application. When development moves to a private source repository, the updater should continue using a separate public release/update repository or public update manifest rather than embedding private-repository credentials in the APK.
 
-### UI / settings
-- top bar now uses `Select`, Undo, Redo, Simulate, Restore, Restart, Center, Options, and Help;
-- bottom rod/connector palette remains always visible;
-- right rotation panel uses camera arrows plus explicit mount Roll and Reset Rotation;
-- left movement panel remains collapsible;
-- selected piece retains the strong cyan outline;
-- persistent reverse orbit/pan controls, camera sensitivity, grid visibility, and collapsed panel state are retained.
+### Security
+Private signing files are ignored by `.gitignore`. Required GitHub Actions Secret names are:
+- `CONNEX_KEYSTORE_B64`
+- `CONNEX_KEYSTORE_PASSWORD`
+- `CONNEX_KEY_ALIAS`
+- `CONNEX_KEY_PASSWORD`
 
-### Simulation preflight
-- the same explicit connection graph is rebuilt before physics;
-- all joint frames are refreshed from the authoritative connection geometry before release;
-- the existing stable-simulation pass still suppresses redundant closed-loop solver constraints and self-collision inside rigidly connected components.
+Godot currently requires the Android keystore password and key password to match.
 
-### APK signing
-The attached APK is debug-signed for direct sideload/testing. It is not a Play Store production-signed package.
+### v0.3.0 editor TODO
+The planned transform-gizmo and explicit detach/re-attach connection editor is tracked separately and is intentionally not included in this updater/signing release.

@@ -1,6 +1,6 @@
 # Connex Lab v0.1.4
 
-Selection, rotation controls, deletion, and physics-stability update.
+Selection, rotation controls, deletion, axle stops, and physics-stability update.
 
 ### Selection and connector controls
 - tapping a connector body/hub now selects it instead of rotating it;
@@ -11,11 +11,19 @@ Selection, rotation controls, deletion, and physics-stability update.
 - in SOCKET mode, tapping an actual free outer socket still places a rod;
 - AXLE mode now selects a connector first and uses a separate `Insert Axle` action, keeping connector body taps as selection gestures.
 
+### O-Ring axle-stop connector
+- added a physical `O-Ring Connector` intended for axle rods;
+- press `Place O-Ring Connector`, then tap an existing axle rod at the desired position;
+- the ring locks to that axle rod and physically prevents a sliding hub/axle connector from travelling past it during simulation;
+- multiple O-rings can be placed on the same axle, including one on each side of a sliding connector;
+- O-rings can be selected, highlighted, deleted, restored through Undo/Redo, and participate in simulation with the axle;
+- placement is rejected on ordinary non-axle rods.
+
 ### Delete
-- `Delete` removes the selected rod or connector;
+- `Delete` removes the selected rod, connector, or O-ring axle stop;
 - joints involving the deleted piece are removed;
 - occupied connector sockets, rod ends, and axle-hub state are recalculated from the remaining graph so freed connection points become usable again;
-- deleting the final piece creates a new editable starting connector;
+- deleting the final main construction piece creates a new editable starting connector;
 - delete operations are included in Undo/Redo history.
 
 ### Starting connector / gravity
@@ -31,6 +39,7 @@ v0.1.4 changes the simulation graph before physics release:
 - axle joints that are already redundant because both endpoints belong to the same rigid component are suppressed for the simulation run;
 - duplicate axle constraints between the same two rigid components are also suppressed;
 - unrelated bodies and unrelated cross/axle pieces continue to collide physically;
+- O-ring axle stops remain rigidly attached to their host axle and collide with sliding axle connectors as physical end-stops;
 - all pieces are velocity-cleared and kept frozen for several physics frames while the stabilized graph initializes, then released simultaneously;
 - returning to BUILD restores the full construction joint graph and original collision behavior.
 

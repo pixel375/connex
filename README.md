@@ -4,9 +4,9 @@
 
 > K'NEX is a trademark of its respective owner. This project is unofficial, unaffiliated, and does not ship official artwork or copied 3D assets.
 
-## Current version — v0.3.7
+## Current version — v0.3.8
 
-v0.3.7 changes normal X/Y/Z rotation into a true rigid-island world transform so moved/off-axis constructions can always rotate, while hardening the right-side Rotate/Move accordion so both panels cannot remain open together.
+v0.3.8 applies the highest-priority correctness fixes from the v0.3.6 Codex audit: mount-relative Reset state now survives Undo/Redo, disconnected constructions collide during simulation, signing documentation is synchronized with the real release certificate, and CI gains its first behavioral editor regression test. The v0.3.7 rigid-island world rotation and one-state Rotate/Move accordion remain in place.
 
 ## Pieces
 
@@ -45,12 +45,13 @@ ROTATE uses a game-engine-style X/Y/Z ring gizmo around the selected piece:
 - the gizmo is attached visually to the selected piece, not embedded in a menu;
 - camera angle changes only how the rings are projected on screen, never which physical axis is used;
 - every drag snaps to exact 45° world-axis increments;
-- **v0.3.7 rotates the entire connected construction island as one rigid transform around the selected piece**;
+- **the entire connected construction island rotates as one rigid transform around the selected piece**;
 - socket, CROSS, axle and O-Ring relationships therefore keep exactly the same relative geometry during normal XYZ rotation;
 - previous movement, reattachment, arbitrary world orientation, or an already off-axis construction cannot make XYZ rotation invalid merely because it no longer matches an old world/rest angle;
 - disconnected constructions remain independent because only the selected piece's connected island rotates;
 - **Roll** remains a separate operation around the actual socket/cross/axle mount axis;
-- **Reset Placement Rotation** restores the connector's stored mount-relative placement orientation rather than an old absolute world-space basis.
+- **Reset Placement Rotation** restores the connector's stored mount-relative placement orientation rather than an old absolute world-space basis;
+- **v0.3.8 serializes that mount-relative home by stable connection UID**, so Roll → Undo → Redo → Reset still returns to the original placement orientation.
 
 Ordinary world taps do not create pieces in ROTATE mode. Use the one-shot **Select** button when you need to choose another piece.
 
@@ -98,6 +99,8 @@ Connex explicitly records:
 - O-Ring Stop — rigid axle stop ↔ host axle rod;
 - automatic fusion — compatible overlaps create the same graph records as explicit attachments.
 
+History snapshots also retain the stable connection UID and v0.3.8 mount-home orientation metadata required for mount-relative Reset Placement Rotation.
+
 ## UI layout
 
 - **Top toolbar:** Select, Undo, Redo, Simulate/Build, Restore, Restart, Center, Options, Help.
@@ -120,7 +123,9 @@ Camera movement changes the view only. Placement orientation and X/Y/Z rotation 
 
 ## Updates and signing
 
-Starting with v0.2.1, release APKs use one permanent Android signing certificate and package ID `com.pixel375.connex`. v0.3.7 uses the same certificate and Android versionCode 18, so it installs in place over permanently signed earlier versions and preserves settings/data.
+Starting with v0.2.1, release APKs use one permanent Android signing certificate and package ID `com.pixel375.connex`. v0.3.8 keeps that package ID and uses Android versionCode 19, so it installs in place over permanently signed earlier versions and preserves settings/data.
+
+The authoritative release-certificate SHA-256 fingerprint is documented in [`SIGNING.md`](SIGNING.md) and is checked in three places: metadata consistency CI, keystore validation before a release export, and `apksigner` verification of the finished APK. The fingerprint in `SIGNING.md` was corrected in v0.3.8 after the Codex audit found that the documentation had drifted from the actual permanent release certificate.
 
 Options contains **App Updates**. Since v0.3.3, Connex reads the latest GitHub Release, downloads the APK with Godot `HTTPRequest` into `user://`, displays progress, verifies the GitHub Release SHA-256 digest when available, then opens the verified APK through Godot's Android FileProvider / normal package installer path.
 
@@ -128,13 +133,23 @@ While this repository remains public, release metadata/APKs come directly from G
 
 ## Physics
 
-Godot `Generic6DOFJoint3D` constraints remain the runtime representation. Fixed socket/cross connections lock all DOFs while axle joints retain axial translation and rotation. Before simulation Connex re-runs auto-fusion, rebuilds the authoritative graph, refreshes joint frames, suppresses redundant fixed cycles, and suppresses self-collision inside rigid fixed components.
+Godot `Generic6DOFJoint3D` constraints remain the runtime representation. Fixed socket/cross connections lock all DOFs while axle joints retain axial translation and rotation.
 
-A future physics upgrade may collapse fully fixed assemblies into compound rigid bodies, leaving only true axle/sliding joints in the solver.
+Construction pieces use collision layer 2 and, starting in v0.3.8, collision mask 3 so they collide with both the layer-1 ground/world and other construction bodies. Before simulation Connex re-runs auto-fusion, rebuilds the authoritative graph, refreshes joint frames, suppresses redundant fixed cycles, and adds collision exceptions inside each rigid fixed component. This means disconnected pieces/assemblies can collide while rigidly connected parts do not fight themselves in the solver.
 
-## Build
+Collision shapes are still simplified. A future physics upgrade may improve connector jaw/hole collision fidelity and collapse fully fixed assemblies into compound rigid bodies, leaving only true axle/sliding joints in the solver.
 
-Every pull request is parsed, smoke-tested headlessly, and exported to an ARM64 Android APK by `.github/workflows/android.yml`. Release merges use the permanent Connex keystore, verify the certificate fingerprint, and publish the APK plus SHA-256 checksum to GitHub Releases.
+## Build and regression checks
+
+Every pull request is parsed, smoke-tested headlessly, behavior-tested, and exported to an ARM64 Android APK by `.github/workflows/android.yml`.
+
+The v0.3.8 behavioral audit smoke test launches the real `Main.tscn`, creates a socket chain with production placement functions, verifies construction collision masks, performs Roll → Undo → Redo → Reset, and fails if the connector's original mount-relative home is lost.
+
+Normal CI jobs have read-only repository contents permission. Release publication is isolated into a separate write-enabled job that runs only for an explicit `[release]` push. Release builds use the permanent Connex keystore, verify the certificate fingerprint, and publish the APK plus SHA-256 checksum to GitHub Releases.
+
+## Audit status
+
+The original Codex review is retained in [`V0.3.6_AUDIT_NOTES.md`](V0.3.6_AUDIT_NOTES.md). v0.3.8 resolves its highest-priority signing-documentation, history/reset-state, construction-collision, and behavioral-test findings. Larger inheritance/performance, updater-hardening and collision-fidelity recommendations remain tracked as future engineering work rather than being mixed into this correctness patch.
 
 ## Research basis
 

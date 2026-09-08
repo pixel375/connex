@@ -36,6 +36,12 @@ func _run() -> void:
 		_fail("could not create connected rod")
 		return
 
+	# v0.5.1 deliberately makes ITEM the default. This older regression covers the
+	# v0.4 WORLD behavior, so request WORLD explicitly before asserting its legacy
+	# whole-island movement/rotation contract.
+	if main.get("transform_space_v051") != null:
+		main.set("transform_space_v051", 1)
+
 	main.call("_set_selected", seed)
 	var seed_start: Vector3 = seed.global_position
 	var rod_start: Vector3 = rod.global_position
@@ -79,7 +85,7 @@ func _run() -> void:
 		_fail("exact-step world rotation fallback did not rotate selected piece")
 		return
 
-	print("EDITOR_UX_SMOKE_OK: no splash + world move gizmo + rigid island move + disconnect + rotation fallback")
+	print("EDITOR_UX_SMOKE_OK: no splash + explicit WORLD move gizmo + rigid island move + disconnect + rotation fallback")
 	main.queue_free()
 	await process_frame
 	quit(0)

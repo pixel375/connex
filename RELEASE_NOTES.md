@@ -1,47 +1,30 @@
-# Connex Lab v0.3.8
+# Connex Lab v0.3.9
 
-Correctness and CI hardening release based on the v0.3.6 Codex audit.
+Selection and O-Ring usability update.
 
-### Undo / Redo now preserves Reset Placement Rotation home
-- v0.3.6 introduced a connector home orientation stored relative to its real host rod;
-- the older history snapshot format did not serialize that joint metadata, so an Undo/Redo restore could accidentally learn the restored rolled pose as the new reset home;
-- v0.3.8 stores each mount-relative home basis by stable connection UID in history snapshots and restores it after the connection graph is rebuilt;
-- Roll → Undo → Redo → Reset now returns the connector to its original mount-relative placement orientation;
-- Delete/Undo and other history restores use the same preservation path.
+### Deselect Piece
+- a new **Deselect Piece** button is available on the left editor panel;
+- tapping genuinely empty workspace also clears the current piece selection;
+- ATTACH points and the ROTATE gizmo are treated as interactive targets, so tapping/dragging those controls does not accidentally deselect the piece;
+- selection tools are cancelled cleanly when the piece is deselected.
 
-### Disconnected constructions now collide
-- rods/connectors use construction collision layer 2 and now mask both the ground and other construction bodies (`mask = 3`);
-- loose pieces and disconnected assemblies therefore collide instead of passing through one another during simulation;
-- the existing simulation preflight still suppresses self-collision inside rigid fixed components and suppresses redundant fixed constraints;
-- collision shapes are still simplified and will be refined separately as visual/physics fidelity improves.
+### Bottom palette now clearly separates editing from future placement
+- while a compatible piece is selected, the existing Rod / Conn controls retain their current edit behavior;
+- with nothing selected, those controls are strictly future-piece selectors and never modify an already-created part;
+- the labels explicitly show `NEXT • ...` while nothing is selected;
+- the left hint also states that the bottom palette is choosing the next part.
 
-### Signing documentation corrected and guarded
-- `SIGNING.md` had drifted to an old/incorrect public certificate fingerprint;
-- the authoritative SHA-256 certificate fingerprint is `BF:CD:2B:59:70:91:E4:AA:FE:4F:27:93:FD:14:A7:9A:2A:D4:94:0D:D1:06:9D:18:74:9C:E7:A9:99:50:D4:22`;
-- that fingerprint was independently verified from the published v0.3.7 APK with `apksigner`;
-- CI now checks Main scene, app version, versionCode, package ID, APK filename and documented signing fingerprint for consistency before the expensive Android build begins;
-- release builds still verify the decoded keystore fingerprint before export and the final APK signer after export.
+### O-Ring Stop is now directly reachable
+- **O-Ring Stop** remains a real entry in the Conn list and can now be reached reliably after clearing selection;
+- when O-Ring Stop is chosen as the next connector, Connex explains that it is placed on a rod already being used as an axle;
+- the new regression test verifies that cycling the future Conn selector reaches O-Ring Stop without changing the existing connector, then places an O-Ring on real axle geometry.
 
-### First behavioral audit regression test
-- CI now launches the actual game scene headlessly and constructs a real socket chain;
-- it checks construction collision layer/mask behavior;
-- it performs Roll → Undo → Redo → Reset and fails if the original mount home is lost;
-- every PR must pass this behavioral smoke test in addition to the existing parser/runtime smoke and Android export.
-
-### GitHub Actions permissions tightened
-- normal build/PR jobs now use read-only repository contents permission;
-- release publication is isolated into a second job with write permission only when an explicit `[release]` push is being published;
-- the validated APK artifact is passed from the build job to the release job.
-
-### v0.3.7 rotation/UI behavior retained
-- X/Y/Z remains a fixed-WORLD game-engine-style gizmo that rotates the selected connected construction island rigidly around the selected piece;
-- camera angle and arbitrary prior orientation do not define the transform axes;
-- exact 45° snapping remains;
-- Roll remains the real mount-axis operation;
-- Rotate and Move remain one mutually-exclusive accordion state.
+### Regression coverage
+- the v0.3.8 mount-home/collision audit smoke remains active;
+- v0.3.9 adds a dedicated headless selection/O-Ring smoke test;
+- parser/runtime smoke, Android export, signing verification, and release metadata checks remain required.
 
 ### Signing / update compatibility
-- Android versionCode is 19;
+- Android versionCode is 20;
 - package ID remains `com.pixel375.connex`;
-- v0.3.8 uses the same permanent signing certificate as v0.2.1+;
-- it updates in place over permanently signed earlier builds and preserves app data/settings.
+- v0.3.9 uses the same permanent signing certificate as v0.2.1+ and updates in place over permanently signed earlier builds.

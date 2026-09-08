@@ -27,7 +27,7 @@ func _run() -> void:
 	await process_frame
 
 	var runtime_path: String = str(main.get_script().resource_path)
-	if not (runtime_path.ends_with("main_v053.gd") or runtime_path.ends_with("main_v054.gd")):
+	if not (runtime_path.ends_with("main_v053.gd") or runtime_path.ends_with("main_v054.gd") or runtime_path.ends_with("main_v055.gd")):
 		_fail("Main is not using a validated v0.5.1+ runtime")
 		return
 

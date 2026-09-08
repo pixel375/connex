@@ -16,9 +16,9 @@ concurrency:
 env:
   GODOT_VERSION: 4.6.3
   GODOT_TAG: 4.6.3-stable
-  APP_VERSION: 0.5.0
-  APP_VERSION_CODE: 24
-  APK_NAME: Connex-v0.5.0.apk
+  APP_VERSION: 0.5.1
+  APP_VERSION_CODE: 25
+  APK_NAME: Connex-v0.5.1.apk
   EXPECTED_RELEASE_CERT_SHA256: BF:CD:2B:59:70:91:E4:AA:FE:4F:27:93:FD:14:A7:9A:2A:D4:94:0D:D1:06:9D:18:74:9C:E7:A9:99:50:D4:22
 
 jobs:
@@ -33,12 +33,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -F 'res://scripts/main_v050.gd' Main.tscn
-          grep -F 'const VERSION_050 := "0.5.0"' scripts/main_v050.gd
+          grep -F 'res://scripts/main_v053.gd' Main.tscn
+          grep -F 'const VERSION_053 := "0.5.1"' scripts/main_v053.gd
           grep -F 'boot_splash/show_image=false' project.godot
-          grep -F 'export_path="build/Connex-v0.5.0.apk"' export_presets.cfg
-          grep -F 'version/code=24' export_presets.cfg
-          grep -F 'version/name="0.5.0"' export_presets.cfg
+          grep -F 'export_path="build/Connex-v0.5.1.apk"' export_presets.cfg
+          grep -F 'version/code=25' export_presets.cfg
+          grep -F 'version/name="0.5.1"' export_presets.cfg
           grep -F 'package/unique_name="com.pixel375.connex"' export_presets.cfg
           grep -F "\`$EXPECTED_RELEASE_CERT_SHA256\`" SIGNING.md
 
@@ -184,6 +184,14 @@ jobs:
           grep -F 'CHUNK2_SMOKE_OK' /tmp/chunk2-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|CHUNK2_SMOKE_FAIL" /tmp/chunk2-smoke.log; then exit 1; fi
 
+      - name: Run v0.5.1 editor correctness smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/editor_correctness_smoke_v051.gd 2>&1 | tee /tmp/editor-051-smoke.log
+          grep -F 'EDITOR_051_SMOKE_OK' /tmp/editor-051-smoke.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_051_SMOKE_FAIL" /tmp/editor-051-smoke.log; then exit 1; fi
+
       - name: Export Android APK
         shell: bash
         run: |
@@ -206,7 +214,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Connex-Android-v0.5.0
+          name: Connex-Android-v0.5.1
           path: |
             build/${{ env.APK_NAME }}
             build/${{ env.APK_NAME }}.sha256
@@ -227,14 +235,14 @@ jobs:
       - name: Download validated APK artifact
         uses: actions/download-artifact@v4
         with:
-          name: Connex-Android-v0.5.0
+          name: Connex-Android-v0.5.1
           path: build
 
-      - name: Publish GitHub Release v0.5.0
+      - name: Publish GitHub Release v0.5.1
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.5.0
-          name: Connex Lab v0.5.0
+          tag_name: v0.5.1
+          name: Connex Lab v0.5.1
           body_path: RELEASE_NOTES.md
           make_latest: true
           files: |

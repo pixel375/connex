@@ -19,8 +19,9 @@ func _run() -> void:
 	root.add_child(main)
 	await process_frame
 
-	if not str(main.get_script().resource_path).ends_with("main_v050_hotfix.gd"):
-		_fail("Main scene is not using the validated v0.5.0 runtime")
+	var runtime_path: String = str(main.get_script().resource_path)
+	if not (runtime_path.ends_with("main_v050_hotfix.gd") or runtime_path.ends_with("main_v051.gd") or runtime_path.ends_with("main_v052.gd") or runtime_path.ends_with("main_v053.gd")):
+		_fail("Main scene is not using a validated v0.5.x runtime")
 		return
 	if main.get("parts_panel_v050") == null or main.get("builds_panel_v050") == null:
 		_fail("parts or saves modal was not created")

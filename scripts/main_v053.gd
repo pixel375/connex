@@ -1,6 +1,10 @@
 extends "res://scripts/main_v052.gd"
 
 const VERSION_053 := "0.5.1"
+# v0.5.2 development compatibility aliases. These intentionally live in the
+# release-lineage shim so main_v054 can reuse the proven v0.4.2 ghost/drag API
+# without copying the old implementation.
+const MOVE_DRAG_STEP_PX_042 := MOVE_GIZMO_STEP_PX_042
 
 
 func _ready() -> void:
@@ -11,6 +15,10 @@ func _ready() -> void:
 func _status(text: String) -> void:
 	if status_label != null:
 		status_label.text = "Connex Lab v%s  •  %s" % [VERSION_053, text]
+
+
+func _show_rotation_ghost_v030(transforms: Dictionary, valid: bool) -> void:
+	_update_rotation_ghost_v030(transforms, valid)
 
 
 # Keep every out-of-plane socket in the same named assembly-root contract used

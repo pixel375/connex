@@ -137,7 +137,9 @@ func _add_arc_bridge_v041(parent: Node3D, slots: Array, color: Color) -> void:
 	for slot_value in slots:
 		arc_points.append(_slot_dir(int(slot_value)) * 0.86)
 	for i in range(arc_points.size() - 1):
-		_add_segment_box_v041(parent, arc_points[i] as Vector3, arc_points[i + 1] as Vector3, 0.19, bridge_mat)
+		var a: Vector3 = arc_points[i]
+		var b: Vector3 = arc_points[i + 1]
+		_add_segment_box_v041(parent, a, b, 0.19, bridge_mat)
 
 
 func _add_spatial_collision_v041(body: RigidBody3D, slot: int) -> void:
@@ -150,11 +152,21 @@ func _add_spatial_collision_v041(body: RigidBody3D, slot: int) -> void:
 	body.add_child(collision)
 
 
+func _clear_spatial_socket_roots_v041(body: RigidBody3D) -> void:
+	for child_value in body.get_children():
+		var child: Node = child_value as Node
+		if child != null and str(child.name).begins_with("SpatialSocket_"):
+			child.queue_free()
+
+
 func _rebuild_connector(body: RigidBody3D, def_index: int) -> void:
 	if def_index < 0 or def_index >= connector_defs.size() or def_index == o_ring_index:
 		return
 	var definition: Dictionary = connector_defs[def_index] as Dictionary
 	if not bool(definition.get("spatial_3d", false)):
+		# Inherited planar rebuilds only remove direct Mesh/Collision children; clear
+		# our nested socket roots first when converting 11/14-point -> planar.
+		_clear_spatial_socket_roots_v041(body)
 		super._rebuild_connector(body, def_index)
 		return
 
@@ -164,7 +176,7 @@ func _rebuild_connector(body: RigidBody3D, def_index: int) -> void:
 			child.queue_free()
 	body.mass = float(definition["mass"])
 	body.set_meta("connector_type", def_index)
-	var color: Color = definition["color"] as Color
+	var color: Color = definition["color"]
 	var main_mat: Material = _mat(color)
 	var edge_mat: Material = _mat(color.lightened(0.06))
 

@@ -6,6 +6,8 @@ config_version=5
 config/name="Connex Lab"
 run/main_scene="res://Main.tscn"
 config/features=PackedStringArray("4.6", "Mobile")
+boot_splash/show_image=false
+boot_splash/bg_color=Color(0.025, 0.03, 0.04, 1)
 
 [display]
 window/size/viewport_width=1280

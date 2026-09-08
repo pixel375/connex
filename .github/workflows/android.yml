@@ -16,9 +16,9 @@ concurrency:
 env:
   GODOT_VERSION: 4.6.3
   GODOT_TAG: 4.6.3-stable
-  APP_VERSION: 0.3.9
-  APP_VERSION_CODE: 20
-  APK_NAME: Connex-v0.3.9.apk
+  APP_VERSION: 0.3.10
+  APP_VERSION_CODE: 21
+  APK_NAME: Connex-v0.3.10.apk
   EXPECTED_RELEASE_CERT_SHA256: BF:CD:2B:59:70:91:E4:AA:FE:4F:27:93:FD:14:A7:9A:2A:D4:94:0D:D1:06:9D:18:74:9C:E7:A9:99:50:D4:22
 
 jobs:
@@ -33,11 +33,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -F 'res://scripts/main_v039.gd' Main.tscn
-          grep -F 'const VERSION_039 := "0.3.9"' scripts/main_v039.gd
-          grep -F 'export_path="build/Connex-v0.3.9.apk"' export_presets.cfg
-          grep -F 'version/code=20' export_presets.cfg
-          grep -F 'version/name="0.3.9"' export_presets.cfg
+          grep -F 'res://scripts/main_v040.gd' Main.tscn
+          grep -F 'const VERSION_040 := "0.3.10"' scripts/main_v040.gd
+          grep -F 'export_path="build/Connex-v0.3.10.apk"' export_presets.cfg
+          grep -F 'version/code=21' export_presets.cfg
+          grep -F 'version/name="0.3.10"' export_presets.cfg
           grep -F 'package/unique_name="com.pixel375.connex"' export_presets.cfg
           grep -F "\`$EXPECTED_RELEASE_CERT_SHA256\`" SIGNING.md
 
@@ -151,6 +151,14 @@ jobs:
           grep -F 'SELECTION_SMOKE_OK' /tmp/selection-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|SELECTION_SMOKE_FAIL" /tmp/selection-smoke.log; then exit 1; fi
 
+      - name: Run v0.3.10 interaction smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/interaction_smoke_v040.gd 2>&1 | tee /tmp/interaction-smoke.log
+          grep -F 'INTERACTION_SMOKE_OK' /tmp/interaction-smoke.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|INTERACTION_SMOKE_FAIL" /tmp/interaction-smoke.log; then exit 1; fi
+
       - name: Export Android APK
         shell: bash
         run: |
@@ -173,7 +181,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Connex-Android-v0.3.9
+          name: Connex-Android-v0.3.10
           path: |
             build/${{ env.APK_NAME }}
             build/${{ env.APK_NAME }}.sha256
@@ -194,14 +202,14 @@ jobs:
       - name: Download validated APK artifact
         uses: actions/download-artifact@v4
         with:
-          name: Connex-Android-v0.3.9
+          name: Connex-Android-v0.3.10
           path: build
 
-      - name: Publish GitHub Release v0.3.9
+      - name: Publish GitHub Release v0.3.10
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.3.9
-          name: Connex Lab v0.3.9
+          tag_name: v0.3.10
+          name: Connex Lab v0.3.10
           body_path: RELEASE_NOTES.md
           make_latest: true
           files: |

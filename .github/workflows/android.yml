@@ -184,6 +184,14 @@ jobs:
           grep -F 'CHUNK2_SMOKE_OK' /tmp/chunk2-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|CHUNK2_SMOKE_FAIL" /tmp/chunk2-smoke.log; then exit 1; fi
 
+      - name: Run v0.5.1 editor correctness smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/editor_correctness_smoke_v051.gd 2>&1 | tee /tmp/editor-051-smoke.log
+          grep -F 'EDITOR_051_SMOKE_OK' /tmp/editor-051-smoke.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_051_SMOKE_FAIL" /tmp/editor-051-smoke.log; then exit 1; fi
+
       - name: Export Android APK
         shell: bash
         run: |

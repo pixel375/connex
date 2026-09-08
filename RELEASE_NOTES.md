@@ -1,34 +1,49 @@
-# Connex Lab v0.3.11
+# Connex Lab v0.4.0
 
-Adds two new fully functional 3D connector pieces.
+First editor-UX modernization chunk.
 
-### New 11-point 3D connector
-- based on the existing 8-way flat connector;
-- adds a three-socket arc over the top;
-- the top arc ports point 45° upward, straight upward, and 45° upward on the opposite side;
-- all 11 ports are real SOCKET endpoints with normal occupancy, attachment, history, rotation, and physics behavior.
+### Cleaner editor modes
+- left-side modes are now **CREATE / ROTATE / MOVE / ATTACH**;
+- MOVE is a first-class editor mode directly beneath ROTATE;
+- right-side Rotate and Move utility panels start collapsed and remain optional;
+- the bottom palette is shorter and the old long instructional line is hidden to leave more room for the construction.
 
-### New 14-point 3D connector
-- includes the full 11-point geometry;
-- adds the mirrored three-socket arc underneath;
-- total: 8 flat-plane sockets + 3 upper-arc sockets + 3 lower-arc sockets;
-- all 14 ports are functional, not decorative.
+### Move gizmo
+- MOVE displays world X/Y/Z translation arrows directly on the selected piece;
+- drag an axis to move the entire connected construction island rigidly;
+- movement snaps every 0.5 world units;
+- the compact Move panel also provides deterministic X/Y/Z ± step buttons and axle sliding.
 
-### Spatial connector support
-- connector socket IDs now support reserved out-of-plane directions while retaining the existing integer socket bookkeeping;
-- existing connection records, Undo/Redo, occupancy maps, re-seat/reset logic and ATTACH can therefore continue to address every socket consistently;
-- the new arc sockets receive matching visual jaw assemblies and collision volumes;
-- changing a spatial connector back to a normal planar connector clears its nested arc geometry correctly.
+### Disconnect Selected
+- new left-side button disconnects the selected physical piece from all of its recorded graph connections;
+- geometry stays exactly where it is;
+- manual-detach blocking prevents the same overlapping pair from instantly auto-fusing again;
+- the operation commits one build/history state and keeps the piece selected.
+
+### Rotation usability
+- the selected-piece world rotation gizmo remains the primary tool;
+- the Rotate panel now includes deterministic World X/Y/Z ±45° fallback buttons;
+- plus/minus direction indicators are evaluated separately so a blocked direction can be greyed without disabling the opposite direction;
+- Roll remains the separate mount-axis operation.
+
+### ATTACH guidance
+- after the first source point is selected, incompatible or occupied discrete points are dimmed;
+- compatible free points are highlighted bright green;
+- a live preview line runs from the selected source to the pointer/current target;
+- green line = compatible target, red line = no valid target yet;
+- existing SOCKET / AXLE / CROSS connection behavior is preserved.
+
+### Visual polish
+- Godot's default boot splash image is disabled;
+- piece materials use a smoother plastic roughness model;
+- key, fill and rim lighting improve shape readability and separation without changing piece colors;
+- UI spacing/panel layout is tightened to reduce clutter.
 
 ### Regression coverage
-- adds `spatial_connectors_smoke_v041.gd`;
-- verifies the exact 11/14 socket counts and 3D directions;
-- verifies top and bottom arc ports create rods in the correct world direction;
-- verifies ATTACH exposes every new socket;
-- verifies spatial geometry is removed when converting back to a planar connector;
-- all v0.3.8, v0.3.9 and v0.3.10 behavioral tests remain active.
+- all v0.3.8 through v0.3.11 behavior tests remain active;
+- new `editor_ux_smoke_v042.gd` verifies the disabled boot splash, world move mode, rigid-island translation, Disconnect Selected, and exact-step world rotation fallback.
 
 ### Signing / update compatibility
-- Android versionCode is 22;
+- Android versionCode is 23;
 - package ID remains `com.pixel375.connex`;
-- v0.3.11 uses the same permanent signing certificate and updates in place over v0.2.1+ permanently signed builds.
+- v0.4.0 uses the same permanent signing certificate and updates in place over v0.2.1+ permanently signed builds.

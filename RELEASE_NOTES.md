@@ -1,47 +1,50 @@
-# Connex Lab v0.5.1
+# Connex Lab v0.5.2
 
-Connection-aware transform and editor-correctness update.
+Interaction-reliability and touch-editor overhaul.
 
-### ITEM / WORLD transforms
-- Rotate and Move now share an explicit **ITEM / WORLD** transform-space switch;
-- **ITEM** is the default and aligns the gizmo to the selected piece or its physically valid connection axis;
-- **WORLD** deliberately moves/rotates the entire connected construction using world XYZ;
-- free pieces expose their own local X/Y/Z axes;
-- CROSS and AXLE connections expose only the degree(s) of freedom their host rod actually allows;
-- invalid arrows/rings are hidden rather than presenting movement that cannot succeed;
-- right-side step buttons use the same transform-space choice as the gizmo.
+### Scrollable editor surfaces
+- Options, Parts, Physics, Rotate and Move are now real touch-scrollable surfaces;
+- Rotate and Move side panels only exist while their matching editor mode is active;
+- those side panels are non-collapsible and disappear immediately when switching modes;
+- modal menus block construction/world input behind them.
 
-### CROSS / AXLE behavior
-- a CROSS-mounted connector can slide along its host rod and rotate around that rod;
-- AXLE-mounted pieces can slide along and rotate around the axle axis while preserving fixed attachments on the moving side;
-- rigidly socket-mounted items do not pretend to have an independent ITEM transform; use WORLD when intentionally repositioning the whole connected assembly;
-- Roll now uses the valid host-rod axis for CROSS / AXLE cases instead of being disabled or rotating the whole construction.
+### Direct selection and transform behavior
+- ROTATE and MOVE no longer require arming the separate Select button; tap a piece directly;
+- ITEM remains the default transform space, while WORLD deliberately transforms the connected construction;
+- ordinary attached ITEM movement follows the selected piece's local alignment;
+- socket-, CROSS- and AXLE-mounted connectors rotate around their real attachment/rod axis;
+- Roll and the visible ITEM rotation gizmo now use the same physically valid axis;
+- CROSS, AXLE and O-Ring movement commits use the same validated transform as the drag preview;
+- invalid transform axes are hidden rather than shown and rejected later;
+- the rotation gizmo starts from the actual finger-down angle, removing the initial jump/snap.
 
-### ATTACH fixes
-- MOVE and ATTACH no longer highlight each other;
-- the buggy cursor tether/line is removed;
-- CROSS attachment markers are rendered as bold `+` symbols;
-- an occupied socket connection can be selected and moved directly to another free fork on the same connector;
-- out-of-plane sockets on the 11-point and 14-point 3D connectors use a larger marker-first picking area and retain rebuild-safe socket assemblies.
+### ATTACH / CREATE reliability
+- valid re-seat sockets keep their valid target color;
+- CROSS `+` markers are substantially larger;
+- rod-end and socket creation taps use larger screen-space picking targets;
+- nearby compatible second rod ends auto-connect more reliably, reducing one-sided structures that fall apart in simulation;
+- Disconnect opens a visible gap and snap-blocks the old pair until explicitly re-attached.
 
-### Parts workflow and connector visuals
-- compact previous/next rod and connector controls are restored alongside the full Parts browser;
-- the Parts browser now includes a live 3D rendering of the currently chosen part using the same procedural geometry as the build;
-- connector socket jaws have been reshaped with rounded rails/tips and a visibly open fork mouth instead of a closed rectangular bridge across the gap;
-- the design remains procedural and unofficial; no official or copied 3D assets are bundled.
+### 11 / 14-point connector fixes
+- all 11 and 14 sockets participate in attachment picking;
+- out-of-plane sockets receive enlarged marker-first targets;
+- spatial connectors now use the current rounded/open-jaw connector design across all ports;
+- changing an 11/14-point connector back to a planar connector removes spatial/top geometry immediately instead of leaving stale pieces behind.
 
-### Camera and UI accessibility
-- two-finger panning once again moves the camera target vertically as well as horizontally;
-- the Rotate/Move side panel receives more usable vertical space so its lower controls are reachable;
-- **Saves & Recovery** and **Physics Settings** are promoted to visible Options actions;
-- Physics has its own accessible panel with gravity, friction, bounce, linear damping and angular damping controls.
+### Parts, camera and physics
+- Parts retains the hybrid quick previous/next controls plus the rendered 3D Parts browser;
+- Parts preview no longer intercepts scroll gestures;
+- camera zoom range is expanded to 3–420 while preserving two-finger pan/zoom;
+- Reset Physics Defaults now restores both physics values and the visible slider positions;
+- Undo/Redo preserves the current rod/connector palette selection instead of treating palette choice as build history.
 
-### Regression coverage
-- the full v0.3.8 through v0.5.0 behavioral suite remains active;
-- the legacy world-transform smoke now explicitly selects WORLD space;
-- new v0.5.1 coverage verifies mode highlighting, ITEM default/synchronized controls, Saves/Physics accessibility, Parts rendering, vertical camera pan and 11/14-point spatial ports.
+### Validation
+- v0.5.2 has dedicated interaction-reliability coverage for scroll surfaces, modal blocking, mode-owned panels, Physics reset, attached local-axis movement, socket-axis rotation, O-Ring/CROSS/AXLE move commits, spatial connector lifecycle and palette-safe history;
+- the complete legacy behavioral suite through v0.5.1 remains active;
+- Android export has passed on the validated v0.5.2 interaction runtime.
 
 ### Signing / update compatibility
-- Android versionCode is 25;
+- Android versionCode is 26;
+- Android versionName is `0.5.2`;
 - package ID remains `com.pixel375.connex`;
-- v0.5.1 uses the existing permanent signing certificate and updates in place over v0.2.1+ permanently signed builds.
+- v0.5.2 uses the existing permanent signing certificate and updates in place over permanently signed Connex builds.

@@ -1,49 +1,56 @@
-# Connex Lab v0.4.0
+# Connex Lab v0.5.0
 
-First editor-UX modernization chunk.
+Second editor-UX modernization chunk, focused on part selection, persistence, recovery, physics controls and scalability.
 
-### Cleaner editor modes
-- left-side modes are now **CREATE / ROTATE / MOVE / ATTACH**;
-- MOVE is a first-class editor mode directly beneath ROTATE;
-- right-side Rotate and Move utility panels start collapsed and remain optional;
-- the bottom palette is shorter and the old long instructional line is hidden to leave more room for the construction.
+### Parts browser
+- the bottom bar now has one clear **PARTS** button instead of four part-cycling arrows;
+- Rods and Connectors are shown as color-coded cards in a scrollable browser;
+- each card shows the part name and useful size/connection information;
+- choosing a card changes the **next** part only and never silently converts the currently selected construction piece;
+- O-Ring Stop, 11-point 3D and 14-point 3D remain available in the connector browser.
 
-### Move gizmo
-- MOVE displays world X/Y/Z translation arrows directly on the selected piece;
-- drag an axis to move the entire connected construction island rigidly;
-- movement snaps every 0.5 world units;
-- the compact Move panel also provides deterministic X/Y/Z ± step buttons and axle sliding.
+### Named Save / Load
+- Options now contains **Open Saves & Recovery**;
+- builds can be saved under user-defined names and loaded later;
+- save files preserve the complete construction snapshot, connection topology, O-Rings, spatial connectors, selected part palette, camera position and SOCKET / AXLE / CROSS mode;
+- loading establishes a fresh Undo root without auto-fusing intentionally detached-but-overlapping pieces.
 
-### Disconnect Selected
-- new left-side button disconnects the selected physical piece from all of its recorded graph connections;
-- geometry stays exactly where it is;
-- manual-detach blocking prevents the same overlapping pair from instantly auto-fusing again;
-- the operation commits one build/history state and keeps the piece selected.
+### Crash autosave and recovery
+- every committed build change schedules a debounced local autosave;
+- the app tracks whether the previous non-headless session closed cleanly;
+- after an unclean Android/app exit, the next launch automatically opens the recovery panel;
+- **Restore Autosave** returns to the latest committed construction;
+- dismissing recovery archives the old autosave into the named Saves folder before normal autosaving resumes, so the recovery point is not silently destroyed;
+- app pause/close flushes pending autosave data.
 
-### Rotation usability
-- the selected-piece world rotation gizmo remains the primary tool;
-- the Rotate panel now includes deterministic World X/Y/Z ±45° fallback buttons;
-- plus/minus direction indicators are evaluated separately so a blocked direction can be greyed without disabling the opposite direction;
-- Roll remains the separate mount-axis operation.
+### Physics controls
+Options now exposes runtime simulation tuning for:
+- gravity;
+- surface friction;
+- bounce;
+- linear damping;
+- angular damping;
+- one-button reset to Connex defaults.
 
-### ATTACH guidance
-- after the first source point is selected, incompatible or occupied discrete points are dimmed;
-- compatible free points are highlighted bright green;
-- a live preview line runs from the selected source to the pointer/current target;
-- green line = compatible target, red line = no valid target yet;
-- existing SOCKET / AXLE / CROSS connection behavior is preserved.
+The values persist between launches and are applied to existing and newly created rods, connectors and O-Rings.
 
-### Visual polish
-- Godot's default boot splash image is disabled;
-- piece materials use a smoother plastic roughness model;
-- key, fill and rim lighting improve shape readability and separation without changing piece colors;
-- UI spacing/panel layout is tightened to reduce clutter.
+### Performance / scalability
+- repeated procedural BoxMesh and CylinderMesh geometry now uses a shared primitive-mesh cache;
+- ATTACH now maintains per-body and world-cell target indexes rather than requiring every ordinary tap to search the entire construction;
+- physical-piece taps use the indexed compatible points first, with the proven global picker retained as a fallback for marker taps outside collision geometry;
+- ATTACH overlay rebuilding is dirty-driven, so repeated UI refreshes no longer recreate all marker geometry when topology, mode and selection have not changed;
+- index/overlay invalidation is tied to commits, restores, mode changes and selection changes.
+
+### UI cleanup
+- part-selection arrows are removed from the normal bottom workflow;
+- Parts, Saves and Physics are grouped behind dedicated surfaces instead of adding more permanent editor buttons;
+- the existing CREATE / ROTATE / MOVE / ATTACH editor stays intact.
 
 ### Regression coverage
-- all v0.3.8 through v0.3.11 behavior tests remain active;
-- new `editor_ux_smoke_v042.gd` verifies the disabled boot splash, world move mode, rigid-island translation, Disconnect Selected, and exact-step world rotation fallback.
+- every v0.3.8 through v0.4.0 behavioral smoke remains active;
+- new `editor_chunk2_smoke_v050.gd` verifies the Parts browser, Variant save round-trip, build restore, physics propagation, mesh-resource reuse, ATTACH spatial indexing and dirty-overlay behavior.
 
 ### Signing / update compatibility
-- Android versionCode is 23;
+- Android versionCode is 24;
 - package ID remains `com.pixel375.connex`;
-- v0.4.0 uses the same permanent signing certificate and updates in place over v0.2.1+ permanently signed builds.
+- v0.5.0 uses the same permanent signing certificate and updates in place over v0.2.1+ permanently signed builds.

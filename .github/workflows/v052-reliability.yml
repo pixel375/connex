@@ -1,0 +1,47 @@
+name: v0.5.2 Reliability Smoke
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reliability-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  reliability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Godot 4.6.3
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -fL --retry 3 -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/4.6.3-stable/Godot_v4.6.3-stable_linux.x86_64.zip"
+          mkdir -p /tmp/godot
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          GODOT_BIN="$(find /tmp/godot -maxdepth 1 -type f -name 'Godot*' | head -n 1)"
+          chmod +x "$GODOT_BIN"
+          sudo install -m 0755 "$GODOT_BIN" /usr/local/bin/godot
+          godot --version
+
+      - name: Parse project
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --editor --quit 2>&1 | tee /tmp/godot-editor.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|Failed to load script" /tmp/godot-editor.log; then exit 1; fi
+
+      - name: Run v0.5.2 interaction reliability smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/editor_reliability_smoke_v052.gd 2>&1 | tee /tmp/editor-052-smoke.log
+          grep -F 'EDITOR_052_SMOKE_OK' /tmp/editor-052-smoke.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_052_SMOKE_FAIL" /tmp/editor-052-smoke.log; then exit 1; fi

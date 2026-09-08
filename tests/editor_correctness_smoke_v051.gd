@@ -27,8 +27,8 @@ func _run() -> void:
 	await process_frame
 
 	var runtime_path: String = str(main.get_script().resource_path)
-	if not runtime_path.ends_with("main_v053.gd"):
-		_fail("Main is not using the current v0.5.1 development runtime")
+	if not (runtime_path.ends_with("main_v053.gd") or runtime_path.ends_with("main_v054.gd")):
+		_fail("Main is not using a validated v0.5.1+ runtime")
 		return
 
 	# MOVE is id 3 and ATTACH is id 2. Their visual states must not be swapped.

@@ -1,56 +1,60 @@
-# Connex Lab v0.5.0
+# Connex Lab v0.6.0
 
-Second editor-UX modernization chunk, focused on part selection, persistence, recovery, physics controls and scalability.
+Mechanical-editor correction release based directly on phone testing of v0.5.0.
 
-### Parts browser
-- the bottom bar now has one clear **PARTS** button instead of four part-cycling arrows;
-- Rods and Connectors are shown as color-coded cards in a scrollable browser;
-- each card shows the part name and useful size/connection information;
-- choosing a card changes the **next** part only and never silently converts the currently selected construction piece;
-- O-Ring Stop, 11-point 3D and 14-point 3D remain available in the connector browser.
+### ITEM vs WORLD transforms
+- Rotate and Move now default to **ITEM • MECHANICAL**;
+- each right-side panel has an explicit ITEM / WORLD switch;
+- ITEM shows only degrees of freedom that the selected connection can physically use;
+- WORLD is the deliberate whole-connected-construction transform;
+- the exact-step buttons and the in-world gizmos follow the same selected transform space.
 
-### Named Save / Load
-- Options now contains **Open Saves & Recovery**;
-- builds can be saved under user-defined names and loaded later;
-- save files preserve the complete construction snapshot, connection topology, O-Rings, spatial connectors, selected part palette, camera position and SOCKET / AXLE / CROSS mode;
-- loading establishes a fresh Undo root without auto-fusing intentionally detached-but-overlapping pieces.
+Mechanical ITEM behavior includes:
+- CROSS connector: one rotation ring around the host rod and one translation axis along the rod;
+- AXLE rod/connector: rotation only around the axle and translation only through the hub;
+- single socket-mounted connector: mount-axis roll;
+- disconnected piece: local X/Y/Z;
+- fixed connections without a valid independent DOF: impossible arrows/rings are hidden instead of pretending the move is valid.
 
-### Crash autosave and recovery
-- every committed build change schedules a debounced local autosave;
-- the app tracks whether the previous non-headless session closed cleanly;
-- after an unclean Android/app exit, the next launch automatically opens the recovery panel;
-- **Restore Autosave** returns to the latest committed construction;
-- dismissing recovery archives the old autosave into the named Saves folder before normal autosaving resumes, so the recovery point is not silently destroyed;
-- app pause/close flushes pending autosave data.
+### Rotate / Move fixes
+- fixes the MOVE / ATTACH active-button highlight mix-up;
+- cross rotation no longer rotates the whole construction;
+- Roll on cross/axle/socket mounts uses the same mechanical item-axis logic;
+- axle Move uses the existing proven axle-slide path;
+- cross Move updates the recorded position along the host rod rather than breaking the snap;
+- Rotate and Move detail panels are scrollable so exact-step controls cannot be clipped below the phone viewport.
 
-### Physics controls
-Options now exposes runtime simulation tuning for:
-- gravity;
-- surface friction;
-- bounce;
-- linear damping;
-- angular damping;
-- one-button reset to Connex defaults.
+### Attachment fixes
+- removes the buggy live tether/line preview entirely;
+- attachment is now a direct source-point -> destination-point workflow;
+- tapping an occupied connector socket resolves to its attached rod end, allowing that existing rod to be moved/re-seated onto another free socket;
+- CROSS connection targets use bold **+** markers instead of generic dots;
+- marker display is filtered to the current SOCKET / AXLE / CROSS mode to reduce clutter;
+- touch picking is enlarged and all special 11-point / 14-point out-of-plane socket IDs are included as real selectable attachment targets.
 
-The values persist between launches and are applied to existing and newly created rods, connectors and O-Rings.
+### Parts workflow
+- restores the fast **Rod / Conn previous-next arrows**;
+- keeps **PARTS…** as the expanded chooser, making the bottom controls a hybrid rather than replacing the quick selector;
+- selecting an existing construction piece no longer changes the future-part palette;
+- Parts cards now contain on-device 3D renderings of each rod/connector rather than text-only cards.
 
-### Performance / scalability
-- repeated procedural BoxMesh and CylinderMesh geometry now uses a shared primitive-mesh cache;
-- ATTACH now maintains per-body and world-cell target indexes rather than requiring every ordinary tap to search the entire construction;
-- physical-piece taps use the indexed compatible points first, with the proven global picker retained as a fallback for marker taps outside collision geometry;
-- ATTACH overlay rebuilding is dirty-driven, so repeated UI refreshes no longer recreate all marker geometry when topology, mode and selection have not changed;
-- index/overlay invalidation is tied to commits, restores, mode changes and selection changes.
+### Connector geometry
+- replaces box-heavy connector jaws with original procedural rounded geometry;
+- fork arms use rounded capsule-like ribs and remain visibly open through the socket gap;
+- removes the visible closed rectangular bridge across the fork mouth;
+- the same open rounded design is used for planar and out-of-plane sockets;
+- the model remains procedural/original and does not bundle third-party STL/mesh assets.
 
-### UI cleanup
-- part-selection arrows are removed from the normal bottom workflow;
-- Parts, Saves and Physics are grouped behind dedicated surfaces instead of adding more permanent editor buttons;
-- the existing CREATE / ROTATE / MOVE / ATTACH editor stays intact.
+### Options / camera
+- Options is now scrollable, making **Saves & Recovery** and all **Physics** sliders reachable on phones;
+- restores a dedicated two-finger centroid pan path while retaining one-finger orbit and pinch zoom;
+- Physics values continue to persist between launches.
 
 ### Regression coverage
-- every v0.3.8 through v0.4.0 behavioral smoke remains active;
-- new `editor_chunk2_smoke_v050.gd` verifies the Parts browser, Variant save round-trip, build restore, physics propagation, mesh-resource reuse, ATTACH spatial indexing and dirty-overlay behavior.
+- all existing v0.3.8 through v0.5.0 regression smokes remain active;
+- new `mechanical_editor_smoke_v060.gd` verifies mode highlighting, removal of the tether, hybrid/3D Parts, scrollable Options, all 14 spatial ports, rounded connector geometry, CROSS item rotation/slide, AXLE item slide and two-finger pan.
 
 ### Signing / update compatibility
-- Android versionCode is 24;
+- Android versionCode is 25;
 - package ID remains `com.pixel375.connex`;
-- v0.5.0 uses the same permanent signing certificate and updates in place over v0.2.1+ permanently signed builds.
+- v0.6.0 uses the same permanent signing certificate and updates in place over v0.2.1+ permanently signed builds.

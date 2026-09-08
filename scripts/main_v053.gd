@@ -1,11 +1,11 @@
 extends "res://scripts/main_v052.gd"
 
-const VERSION_053 := "0.5.1-dev3"
+const VERSION_053 := "0.5.1"
 
 
 func _ready() -> void:
 	super._ready()
-	_status("v0.5.1 validation build: item-aware transforms, open-jaw connectors, restored camera pan and spatial socket fixes active.")
+	_status("Item-aware transforms, open-jaw connectors, restored camera pan and spatial socket fixes active.")
 
 
 func _status(text: String) -> void:

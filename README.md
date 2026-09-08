@@ -4,9 +4,11 @@
 
 > K'NEX is a trademark of its respective owner. This project is unofficial, unaffiliated, and does not ship official artwork or copied 3D assets.
 
-## Current version — v0.3.8
+## Current version — v0.3.9
 
-v0.3.8 applies the highest-priority correctness fixes from the v0.3.6 Codex audit: mount-relative Reset state now survives Undo/Redo, disconnected constructions collide during simulation, signing documentation is synchronized with the real release certificate, and CI gains its first behavioral editor regression test. The v0.3.7 rigid-island world rotation and one-state Rotate/Move accordion remain in place.
+v0.3.9 adds explicit piece deselection and makes the bottom palette unambiguous: when nothing is selected, Rod / Conn chooses the **next** part instead of editing an existing one. The special **O-Ring Stop** is therefore easy to reach in the Conn list and place on an axle rod. Tapping empty workspace also deselects the current piece.
+
+v0.3.8 correctness work remains in place: mount-relative Reset state survives Undo/Redo, disconnected constructions collide during simulation, signing metadata is guarded by CI, and behavioral regression tests run before Android export.
 
 ## Pieces
 
@@ -27,6 +29,17 @@ The simulator uses roughly 10 mm = 1 world unit and a 10.1 mm connector-centre-t
 
 Gray 1-way, Orange straight 2-way, Light gray angled 2-way, Red 3-way, Green 4-way, Yellow 5-way, White 8-way, and the special **O-Ring Stop** axle part.
 
+## Selection and the bottom palette
+
+The newest created piece is selected automatically. Selection can now be cleared in two ways:
+
+- press **Deselect Piece** on the left editor panel;
+- tap genuinely empty workspace.
+
+With a piece selected, the matching Rod / Conn arrows retain their existing edit behavior where the current connection graph permits it. With **nothing selected**, the palette becomes future-only: Rod / Conn changes what will be created next and cannot mutate an already-built part. Labels show `NEXT • ...` in this state.
+
+This is also the normal way to choose **O-Ring Stop**: deselect the current piece, cycle **Conn** until `NEXT • O-Ring Stop` appears, then place it on a rod already being used as an axle.
+
 ## Editor modes
 
 Large buttons on the left choose one of three modes.
@@ -45,15 +58,15 @@ ROTATE uses a game-engine-style X/Y/Z ring gizmo around the selected piece:
 - the gizmo is attached visually to the selected piece, not embedded in a menu;
 - camera angle changes only how the rings are projected on screen, never which physical axis is used;
 - every drag snaps to exact 45° world-axis increments;
-- **the entire connected construction island rotates as one rigid transform around the selected piece**;
+- the entire connected construction island rotates as one rigid transform around the selected piece;
 - socket, CROSS, axle and O-Ring relationships therefore keep exactly the same relative geometry during normal XYZ rotation;
 - previous movement, reattachment, arbitrary world orientation, or an already off-axis construction cannot make XYZ rotation invalid merely because it no longer matches an old world/rest angle;
 - disconnected constructions remain independent because only the selected piece's connected island rotates;
 - **Roll** remains a separate operation around the actual socket/cross/axle mount axis;
 - **Reset Placement Rotation** restores the connector's stored mount-relative placement orientation rather than an old absolute world-space basis;
-- **v0.3.8 serializes that mount-relative home by stable connection UID**, so Roll → Undo → Redo → Reset still returns to the original placement orientation.
+- v0.3.8 serializes that mount-relative home by stable connection UID, so Roll → Undo → Redo → Reset still returns to the original placement orientation.
 
-Ordinary world taps do not create pieces in ROTATE mode. Use the one-shot **Select** button when you need to choose another piece.
+Ordinary world taps do not create pieces in ROTATE mode. Use the one-shot **Select** button when you need to choose another piece, or **Deselect Piece** / empty workspace to clear the current selection.
 
 ### ATTACH
 
@@ -83,7 +96,8 @@ Workflow:
 4. only a compatible counterpart is accepted for the second tap;
 5. the selected point is recomputed from the piece's current transform if the piece moves;
 6. point picking uses larger projected targets plus a physical raycast fallback for crowded/overlapping geometry;
-7. press **Deselect Point** to clear the source explicitly.
+7. press **Deselect Point** to clear only the ATTACH source point;
+8. press **Deselect Piece** to clear the actual piece selection.
 
 If the chosen rod and connector already have a different connection type, Connex can replace that existing pair edge. The old connection is excluded from rigid-component validation first, the replacement geometry is calculated, and the old edge is removed only after the new state validates. Invalid attempts leave the original connection intact.
 
@@ -105,9 +119,9 @@ History snapshots also retain the stable connection UID and v0.3.8 mount-home or
 
 - **Top toolbar:** Select, Undo, Redo, Simulate/Build, Restore, Restart, Center, Options, Help.
 - **Status strip:** a separate line directly below the toolbar for version/runtime messages.
-- **Left:** CREATE / ROTATE / ATTACH, Delete Selected, ATTACH point deselection.
+- **Left:** CREATE / ROTATE / ATTACH, Delete Selected, **Deselect Piece**, and ATTACH point deselection.
 - **Right:** Rotate and Move share one authoritative accordion state. Opening either closes the other, entering ROTATE opens Rotate, and UI refreshes such as Reset cannot reopen Move underneath it.
-- **Bottom:** permanent rod/connector palette and creation connection mode.
+- **Bottom:** permanent rod/connector palette and creation connection mode; labels show `NEXT • ...` while no piece is selected.
 
 ## Camera and Options
 
@@ -123,9 +137,9 @@ Camera movement changes the view only. Placement orientation and X/Y/Z rotation 
 
 ## Updates and signing
 
-Starting with v0.2.1, release APKs use one permanent Android signing certificate and package ID `com.pixel375.connex`. v0.3.8 keeps that package ID and uses Android versionCode 19, so it installs in place over permanently signed earlier versions and preserves settings/data.
+Starting with v0.2.1, release APKs use one permanent Android signing certificate and package ID `com.pixel375.connex`. v0.3.9 keeps that package ID and uses Android versionCode 20, so it installs in place over permanently signed earlier versions and preserves settings/data.
 
-The authoritative release-certificate SHA-256 fingerprint is documented in [`SIGNING.md`](SIGNING.md) and is checked in three places: metadata consistency CI, keystore validation before a release export, and `apksigner` verification of the finished APK. The fingerprint in `SIGNING.md` was corrected in v0.3.8 after the Codex audit found that the documentation had drifted from the actual permanent release certificate.
+The authoritative release-certificate SHA-256 fingerprint is documented in [`SIGNING.md`](SIGNING.md) and is checked in three places: metadata consistency CI, keystore validation before a release export, and `apksigner` verification of the finished APK.
 
 Options contains **App Updates**. Since v0.3.3, Connex reads the latest GitHub Release, downloads the APK with Godot `HTTPRequest` into `user://`, displays progress, verifies the GitHub Release SHA-256 digest when available, then opens the verified APK through Godot's Android FileProvider / normal package installer path.
 
@@ -143,13 +157,15 @@ Collision shapes are still simplified. A future physics upgrade may improve conn
 
 Every pull request is parsed, smoke-tested headlessly, behavior-tested, and exported to an ARM64 Android APK by `.github/workflows/android.yml`.
 
-The v0.3.8 behavioral audit smoke test launches the real `Main.tscn`, creates a socket chain with production placement functions, verifies construction collision masks, performs Roll → Undo → Redo → Reset, and fails if the connector's original mount-relative home is lost.
+The v0.3.8 audit smoke test creates a socket chain, verifies construction collision masks, performs Roll → Undo → Redo → Reset, and fails if the connector's original mount-relative home is lost.
+
+v0.3.9 adds a selection/O-Ring regression that verifies **Deselect Piece** clears selection, future connector cycling reaches **O-Ring Stop** without mutating the existing connector, the palette clearly displays `NEXT`, and the selected O-Ring can be placed on production axle geometry.
 
 Normal CI jobs have read-only repository contents permission. Release publication is isolated into a separate write-enabled job that runs only for an explicit `[release]` push. Release builds use the permanent Connex keystore, verify the certificate fingerprint, and publish the APK plus SHA-256 checksum to GitHub Releases.
 
 ## Audit status
 
-The original Codex review is retained in [`V0.3.6_AUDIT_NOTES.md`](V0.3.6_AUDIT_NOTES.md). v0.3.8 resolves its highest-priority signing-documentation, history/reset-state, construction-collision, and behavioral-test findings. Larger inheritance/performance, updater-hardening and collision-fidelity recommendations remain tracked as future engineering work rather than being mixed into this correctness patch.
+The original Codex review is retained in [`V0.3.6_AUDIT_NOTES.md`](V0.3.6_AUDIT_NOTES.md). v0.3.8 resolves its highest-priority signing-documentation, history/reset-state, construction-collision, and behavioral-test findings. Larger inheritance/performance, updater-hardening and collision-fidelity recommendations remain tracked as future engineering work rather than being mixed into small UX patches.
 
 ## Research basis
 

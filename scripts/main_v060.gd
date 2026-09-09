@@ -102,9 +102,6 @@ func _best_socket_for_end_v020(rod: RigidBody3D, sign_value: int) -> Dictionary:
 					"point": point,
 					"rod_point": end_point,
 				}
-	if not best.is_empty():
-		var picked: RigidBody3D = best.get("connector") as RigidBody3D
-		print("SNAP_CANDIDATE rod=%s end=%d connector=%s slot=%d dist=%.4f align=%.4f lateral=%.4f axial=%.4f score=%.4f" % [rod.name, sign_value, picked.name if is_instance_valid(picked) else "INVALID", int(best.get("slot", -1)), float(best.get("distance", -1.0)), float(best.get("alignment", -9.0)), float(best.get("lateral", -1.0)), float(best.get("axial", -9.0)), float(best.get("score", -1.0))])
 	return best
 
 

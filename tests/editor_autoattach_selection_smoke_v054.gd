@@ -1,21 +1,17 @@
 extends SceneTree
 
-
 func _initialize() -> void:
 	call_deferred("_run")
-
 
 func _fail(message: String) -> void:
 	push_error("EDITOR_054_SMOKE_FAIL: %s" % message)
 	quit(1)
-
 
 func _connector_index(defs: Array, wanted: String) -> int:
 	for i in range(defs.size()):
 		if str((defs[i] as Dictionary).get("name", "")) == wanted:
 			return i
 	return -1
-
 
 func _run() -> void:
 	var packed: PackedScene = load("res://Main.tscn") as PackedScene
@@ -25,18 +21,15 @@ func _run() -> void:
 	var main: Node = packed.instantiate()
 	root.add_child(main)
 	await process_frame
-
 	if not str(main.get_script().resource_path).ends_with("main_v058.gd"):
 		_fail("Main is not using v0.5.4 runtime")
 		return
-
 	var bodies: Array = main.get("bodies") as Array
 	if bodies.is_empty():
 		_fail("seed connector missing")
 		return
 	var seed: RigidBody3D = bodies[0] as RigidBody3D
 
-	# Android transform releases are not direct-selection taps.
 	main.call("_set_editor_mode_v032", 1, false)
 	main.call("_set_selected", seed)
 	main.call("_arm_transform_release_suppression_v058")
@@ -48,7 +41,6 @@ func _run() -> void:
 		_fail("suppressed transform release changed selection")
 		return
 
-	# A selected spatial connector must get a newly generated highlight after type change.
 	var defs: Array = main.get("connector_defs") as Array
 	var index_14: int = _connector_index(defs, "14-point 3D")
 	if index_14 < 0:
@@ -72,8 +64,6 @@ func _run() -> void:
 		_fail("stale spatial highlight survived connector type change")
 		return
 
-	# Use an isolated anchor far from the starter construction so the nearest-socket
-	# assertion cannot be affected by any other connector created by earlier tests.
 	var anchor: RigidBody3D = main.call("_make_connector", 6, Transform3D(Basis.IDENTITY, Vector3(70.0, 12.0, 0.0))) as RigidBody3D
 	await process_frame
 	main.call("_set_selected", anchor)
@@ -95,13 +85,17 @@ func _run() -> void:
 		_fail("initial socket connection metadata incomplete")
 		return
 	main.call("_detach_record_raw_v032", record)
+	# _detach_record_raw_v032 intentionally creates the same snap-back guard as a
+	# real user Disconnect. This test is about ordinary proximity capture, so remove
+	# only the synthetic guard created by test setup.
+	var blocks: Dictionary = main.get("manual_detach_blocks_v030") as Dictionary
+	blocks.erase(main.call("_pair_key_v030", rod, anchor))
 	main.call("_rebuild_connection_graph_v020")
 	var socket: Dictionary = main.call("_socket_world_v020", anchor, slot) as Dictionary
 	var socket_dir: Vector3 = (socket.get("dir", Vector3.RIGHT) as Vector3).normalized()
 	rod.global_position += socket_dir * 1.55
 	main.call("_refresh_joint_frames_v020")
 	main.call("_rebuild_connection_graph_v020")
-
 	var before_gap: float = (main.call("_rod_end_v020", rod, sign_value) as Vector3).distance_to((main.call("_socket_world_v020", anchor, slot) as Dictionary).get("point", anchor.global_position) as Vector3)
 	if before_gap <= 1.10 or before_gap > 2.00:
 		_fail("test did not create the intended v0.5.4-only capture gap: %.3f" % before_gap)
@@ -123,7 +117,6 @@ func _run() -> void:
 	if after_gap > 0.08:
 		_fail("separate-island auto-snap did not visibly close the gap: %.3f" % after_gap)
 		return
-
 	print("EDITOR_054_SMOKE_OK: transform-release selection suppression + fresh spatial highlight rebuild + wider proximity auto-attach + visible separate-island snap")
 	main.queue_free()
 	await process_frame

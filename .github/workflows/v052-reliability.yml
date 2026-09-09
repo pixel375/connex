@@ -42,13 +42,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed -i 's/ends_with("main_v054.gd")/ends_with("main_v066.gd")/' tests/editor_reliability_smoke_v052.gd
-          sed -Ei 's/ends_with\("main_v(056|057)\.gd"\)/ends_with("main_v066.gd")/g' tests/editor_touch_attach_smoke_v053.gd || true
-          sed -i 's/ends_with("main_v058.gd")/ends_with("main_v066.gd")/' tests/editor_autoattach_selection_smoke_v054.gd || true
-          sed -i 's/ends_with("main_v062.gd")/ends_with("main_v066.gd")/' tests/rod_far_end_autoattach_smoke_v057.gd || true
-          sed -i 's/ends_with("main_v063.gd")/ends_with("main_v066.gd")/' tests/socket_loop_simulation_smoke_v058.gd || true
-          sed -i 's/ends_with("main_v064.gd")/ends_with("main_v066.gd")/' tests/camera_gesture_smoke_v059.gd || true
-          sed -i 's/ends_with("main_v065.gd")/ends_with("main_v066.gd")/' tests/strict_autoconnect_no_warp_smoke_v510.gd || true
+          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v066.gd")/g' \
+            tests/editor_reliability_smoke_v052.gd \
+            tests/editor_touch_attach_smoke_v053.gd \
+            tests/editor_autoattach_selection_smoke_v054.gd \
+            tests/editor_geometry_snap_smoke_v055.gd \
+            tests/editor_autodock_camera_smoke_v056.gd \
+            tests/rod_far_end_autoattach_smoke_v057.gd \
+            tests/socket_loop_simulation_smoke_v058.gd \
+            tests/camera_gesture_smoke_v059.gd \
+            tests/strict_autoconnect_no_warp_smoke_v510.gd || true
 
       - name: Run v0.5.2 interaction reliability smoke
         shell: bash

@@ -51,6 +51,7 @@ jobs:
             tests/rod_far_end_autoattach_smoke_v057.gd \
             tests/socket_loop_simulation_smoke_v058.gd \
             tests/camera_gesture_smoke_v059.gd \
+            tests/physics_stability_smoke_v059.gd \
             tests/strict_autoconnect_no_warp_smoke_v510.gd \
             tests/structure_rigidity_smoke_v061.gd || true
 

@@ -128,22 +128,26 @@ func _apply_axle_stop_limits_v069() -> int:
 				upper_center = minf(upper_center, ring_along - AXLE_STOP_CLEARANCE_V069)
 				stop_count += 1
 
-		# Never start a simulation outside the active limit. If the BUILD pose is
-		# already visually touching/overlapping a stop, that side begins at zero
-		# travel instead of snapping the structure to manufacture clearance.
-		var lower_rel: float = minf(0.0, lower_center - start_along)
-		var upper_rel: float = maxf(0.0, upper_center - start_along)
-		if lower_rel > upper_rel:
-			lower_rel = 0.0
-			upper_rel = 0.0
+		# Allowed connector-center displacement relative to the host rod.
+		var connector_lower_rel: float = minf(0.0, lower_center - start_along)
+		var connector_upper_rel: float = maxf(0.0, upper_center - start_along)
+		if connector_lower_rel > connector_upper_rel:
+			connector_lower_rel = 0.0
+			connector_upper_rel = 0.0
+
+		# _make_axle_joint() binds node_a=connector and node_b=rod. Generic6DOF
+		# linear Y measures B relative to A at the joint frames, so connector motion
+		# relative to the rod has the opposite sign. Map [Cmin,Cmax] -> [-Cmax,-Cmin].
+		var joint_lower: float = -connector_upper_rel
+		var joint_upper: float = -connector_lower_rel
 
 		_save_axle_joint_limits_v069(joint)
 		joint.set("linear_limit_y/enabled", true)
-		joint.set("linear_limit_y/lower_distance", lower_rel)
-		joint.set("linear_limit_y/upper_distance", upper_rel)
+		joint.set("linear_limit_y/lower_distance", joint_lower)
+		joint.set("linear_limit_y/upper_distance", joint_upper)
 		joint.solver_priority = maxi(joint.solver_priority, AXLE_SOLVER_PRIORITY_V069)
-		joint.set_meta("sim_axle_stop_lower_v069", lower_rel)
-		joint.set_meta("sim_axle_stop_upper_v069", upper_rel)
+		joint.set_meta("sim_axle_stop_lower_v069", connector_lower_rel)
+		joint.set_meta("sim_axle_stop_upper_v069", connector_upper_rel)
 		joint.set_meta("sim_axle_stop_count_v069", stop_count)
 		applied += 1
 	axle_stop_limit_count_v069 = applied

@@ -1,6 +1,6 @@
 extends "res://scripts/main_v063.gd"
 
-const VERSION_064 := "0.5.9-dev"
+const VERSION_064 := "0.5.9"
 
 # Camera gesture tuning is viewport-relative so the same physical gesture feels
 # similar on phones/tablets with different resolutions.
@@ -23,7 +23,7 @@ func _ready() -> void:
 	_update_help_text_v030()
 	if update_status_v021 != null:
 		_set_update_status_v021("Current version: v%s" % VERSION_064)
-	_status("v0.5.9 dev — deterministic orbit/pan/zoom gestures and stable closed-loop socket constraints are active.")
+	_status("Deterministic orbit/pan/zoom gestures and stable closed-loop socket constraints are active.")
 
 
 func _status(text: String) -> void:

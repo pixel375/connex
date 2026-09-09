@@ -171,7 +171,7 @@ func _update_help_text_v030() -> void:
 		return
 	var label: Label = _find_label_v030(help_panel)
 	if label != null:
-		label.text += "\n\nv0.5.11 STRUCTURE RIGIDITY: closed-loop SOCKET edges no longer become completely free angular hinges during SIMULATE. Physics > Structure Rigidity controls their permitted angular flex. Default 92% is about ±%.2f° per stabilized cycle edge; 100%% remains slightly compliant to avoid the old redundant-weld explosion." % _structure_flex_angle_deg_v066()
+		label.text += "\n\nv0.5.11 STRUCTURE RIGIDITY: closed-loop SOCKET edges no longer become completely free angular hinges during SIMULATE. Physics > Structure Rigidity controls their permitted angular flex. Default 92%% is about ±%.2f° per stabilized cycle edge; 100%% remains slightly compliant to avoid the old redundant-weld explosion." % _structure_flex_angle_deg_v066()
 
 
 func _on_update_request_completed_v021(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:

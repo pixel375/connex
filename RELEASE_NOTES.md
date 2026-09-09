@@ -1,31 +1,32 @@
-# Connex Lab v0.5.7
+# Connex Lab v0.5.8
 
-Single-bug correction release: automatic attachment of the opposite end of a newly placed rod.
+Single-bug correction release: keep automatically attached rod/socket connections physically attached when SIMULATE starts.
 
-### New rod second-end attachment
-- when a rod is created by tapping a connector socket, the tapped end is connected as before;
-- before that placement is committed, v0.5.7 immediately checks the rod's opposite end;
-- if that far end lines up with a compatible free socket on another connector, it is immediately created as a real `SOCKET` graph connection;
-- ATTACH mode is not required;
-- both rod ends and both connector sockets are marked occupied in the same placement state;
-- the existing exact geometry closure is applied before the state is stored.
+### Root cause fixed
+- v0.5.7 correctly created the second `SOCKET` record when a newly placed rod lined up with another connector;
+- however, the legacy simulation preflight deliberately removed one fixed joint from every closed rigid loop as a "redundant constraint";
+- in a closed K'NEX frame, that removed edge could be the newly auto-attached rod end;
+- the build therefore looked connected in BUILD but that endpoint had no active solver constraint after SIMULATE and opened under gravity.
 
-### Simulation persistence
-- the second-end socket joint exists before SIMULATE is pressed;
-- simulation therefore receives the already-complete connection graph instead of trying to infer the missing edge after physics begins;
-- the v0.5.7 regression starts simulation and verifies the far-end joint remains physically bound and the rod/socket points remain together.
+### Closed-loop sockets remain real connections
+- v0.5.8 keeps the existing pre-simulation graph preparation, geometry normalization, collision handling, and duplicate-axle filtering;
+- after the legacy loop analysis, any real `SOCKET` joint that was disabled only because it closes a rigid loop is restored before physics is released;
+- automatically attached second rod ends therefore stay physically bound to their connector sockets in closed frames;
+- ATTACH mode is still not required.
 
 ### Scope
-- no camera, UI, rotation, movement, connector-design, or other gameplay behavior is changed in this release;
-- v0.5.7 is intentionally limited to this rod-placement auto-attachment bug.
+- no camera, UI, movement, rotation, connector geometry, selection, scrolling, or attachment-picking behavior is changed;
+- this release changes only simulation handling of already-recorded closed-loop `SOCKET` connections.
 
 ### Validation
-- all previous regressions through v0.5.6 remain enabled;
-- the dedicated v0.5.7 test creates two pre-existing 8-port connectors at the exact Blue-54 spacing, places a rod from the first connector without using ATTACH mode, requires two real socket records immediately, then presses SIMULATE and verifies the second end stays attached;
-- Android export and permanent release signing must pass before publication.
+- all existing regressions through v0.5.7 remain enabled;
+- the dedicated v0.5.8 regression builds a four-connector rectangular closed frame;
+- the fourth side is created through the real production SOCKET placement path and its far end must auto-attach before simulation;
+- the test requires the legacy redundant-cycle path to be exercised, then verifies no real SOCKET remains disabled;
+- it runs the actual SIMULATE path for 60 physics frames and verifies the loop-closing rod endpoint remains in its socket.
 
 ### Signing / update compatibility
-- Android versionCode is 31;
-- Android versionName is `0.5.7`;
+- Android versionCode is 32;
+- Android versionName is `0.5.8`;
 - package ID remains `com.pixel375.connex`;
-- the existing permanent Connex signing certificate is retained for in-place update over v0.5.6.
+- the existing permanent Connex signing certificate is retained for an in-place update over v0.5.7.

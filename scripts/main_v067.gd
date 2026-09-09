@@ -1,6 +1,6 @@
 extends "res://scripts/main_v066.gd"
 
-const VERSION_067 := "0.5.12-dev"
+const VERSION_067 := "0.5.12"
 
 var active_structure_rigidity_v067: float = STRUCTURE_RIGIDITY_DEFAULT_V066
 var rigidity_pending_for_next_run_v067: bool = false

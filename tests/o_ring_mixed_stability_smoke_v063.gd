@@ -1,0 +1,169 @@
+extends SceneTree
+
+
+func _initialize() -> void:
+	call_deferred("_run")
+
+
+func _fail(message: String) -> void:
+	push_error("ORING_STABILITY_063_SMOKE_FAIL: %s" % message)
+	quit(1)
+
+
+func _add_axle_connection(main: Node, connector: RigidBody3D, rod: RigidBody3D, along: float) -> void:
+	var joint := main.call("_make_axle_joint", connector, rod) as Generic6DOFJoint3D
+	main.call("_tag_connection_v020", joint, "axle", connector, rod, -1, 0, along, null, false)
+	connector.set_meta("axle_occupied", true)
+
+
+func _add_o_ring(main: Node, rod: RigidBody3D, along: float) -> RigidBody3D:
+	var axis: Vector3 = (rod.global_transform.basis * Vector3.UP).normalized()
+	var center: Vector3 = rod.global_position + axis * along
+	var basis: Basis = Basis(Quaternion(Vector3.UP, axis))
+	var ring := main.call("_make_o_ring_body", Transform3D(basis, center)) as RigidBody3D
+	var joint := main.call("_make_fixed_joint", rod, ring, center) as Generic6DOFJoint3D
+	main.call("_tag_connection_v020", joint, "o_ring", null, rod, -1, 0, along, ring, false)
+	joint.set_meta("o_ring_mount", true)
+	ring.set_meta("host_rod", rod)
+	ring.set_meta("build_transform", ring.global_transform)
+	return ring
+
+
+func _add_spoke(main: Node, connector: RigidBody3D, slot: int, length: float) -> RigidBody3D:
+	var socket: Dictionary = main.call("_socket_world_v020", connector, slot) as Dictionary
+	var start: Vector3 = socket.get("point", connector.global_position) as Vector3
+	var direction: Vector3 = (socket.get("dir", Vector3.RIGHT) as Vector3).normalized()
+	var finish: Vector3 = start + direction * length
+	var rod := main.call("_make_rod", 2, start, finish) as RigidBody3D
+	var joint := main.call("_make_fixed_joint", connector, rod, start) as Generic6DOFJoint3D
+	main.call("_tag_connection_v020", joint, "socket", connector, rod, slot, -1, 0.0, null, false)
+	main.call("_set_connector_occupied", connector, slot, true)
+	main.call("_set_rod_end_occupied", rod, -1, true)
+	rod.set_meta("build_transform", rod.global_transform)
+	return rod
+
+
+func _run() -> void:
+	var packed := load("res://Main.tscn") as PackedScene
+	if packed == null:
+		_fail("Main.tscn did not load")
+		return
+	var main := packed.instantiate()
+	root.add_child(main)
+	await process_frame
+
+	if not str(main.get_script().resource_path).ends_with("main_v068.gd"):
+		_fail("Main is not using v0.5.13 runtime")
+		return
+
+	# Intentionally awkward mixed build: one long axle, two independently sliding
+	# hubs, five offset fixed spokes, and stops at both ends. This fixture is meant
+	# to hit the floor asymmetrically and used to gain impossible solver energy.
+	var axle := main.call("_make_rod", 4, Vector3(0, 13, 0), Vector3(0, 29, 0)) as RigidBody3D
+	var hub_a := main.call("_make_connector", 6, Transform3D(Basis.IDENTITY, Vector3(0, 19, 0))) as RigidBody3D
+	var hub_b := main.call("_make_connector", 6, Transform3D(Basis.IDENTITY, Vector3(0, 23, 0))) as RigidBody3D
+	_add_axle_connection(main, hub_a, axle, 0.0)
+	_add_axle_connection(main, hub_b, axle, 4.0)
+	_add_spoke(main, hub_a, 0, 5.5)
+	_add_spoke(main, hub_a, 90, 5.5)
+	_add_spoke(main, hub_a, 180, 5.5)
+	_add_spoke(main, hub_b, 45, 5.5)
+	_add_spoke(main, hub_b, 135, 5.5)
+	var ring_low := _add_o_ring(main, axle, -3.0)
+	var ring_high := _add_o_ring(main, axle, 6.0)
+	main.call("_rebuild_connection_graph_v020")
+
+	var ring_low_start_y := ring_low.global_position.y
+	var ring_high_start_y := ring_high.global_position.y
+	var low_local_before: Transform3D = axle.global_transform.affine_inverse() * ring_low.global_transform
+	var high_local_before: Transform3D = axle.global_transform.affine_inverse() * ring_high.global_transform
+
+	main.call("_toggle_simulation")
+	for _i in range(12):
+		await physics_frame
+
+	# v0.5.13 intentionally removes the tiny independent O-Ring rigid body from the
+	# live solver. The visible ring stays frozen/non-colliding and follows the host;
+	# its collision shape is duplicated into the host rod instead.
+	if int((main.get("o_ring_followers_v068") as Array).size()) != 2:
+		_fail("O-Ring Stops were not converted to host-follow physics")
+		return
+	if int((main.get("o_ring_proxy_shapes_v068") as Array).size()) < 2:
+		_fail("O-Ring stop collision shapes were not merged into the host rod")
+		return
+	if not ring_low.freeze or not ring_high.freeze:
+		_fail("standalone O-Ring rigid bodies remained live in the solver")
+		return
+	if ring_low.collision_layer != 0 or ring_high.collision_layer != 0:
+		_fail("standalone O-Ring collision bodies were not disabled")
+		return
+
+	for _i in range(72):
+		await physics_frame
+	if ring_low.global_position.y > ring_low_start_y - 0.30 or ring_high.global_position.y > ring_high_start_y - 0.30:
+		_fail("O-Ring Stops did not fall visually with their host construction under gravity")
+		return
+
+	var max_linear := 0.0
+	var max_angular := 0.0
+	var max_linear_name := ""
+	var max_linear_frame := -1
+	var max_linear_pos := Vector3.ZERO
+	var max_angular_name := ""
+	var max_angular_frame := -1
+	var first_over_30 := ""
+	for frame_index in range(420):
+		await physics_frame
+		for body_value in (main.get("bodies") as Array):
+			var body := body_value as RigidBody3D
+			if not is_instance_valid(body):
+				continue
+			var linear := body.linear_velocity.length()
+			var angular := body.angular_velocity.length()
+			if linear > max_linear:
+				max_linear = linear
+				max_linear_name = "%s[%s]" % [body.name, str(body.get_meta("kind", ""))]
+				max_linear_frame = frame_index
+				max_linear_pos = body.global_position
+			if angular > max_angular:
+				max_angular = angular
+				max_angular_name = "%s[%s]" % [body.name, str(body.get_meta("kind", ""))]
+				max_angular_frame = frame_index
+			if first_over_30.is_empty() and linear > 30.0:
+				first_over_30 = "%s frame=%d v=%.2f w=%.2f pos=%s guard_events=%d" % [
+					"%s[%s]" % [body.name, str(body.get_meta("kind", ""))],
+					frame_index, linear, angular, str(body.global_position), int(main.get("runaway_guard_events_v068"))]
+				print("ORING_STABILITY_DIAG_FIRST_OVER_30: %s" % first_over_30)
+
+		# The visible O-Ring transform must remain exactly welded to the moving axle.
+		var low_expected: Transform3D = axle.global_transform * low_local_before
+		var high_expected: Transform3D = axle.global_transform * high_local_before
+		if ring_low.global_position.distance_to(low_expected.origin) > 0.03 or ring_high.global_position.distance_to(high_expected.origin) > 0.03:
+			_fail("O-Ring visual follower drifted away from the host rod")
+			return
+
+	if max_linear > 41.9:
+		_fail("mixed build runaway: vmax=%.2f actor=%s frame=%d pos=%s; wmax=%.2f actor=%s frame=%d; first_over_30=%s; guard_events=%d" % [max_linear, max_linear_name, max_linear_frame, str(max_linear_pos), max_angular, max_angular_name, max_angular_frame, first_over_30, int(main.get("runaway_guard_events_v068"))])
+		return
+	if max_angular > 54.9:
+		_fail("mixed build runaway angular speed: %.2f actor=%s frame=%d; first_over_30=%s; guard_events=%d" % [max_angular, max_angular_name, max_angular_frame, first_over_30, int(main.get("runaway_guard_events_v068"))])
+		return
+	if int(main.get("runaway_guard_events_v068")) != 0:
+		_fail("ordinary mixed fixture needed the emergency stability guard (%d events); first_over_30=%s" % [int(main.get("runaway_guard_events_v068")), first_over_30])
+		return
+
+	var guard_probe := main.call("_make_rod", 0, Vector3(40, 10, 0), Vector3(40, 15, 0)) as RigidBody3D
+	guard_probe.freeze = false
+	guard_probe.linear_velocity = Vector3(100, 0, 0)
+	guard_probe.angular_velocity = Vector3(0, 90, 0)
+	if not bool(main.call("_guard_body_energy_v068", guard_probe)):
+		_fail("runaway stability guard did not recognize extreme solver energy")
+		return
+	if guard_probe.linear_velocity.length() > 18.01 or guard_probe.angular_velocity.length() > 24.01:
+		_fail("runaway stability guard did not dissipate the extreme velocity spike")
+		return
+
+	print("ORING_STABILITY_063_SMOKE_OK: O-Rings welded into host physics + mixed axle/spoke impact stable; vmax=%.2f wmax=%.2f" % [max_linear, max_angular])
+	main.queue_free()
+	await process_frame
+	quit(0)

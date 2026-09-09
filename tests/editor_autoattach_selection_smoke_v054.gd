@@ -36,8 +36,7 @@ func _run() -> void:
 		return
 	var seed: RigidBody3D = bodies[0] as RigidBody3D
 
-	# A transform release must suppress the direct-selection tap that can arrive
-	# on the same Android touch release.
+	# Android transform releases are not direct-selection taps.
 	main.call("_set_editor_mode_v032", 1, false)
 	main.call("_set_selected", seed)
 	main.call("_arm_transform_release_suppression_v058")
@@ -49,8 +48,7 @@ func _run() -> void:
 		_fail("suppressed transform release changed selection")
 		return
 
-	# Rebuilding a selected spatial connector into a smaller connector must throw
-	# away the old cloned outline and create a fresh one from current geometry.
+	# A selected spatial connector must get a newly generated highlight after type change.
 	var defs: Array = main.get("connector_defs") as Array
 	var index_14: int = _connector_index(defs, "14-point 3D")
 	if index_14 < 0:
@@ -74,10 +72,12 @@ func _run() -> void:
 		_fail("stale spatial highlight survived connector type change")
 		return
 
-	# Proximity auto-attach must catch a free rod end farther away than the old
-	# v0.5.3 1.10 capture shell, then visibly close a separate-island gap.
-	main.call("_set_selected", seed)
-	main.call("_extend_socket", seed, 0)
+	# Use an isolated anchor far from the starter construction so the nearest-socket
+	# assertion cannot be affected by any other connector created by earlier tests.
+	var anchor: RigidBody3D = main.call("_make_connector", 6, Transform3D(Basis.IDENTITY, Vector3(70.0, 12.0, 0.0))) as RigidBody3D
+	await process_frame
+	main.call("_set_selected", anchor)
+	main.call("_extend_socket", anchor, 0)
 	await process_frame
 	bodies = main.get("bodies") as Array
 	var rod: RigidBody3D = bodies[bodies.size() - 1] as RigidBody3D
@@ -96,18 +96,18 @@ func _run() -> void:
 		return
 	main.call("_detach_record_raw_v032", record)
 	main.call("_rebuild_connection_graph_v020")
-	var socket: Dictionary = main.call("_socket_world_v020", seed, slot) as Dictionary
+	var socket: Dictionary = main.call("_socket_world_v020", anchor, slot) as Dictionary
 	var socket_dir: Vector3 = (socket.get("dir", Vector3.RIGHT) as Vector3).normalized()
 	rod.global_position += socket_dir * 1.55
 	main.call("_refresh_joint_frames_v020")
 	main.call("_rebuild_connection_graph_v020")
 
-	var before_gap: float = (main.call("_rod_end_v020", rod, sign_value) as Vector3).distance_to((main.call("_socket_world_v020", seed, slot) as Dictionary).get("point", seed.global_position) as Vector3)
+	var before_gap: float = (main.call("_rod_end_v020", rod, sign_value) as Vector3).distance_to((main.call("_socket_world_v020", anchor, slot) as Dictionary).get("point", anchor.global_position) as Vector3)
 	if before_gap <= 1.10 or before_gap > 2.00:
 		_fail("test did not create the intended v0.5.4-only capture gap: %.3f" % before_gap)
 		return
 	var best: Dictionary = main.call("_best_socket_for_end_v020", rod, sign_value) as Dictionary
-	if best.is_empty() or best.get("connector") != seed:
+	if best.is_empty() or best.get("connector") != anchor:
 		_fail("proximity matcher did not find the intended close free socket")
 		return
 	var fused: int = int(main.call("_auto_connect_all_v020"))
@@ -119,7 +119,7 @@ func _run() -> void:
 	if (main.call("_connection_record_for_point_v032", endpoint) as Dictionary).is_empty():
 		_fail("auto-attach did not record the rod-end connection")
 		return
-	var after_gap: float = (main.call("_rod_end_v020", rod, sign_value) as Vector3).distance_to((main.call("_socket_world_v020", seed, slot) as Dictionary).get("point", seed.global_position) as Vector3)
+	var after_gap: float = (main.call("_rod_end_v020", rod, sign_value) as Vector3).distance_to((main.call("_socket_world_v020", anchor, slot) as Dictionary).get("point", anchor.global_position) as Vector3)
 	if after_gap > 0.08:
 		_fail("separate-island auto-snap did not visibly close the gap: %.3f" % after_gap)
 		return

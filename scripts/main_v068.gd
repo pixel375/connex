@@ -25,19 +25,6 @@ func _status(text: String) -> void:
 		status_label.text = "Connex Lab v%s  •  %s" % [VERSION_068, text]
 
 
-# O-Ring Stops are physically fixed to their rod. Simulating each ring as a
-# separate RigidBody3D connected by another hard 6DOF weld creates a tiny,
-# high-frequency constrained body that can inject enormous angular energy on
-# ground/axle impacts. Treat it as what it physically is: part of the host rod.
-#
-# During SIMULATE:
-# - the ring's standalone collision body is disabled;
-# - its fixed joint is detached from the solver;
-# - an equivalent collision shape is copied into the host rod;
-# - the visible ring follows its saved host-local transform exactly.
-#
-# This preserves stop collisions against axle connectors while removing the
-# redundant ring rigid body/joint pair from the solver entirely.
 func _disable_o_ring_joint_v068(joint: Joint3D) -> void:
 	if not is_instance_valid(joint) or bool(joint.get_meta("sim_o_ring_detached_v068", false)):
 		return
@@ -91,6 +78,8 @@ func _prepare_o_ring_followers_v068() -> int:
 			continue
 
 		var local_transform: Transform3D = rod.global_transform.affine_inverse() * ring.global_transform
+		var original_parent := ring.get_parent()
+		var original_index := ring.get_index()
 		o_ring_followers_v068.append({
 			"ring": ring,
 			"rod": rod,
@@ -98,6 +87,8 @@ func _prepare_o_ring_followers_v068() -> int:
 			"local_transform": local_transform,
 			"collision_layer": ring.collision_layer,
 			"collision_mask": ring.collision_mask,
+			"original_parent": original_parent,
+			"original_index": original_index,
 		})
 
 		_disable_o_ring_joint_v068(joint)
@@ -111,6 +102,11 @@ func _prepare_o_ring_followers_v068() -> int:
 		ring.collision_layer = 0
 		ring.collision_mask = 0
 		ring.continuous_cd = false
+
+		# Make the visible ring a direct transform child of the host rod. This is
+		# deterministic and cannot lag one physics frame behind the host.
+		ring.reparent(rod, true)
+		ring.transform = local_transform
 		prepared += 1
 
 	if prepared > 0:
@@ -128,7 +124,9 @@ func _sync_o_ring_followers_v068() -> void:
 		if not is_instance_valid(ring) or not is_instance_valid(rod):
 			continue
 		var local_transform := follower.get("local_transform", Transform3D.IDENTITY) as Transform3D
-		ring.global_transform = rod.global_transform * local_transform
+		if ring.get_parent() != rod:
+			ring.reparent(rod, true)
+		ring.transform = local_transform
 		ring.linear_velocity = rod.linear_velocity
 		ring.angular_velocity = rod.angular_velocity
 
@@ -144,6 +142,13 @@ func _restore_o_ring_followers_v068(restore_build_pose: bool = true) -> void:
 		var follower := follower_value as Dictionary
 		var ring := follower.get("ring") as RigidBody3D
 		var joint := follower.get("joint") as Joint3D
+		if is_instance_valid(ring):
+			var original_parent := follower.get("original_parent") as Node
+			if is_instance_valid(original_parent) and ring.get_parent() != original_parent:
+				ring.reparent(original_parent, true)
+				var original_index := int(follower.get("original_index", -1))
+				if original_index >= 0 and original_index < original_parent.get_child_count():
+					original_parent.move_child(ring, original_index)
 		_restore_o_ring_joint_v068(joint)
 		if not is_instance_valid(ring):
 			continue
@@ -160,9 +165,6 @@ func _restore_o_ring_followers_v068(restore_build_pose: bool = true) -> void:
 	_rebind_all_joints()
 
 
-# Long thin rods can move farther than their radius in one 60 Hz step during a
-# fall. Continuous collision detection prevents a ground impact from beginning as
-# a deep penetration which the joint solver then has to correct explosively.
 func _set_simulation_ccd_v068(enabled: bool) -> void:
 	for body_value in bodies:
 		var body := body_value as RigidBody3D
@@ -254,7 +256,7 @@ func _update_help_text_v030() -> void:
 		return
 	var label: Label = _find_label_v030(help_panel)
 	if label != null:
-		label.text += "\n\nv0.5.13 O-RINGS / STABILITY: an O-Ring Stop is physically welded into its host rod during SIMULATE instead of being solved as a separate tiny rigid body plus hard 6DOF joint. Its visible ring follows the rod exactly and its collision shape is temporarily copied into the host rod, so it still acts as a real axle stop without becoming an invisible world anchor or an unstable high-frequency constraint. BUILD/Restore returns the original editable ring body and joint. SIMULATE also enables continuous collision detection on construction bodies and uses higher solver iteration counts for hard impacts."
+		label.text += "\n\nv0.5.13 O-RINGS / STABILITY: an O-Ring Stop is physically welded into its host rod during SIMULATE instead of being solved as a separate tiny rigid body plus hard 6DOF joint. Its visible ring is temporarily parented directly to the rod, and its collision shape is copied into the host rod, so it still acts as a real axle stop without becoming an invisible world anchor or unstable high-frequency constraint. BUILD/Restore returns the original editable ring body and joint. SIMULATE also enables continuous collision detection on construction bodies and uses Jolt with higher solver iteration counts for hard impacts."
 
 
 func _on_update_request_completed_v021(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:

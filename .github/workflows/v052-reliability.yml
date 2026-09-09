@@ -1,4 +1,4 @@
-name: v0.5.11 Regression Smoke
+name: v0.5.12 Regression Smoke
 
 on:
   pull_request:
@@ -14,7 +14,7 @@ concurrency:
 jobs:
   reliability:
     runs-on: ubuntu-latest
-    timeout-minutes: 28
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -42,7 +42,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v066.gd")/g' \
+          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v067.gd")/g' \
             tests/editor_reliability_smoke_v052.gd \
             tests/editor_touch_attach_smoke_v053.gd \
             tests/editor_autoattach_selection_smoke_v054.gd \
@@ -51,7 +51,9 @@ jobs:
             tests/rod_far_end_autoattach_smoke_v057.gd \
             tests/socket_loop_simulation_smoke_v058.gd \
             tests/camera_gesture_smoke_v059.gd \
-            tests/strict_autoconnect_no_warp_smoke_v510.gd || true
+            tests/physics_stability_smoke_v059.gd \
+            tests/strict_autoconnect_no_warp_smoke_v510.gd \
+            tests/structure_rigidity_smoke_v061.gd || true
 
       - name: Run v0.5.2 interaction reliability smoke
         shell: bash
@@ -117,7 +119,7 @@ jobs:
           grep -F 'CAMERA_059_SMOKE_OK' /tmp/camera-059-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|CAMERA_059_SMOKE_FAIL" /tmp/camera-059-smoke.log; then exit 1; fi
 
-      - name: Run v0.5.9 long physics stability smoke on v0.5.11 rigidity runtime
+      - name: Run v0.5.9 long physics stability smoke on current runtime
         shell: bash
         run: |
           set -euo pipefail
@@ -140,3 +142,11 @@ jobs:
           godot --headless --path . --script res://tests/structure_rigidity_smoke_v061.gd 2>&1 | tee /tmp/rigidity-061-smoke.log
           grep -F 'RIGIDITY_061_SMOKE_OK' /tmp/rigidity-061-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|RIGIDITY_061_SMOKE_FAIL" /tmp/rigidity-061-smoke.log; then exit 1; fi
+
+      - name: Run v0.5.12 live rigidity and axle gravity smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/rigidity_live_axle_smoke_v062.gd 2>&1 | tee /tmp/rigidity-axle-062-smoke.log
+          grep -F 'RIGIDITY_AXLE_062_SMOKE_OK' /tmp/rigidity-axle-062-smoke.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|RIGIDITY_AXLE_062_SMOKE_FAIL" /tmp/rigidity-axle-062-smoke.log; then exit 1; fi

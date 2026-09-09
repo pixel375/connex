@@ -1,41 +1,44 @@
-# Connex Lab v0.5.5
+# Connex Lab v0.5.6
 
-Phantom-highlight and closed-loop attachment correction release.
+Axle-placement auto-attachment and Android camera correction release.
 
-### Phantom selection geometry actually removed
-- the remaining cyan phantom geometry after changing an 11/14-point connector was traced to old connector meshes waiting in Godot's `queue_free()` deletion queue;
-- those queued source meshes were still present long enough to be cloned into the replacement selection outline;
-- connector rebuilds now detach old meshes, collision shapes and spatial roots synchronously before new geometry is created;
-- recursive highlight generation also ignores any node already queued for deletion;
-- changing 14-point → 1/2/3/4-way now builds the highlight only from the connector geometry that really exists.
+### The missing-joint bug from the device screenshots is fixed at its source
+- v0.5.5 could geometrically normalize a SOCKET connection only after that connection already existed in the graph;
+- placing an 8-port connector onto a central axle beside several existing rod ends created only the AXLE record, leaving the visually adjacent side rods completely unconnected;
+- SIMULATE could therefore normalize nothing for those rods, and they fell away exactly as shown in the device report;
+- v0.5.6 explicitly discovers and creates those missing SOCKET records before physics begins.
 
-### Close connections now snap as geometry, not only as graph records
-- v0.5.4 could record a valid same-structure loop connection while leaving the rod end and socket visibly apart;
-- v0.5.5 projects recorded attachment points into a physically closed BUILD pose instead of accepting that visible gap as the connection's rest pose;
-- iterative position/orientation projection distributes a small closure correction through an already-connected construction while keeping the root piece fixed;
-- newly detected loop closures receive priority so the endpoint the user is trying to join is not left as the remaining visible error;
-- corrected transforms become the stored BUILD pose used by Restore.
+### Axle-mounted connectors auto-dock to surrounding rods
+- a newly placed connector on an axle may freely roll around that axle before radial socket connections exist;
+- v0.5.6 uses that real physical degree of freedom to examine nearby free rod ends and candidate connector slots;
+- it chooses the axle roll that produces the greatest number of compatible surrounding rod/socket matches;
+- it then runs the normal socket-fusion system so each matched rod becomes a real connection in the graph;
+- this happens immediately after axle placement and again as a final safety pass when SIMULATE is pressed;
+- once radial connections exist, the auto-dock pass does not arbitrarily rotate the connector again.
 
-### Simulation no longer exposes stored loop gaps
-- the existing physics stabilizer still suppresses mathematically redundant fixed joints in closed loops to avoid over-constrained solver instability;
-- immediately before that suppression step, v0.5.5 re-normalizes all recorded attachment geometry;
-- this prevents a suppressed redundant edge from revealing a gap that had been saved into the build pose.
+### Existing v0.5.5 geometry closure remains active
+- newly created socket connections still use the closed-loop geometry projection introduced in v0.5.5;
+- build transforms and joint rest geometry are refreshed after auto-docking;
+- redundant closed-loop physics constraints are suppressed only after missing connections have been discovered and the attachment geometry has been normalized.
 
-### Wider but safer automatic capture
-- free rod ends/sockets retain a substantially wider phone-friendly capture shell than older releases;
-- farther candidates must now have much stronger opposing insertion direction and a limited lateral miss;
-- distance, lateral offset and direction are jointly scored so a nearby 8/11/14-point hub does not snap to an unrelated neighboring port;
-- explicit Disconnect snap-back protection remains authoritative.
+### Camera zoom and movement stabilized
+- two-finger pinch zoom now uses the ratio between finger distances instead of a raw screen-pixel delta, making it consistent across phone resolutions and pixel densities;
+- two-finger pan still follows camera screen X/Y, but its speed is bounded at extreme zoom distances so a small finger movement cannot throw the view across the scene;
+- the wide 3–420 camera distance range remains available;
+- both active fingers are marked as part of a camera gesture, preventing the stationary finger from becoming an accidental world tap when a pinch ends;
+- mouse-wheel zoom is multiplicative as well, matching the smoother distance scaling.
 
 ### Validation
-- the complete behavioral regression suite through v0.5.4 remains active;
-- the new v0.5.5 regression verifies that queued old meshes cannot enter a replacement highlight;
-- it verifies automatic capture beyond v0.5.4's 2.0-unit mathematical endpoint range;
-- it constructs a deliberately misaligned same-island closed loop, auto-attaches the final free endpoint, verifies the visible gap is projected closed, then runs redundant-joint simulation preflight and verifies the closure remains closed;
-- Android export and permanent signing must pass before publication.
+- all previous behavioral regressions through v0.5.5 remain active;
+- the new v0.5.6 regression reproduces the reported setup with a vertical axle, an 8-port connector, and three surrounding free rod ends;
+- it requires all three side rods to become real SOCKET graph connections after axle placement;
+- it adds another close unrecorded rod and requires simulation preflight to discover and fuse it before physics;
+- it verifies the resulting socket geometry is actually closed;
+- it also verifies bounded high-distance panning, monotonic ratio-based pinch zoom, and the 3–420 zoom limits;
+- Android export and permanent release signing must pass before publication.
 
 ### Signing / update compatibility
-- Android versionCode is 29;
-- Android versionName is `0.5.5`;
+- Android versionCode is 30;
+- Android versionName is `0.5.6`;
 - package ID remains `com.pixel375.connex`;
-- v0.5.5 uses the existing permanent Connex signing certificate and updates in place over v0.5.4.
+- v0.5.6 uses the existing permanent Connex signing certificate and updates in place over v0.5.5.

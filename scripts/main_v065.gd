@@ -1,6 +1,6 @@
 extends "res://scripts/main_v064.gd"
 
-const VERSION_065 := "0.5.10-dev"
+const VERSION_065 := "0.5.10"
 
 # Auto-connect means overlap, not proximity. The old v0.5.5 shell was 3.50
 # world units and could treat a visibly separated rod/socket pair as connected.
@@ -26,10 +26,6 @@ func _status(text: String) -> void:
 
 # -----------------------------------------------------------------------------
 # Strict rod-end -> socket matching.
-#
-# A candidate must already be physically at the socket. We do not use the wide
-# v0.5.5 3.50-unit shell, and we do not accept a large lateral miss merely because
-# the rod points in roughly the right direction.
 # -----------------------------------------------------------------------------
 
 func _best_socket_for_end_v020(rod: RigidBody3D, sign_value: int) -> Dictionary:
@@ -104,8 +100,6 @@ func _auto_connect_end_v020(rod: RigidBody3D, sign_value: int) -> bool:
 		return false
 
 	var had_connections: bool = not _connections_for_piece_v020(connector).is_empty()
-	# Anchor at the real rod end. The candidate is already inside the socket, so
-	# creating the joint must not move either body to make the math fit.
 	var anchor: Vector3 = target.get("rod_point", _rod_end_v020(rod, sign_value)) as Vector3
 	var joint: Generic6DOFJoint3D = _make_fixed_joint(rod, connector, anchor)
 	var primary: bool = not had_connections and not bool(connector.get_meta("root_piece_v020", false)) and int(connector.get_meta("primary_connection_uid_v020", -1)) < 0
@@ -188,13 +182,6 @@ func _extend_socket(connector: RigidBody3D, slot: int) -> void:
 
 # -----------------------------------------------------------------------------
 # SIMULATE must not be an editor operation.
-#
-# v0.5.6 performed a final auto-dock/auto-connect pass here and v0.5.5 projected
-# every recorded connection into a new pose. Both actions modify the construction
-# simply because SIMULATE was pressed. Temporarily mark graph restoration active
-# while the inherited preflight runs; that skips only those two editor-style
-# mutations while preserving the legacy solver graph setup, the v0.5.8 closed-
-# loop SOCKET restoration, and the v0.5.9 redundant angular-lock softening.
 # -----------------------------------------------------------------------------
 
 func _prepare_stable_simulation_graph() -> void:

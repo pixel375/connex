@@ -51,7 +51,7 @@ func _add_o_ring(main: Node, rod: RigidBody3D, along: float) -> RigidBody3D:
 	return ring
 
 
-func _along(main: Node, body: RigidBody3D, rod: RigidBody3D) -> float:
+func _along(main: Node, body: Node3D, rod: RigidBody3D) -> float:
 	var axis: Vector3 = (main.call("_rod_axis_v020", rod) as Vector3).normalized()
 	return (body.global_position - rod.global_position).dot(axis)
 
@@ -125,14 +125,23 @@ func _run() -> void:
 	if int((main.get("o_ring_proxy_shapes_v068") as Array).size()) != 0:
 		_fail("v0.5.13 host-rod O-Ring proxy collision was recreated")
 		return
+	var stop_proxies := main.get("o_ring_stop_proxies_v069") as Array
+	if stop_proxies.size() != 1:
+		_fail("video fixture expected one root-level O-Ring stopper proxy, got %d" % stop_proxies.size())
+		return
 	if int(main.get("o_ring_stop_pair_count_v069")) < 1:
 		_fail("video fixture did not configure an O-Ring/axle-hub stop pair")
 		return
-	if not ring.freeze or ring.freeze_mode != RigidBody3D.FREEZE_MODE_KINEMATIC:
-		_fail("video fixture O-Ring is not a frozen kinematic stopper")
+	if not ring.freeze or ring.collision_layer != 0 or ring.collision_mask != 0:
+		_fail("visible video-fixture O-Ring was left active in collision physics")
 		return
-	if ring.collision_layer != int(main.get("O_RING_STOP_LAYER_V069")) or ring.collision_mask != int(main.get("AXLE_STOP_TARGET_LAYER_V069")):
-		_fail("video fixture O-Ring collision channels are wrong")
+	var proxy_state := stop_proxies[0] as Dictionary
+	var proxy := proxy_state.get("proxy") as AnimatableBody3D
+	if not is_instance_valid(proxy) or proxy.get_parent() != main:
+		_fail("video fixture O-Ring stopper is not a root-level AnimatableBody3D")
+		return
+	if proxy.collision_layer != int(main.get("O_RING_STOP_LAYER_V069")) or proxy.collision_mask != int(main.get("AXLE_STOP_TARGET_LAYER_V069")):
+		_fail("video fixture O-Ring stopper collision channels are wrong")
 		return
 	if (a.collision_layer & int(main.get("AXLE_STOP_TARGET_LAYER_V069"))) == 0 or (a.collision_mask & int(main.get("O_RING_STOP_LAYER_V069"))) == 0:
 		_fail("video fixture axle hub is not paired to O-Ring collision channel")
@@ -168,7 +177,11 @@ func _run() -> void:
 
 		var ring_expected: Transform3D = axle.global_transform * ring_local_before
 		if ring.global_position.distance_to(ring_expected.origin) > 0.03:
-			_fail("O-Ring kinematic follower drifted off its axle rod")
+			_fail("visible O-Ring follower drifted off its axle rod")
+			return
+		var proxy_expected: Transform3D = axle.global_transform * (proxy_state.get("local_transform", Transform3D.IDENTITY) as Transform3D)
+		if proxy.global_position.distance_to(proxy_expected.origin) > 0.08:
+			_fail("O-Ring stopper proxy drifted off axle at frame %d" % frame_index)
 			return
 
 		if frame_index % 30 == 0:
@@ -184,7 +197,7 @@ func _run() -> void:
 		_fail("closed frame opened while settling on O-Ring; max socket gap=%.3f" % max_gap)
 		return
 
-	print("AXLE_ORING_VIDEO_064_SMOKE_OK: kinematic O-Ring physically stops loaded axle hub and frame settles; min_clearance=%.3f vmax=%.2f wmax=%.2f gap=%.3f" % [min_stop_clearance, max_linear, max_angular, max_gap])
+	print("AXLE_ORING_VIDEO_064_SMOKE_OK: moving O-Ring stopper blocks loaded axle hub and frame settles; min_clearance=%.3f vmax=%.2f wmax=%.2f gap=%.3f" % [min_stop_clearance, max_linear, max_angular, max_gap])
 	main.queue_free()
 	await process_frame
 	quit(0)

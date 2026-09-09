@@ -1,50 +1,48 @@
-# Connex Lab v0.5.2
+# Connex Lab v0.5.3
 
-Interaction-reliability and touch-editor overhaul.
+Touch interaction, attachment rewiring and rotation-reset correction release.
 
-### Scrollable editor surfaces
-- Options, Parts, Physics, Rotate and Move are now real touch-scrollable surfaces;
-- Rotate and Move side panels only exist while their matching editor mode is active;
-- those side panels are non-collapsible and disappear immediately when switching modes;
-- modal menus block construction/world input behind them.
+### Real touch scrolling
+- Options, Parts, Saves/Recovery, Help, Physics, Rotate and Move now support full-panel finger pull/swipe scrolling;
+- users no longer need to grab the thin scrollbar;
+- vertical swipe intent is detected before button/slider release so a real scroll gesture does not accidentally activate the underlying control;
+- Saves keeps its own ItemList scrolling behavior when the list itself is swiped.
 
-### Direct selection and transform behavior
-- ROTATE and MOVE no longer require arming the separate Select button; tap a piece directly;
-- ITEM remains the default transform space, while WORLD deliberately transforms the connected construction;
-- ordinary attached ITEM movement follows the selected piece's local alignment;
-- socket-, CROSS- and AXLE-mounted connectors rotate around their real attachment/rod axis;
-- Roll and the visible ITEM rotation gizmo now use the same physically valid axis;
-- CROSS, AXLE and O-Ring movement commits use the same validated transform as the drag preview;
-- invalid transform axes are hidden rather than shown and rejected later;
-- the rotation gizmo starts from the actual finger-down angle, removing the initial jump/snap.
+### Modal input ownership
+- open modal menus now intercept outside touches before higher CanvasLayer controls can receive them;
+- construction, toolbar and editor actions behind an open modal no longer receive leaked taps.
 
-### ATTACH / CREATE reliability
-- valid re-seat sockets keep their valid target color;
-- CROSS `+` markers are substantially larger;
-- rod-end and socket creation taps use larger screen-space picking targets;
-- nearby compatible second rod ends auto-connect more reliably, reducing one-sided structures that fall apart in simulation;
-- Disconnect opens a visible gap and snap-blocks the old pair until explicitly re-attached.
+### Rotate / Move terminology and reset
+- WORLD transform mode is renamed STRUCTURE in the user interface;
+- STRUCTURE continues to transform the complete connected construction;
+- Reset Placement Rotation now zeros the selected connector's STRUCTURE/world rotation;
+- free ITEM connectors reset to exact zero rotation;
+- socket-, CROSS- and AXLE-mounted ITEM connectors reset to their canonical physically valid zero-roll state;
+- ITEM gizmo axes are synchronized before validity coloring, removing the initial gray-valid-ring state.
 
-### 11 / 14-point connector fixes
-- all 11 and 14 sockets participate in attachment picking;
-- out-of-plane sockets receive enlarged marker-first targets;
-- spatial connectors now use the current rounded/open-jaw connector design across all ports;
-- changing an 11/14-point connector back to a planar connector removes spatial/top geometry immediately instead of leaving stale pieces behind.
+### Selection and CREATE behavior
+- when Select is armed, CREATE placement is disabled until selection succeeds or Select is cancelled;
+- tapping a connector while Select is armed can no longer place a rod instead.
 
-### Parts, camera and physics
-- Parts retains the hybrid quick previous/next controls plus the rendered 3D Parts browser;
-- Parts preview no longer intercepts scroll gestures;
-- camera zoom range is expanded to 3–420 while preserving two-finger pan/zoom;
-- Reset Physics Defaults now restores both physics values and the visible slider positions;
-- Undo/Redo preserves the current rod/connector palette selection instead of treating palette choice as build history.
+### Attachment rewiring
+- tapping an occupied SOCKET where a rod end overlaps the connector now resolves to the actual connected rod end when that is the movable endpoint;
+- already-attached ends can be moved/re-seated without the old "no free compatible rod end" dead end;
+- the attachment solver no longer guesses an unrelated existing link between the same two pieces as the connection being moved;
+- rigid-loop closure is allowed when the requested new attachment points are already geometrically aligned;
+- perfectly aligned free rod-end/socket pairs can auto-attach even when those pieces already share another rigid link;
+- explicit manual disconnect snap-back protection remains respected.
+
+### 11 / 14-point selection visuals
+- selection highlight traversal is recursive;
+- nested top/bottom spatial jaws and arc geometry on 11- and 14-point connectors glow with the rest of the selected connector.
 
 ### Validation
-- v0.5.2 has dedicated interaction-reliability coverage for scroll surfaces, modal blocking, mode-owned panels, Physics reset, attached local-axis movement, socket-axis rotation, O-Ring/CROSS/AXLE move commits, spatial connector lifecycle and palette-safe history;
-- the complete legacy behavioral suite through v0.5.1 remains active;
-- Android export has passed on the validated v0.5.2 interaction runtime.
+- complete legacy behavioral suite through v0.5.2 remains active;
+- dedicated v0.5.3 regression coverage verifies pull scrolling, STRUCTURE reset, Select precedence, occupied-end normalization, immediate valid gizmo coloring, recursive spatial highlight and rigid-loop attachment;
+- Android debug export passed on the v0.5.3 candidate before promotion.
 
 ### Signing / update compatibility
-- Android versionCode is 26;
-- Android versionName is `0.5.2`;
+- Android versionCode is 27;
+- Android versionName is `0.5.3`;
 - package ID remains `com.pixel375.connex`;
-- v0.5.2 uses the existing permanent signing certificate and updates in place over permanently signed Connex builds.
+- v0.5.3 uses the existing permanent signing certificate and updates in place over permanently signed Connex builds.

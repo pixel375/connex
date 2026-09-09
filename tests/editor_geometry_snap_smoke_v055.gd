@@ -86,7 +86,7 @@ func _run() -> void:
 	root.add_child(main)
 	await process_frame
 
-	if not str(main.get_script().resource_path).ends_with("main_v063.gd"):
+	if not str(main.get_script().resource_path).ends_with("main_v064.gd"):
 		_fail("Main is not using a descendant runtime with v0.5.5 geometry behavior")
 		return
 
@@ -184,7 +184,7 @@ func _run() -> void:
 	_connect_socket(main, d_conn, da, 90, -1)
 	main.call("_rebuild_connection_graph_v020")
 
-	_rotate_rod_about_endpoint(main, da, -1, Vector3.UP, deg_to_rad(4.0))
+	_rotate_rod_about_endpoint(main, da, -1, Vector3.UP, deg_to_rad(8.0))
 	main.call("_refresh_joint_frames_v020")
 	main.call("_rebuild_connection_graph_v020")
 	var gap_before: float = (main.call("_rod_end_v020", da, 1) as Vector3).distance_to((main.call("_socket_world_v020", a, 270) as Dictionary).get("point") as Vector3)
@@ -238,19 +238,14 @@ func _run() -> void:
 		_fail("loop projection left another square attachment visibly open: max %.3f" % max_square_gap)
 		return
 
-	# v0.5.8 deliberately changes only the last part of the old preflight behavior:
-	# the legacy v0.1.4 pass still identifies a redundant fixed-cycle edge, but if
-	# that edge is a real SOCKET it is immediately restored so the physical socket
-	# cannot open under gravity. Verify the legacy path was exercised and that no
-	# SOCKET remains disabled afterward.
+	# v0.5.8+ keeps every real SOCKET solver-active. Redundant loop handling may
+	# stabilize the constraint internally, but it must never physically remove a
+	# socket edge again.
 	main.call("_prepare_stable_simulation_graph")
-	if int(main.get("restored_socket_loop_constraints_v063")) < 1:
-		_fail("loop fixture did not exercise and restore legacy redundant SOCKET suppression")
-		return
 	for joint_value in (main.get("joints") as Array):
-		var joint: Joint3D = joint_value as Joint3D
-		if is_instance_valid(joint) and str(joint.get_meta("connection_kind_v020", "")) == "socket" and bool(joint.get_meta("sim_disabled", false)):
-			_fail("a real socket connection remained suppressed after simulation preflight")
+		var prepared_joint: Joint3D = joint_value as Joint3D
+		if is_instance_valid(prepared_joint) and str(prepared_joint.get_meta("connection_kind_v020", "")) == "socket" and bool(prepared_joint.get_meta("sim_disabled", false)):
+			_fail("simulation preflight suppressed a real SOCKET loop edge")
 			return
 	var after_prepare_gap: float = float(main.call("_connection_gap_v059", closure))
 	if after_prepare_gap > 0.08:
@@ -258,7 +253,7 @@ func _run() -> void:
 		return
 	main.call("_restore_simulation_joint_graph")
 
-	print("EDITOR_055_SMOKE_OK: no queued phantom highlight + >2.0 capture + same-island closed-loop projection + loop SOCKET preserved through preflight")
+	print("EDITOR_055_SMOKE_OK: no queued phantom highlight + >2.0 capture + same-island closed-loop projection + socket-preserving preflight")
 	main.queue_free()
 	await process_frame
 	quit(0)

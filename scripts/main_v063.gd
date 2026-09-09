@@ -35,8 +35,8 @@ func _restore_suppressed_socket_loops_v063() -> int:
 			continue
 		if str(joint.get_meta("connection_kind_v020", "")) != "socket":
 			continue
-		var saved_a: NodePath = joint.get_meta("sim_saved_node_a", NodePath()) as NodePath
-		var saved_b: NodePath = joint.get_meta("sim_saved_node_b", NodePath()) as NodePath
+		var saved_a: NodePath = joint.get_meta("sim_saved_node_a", NodePath())
+		var saved_b: NodePath = joint.get_meta("sim_saved_node_b", NodePath())
 		if saved_a.is_empty() or saved_b.is_empty():
 			continue
 		joint.node_a = saved_a

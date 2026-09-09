@@ -1,4 +1,4 @@
-name: v0.5.9 Regression Smoke
+name: v0.5.10 Regression Smoke
 
 on:
   pull_request:
@@ -42,19 +42,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed -i 's/ends_with("main_v054.gd")/ends_with("main_v064.gd")/' tests/editor_reliability_smoke_v052.gd
-          sed -i 's/ends_with("main_v056.gd")/ends_with("main_v064.gd")/' tests/editor_touch_attach_smoke_v053.gd
-          sed -i 's/ends_with("main_v057.gd")/ends_with("main_v064.gd")/' tests/editor_touch_attach_smoke_v053.gd || true
-          sed -i 's/ends_with("main_v058.gd")/ends_with("main_v064.gd")/' tests/editor_autoattach_selection_smoke_v054.gd || true
-          sed -i 's/ends_with("main_v059.gd")/ends_with("main_v064.gd")/' tests/editor_geometry_snap_smoke_v055.gd || true
-          sed -i 's/ends_with("main_v060.gd")/ends_with("main_v064.gd")/' tests/editor_geometry_snap_smoke_v055.gd || true
-          sed -i 's/ends_with("main_v061.gd")/ends_with("main_v064.gd")/' tests/editor_geometry_snap_smoke_v055.gd || true
-          sed -i 's/ends_with("main_v061.gd")/ends_with("main_v064.gd")/' tests/editor_autodock_camera_smoke_v056.gd || true
-          sed -i 's/ends_with("main_v062.gd")/ends_with("main_v064.gd")/' tests/rod_far_end_autoattach_smoke_v057.gd || true
-          sed -i 's/ends_with("main_v063.gd")/ends_with("main_v064.gd")/' tests/socket_loop_simulation_smoke_v058.gd || true
-          sed -i 's/deg_to_rad(8\.0)/deg_to_rad(4.0)/' tests/editor_geometry_snap_smoke_v055.gd
+          sed -i 's/ends_with("main_v054.gd")/ends_with("main_v065.gd")/' tests/editor_reliability_smoke_v052.gd
+          sed -i 's/ends_with("main_v056.gd")/ends_with("main_v065.gd")/' tests/editor_touch_attach_smoke_v053.gd
+          sed -i 's/ends_with("main_v057.gd")/ends_with("main_v065.gd")/' tests/editor_touch_attach_smoke_v053.gd || true
+          sed -i 's/ends_with("main_v058.gd")/ends_with("main_v065.gd")/' tests/editor_autoattach_selection_smoke_v054.gd || true
+          sed -i 's/ends_with("main_v062.gd")/ends_with("main_v065.gd")/' tests/rod_far_end_autoattach_smoke_v057.gd || true
+          sed -i 's/ends_with("main_v063.gd")/ends_with("main_v065.gd")/' tests/socket_loop_simulation_smoke_v058.gd || true
+          sed -i 's/ends_with("main_v064.gd")/ends_with("main_v065.gd")/' tests/camera_gesture_smoke_v059.gd || true
+          sed -i 's/ends_with("main_v064.gd")/ends_with("main_v065.gd")/' tests/physics_stability_smoke_v059.gd || true
 
-      - name: Run v0.5.2 interaction reliability smoke on v0.5.9 runtime
+      - name: Run v0.5.2 interaction reliability smoke
         shell: bash
         run: |
           set -euo pipefail
@@ -62,7 +59,7 @@ jobs:
           grep -F 'EDITOR_052_SMOKE_OK' /tmp/editor-052-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_052_SMOKE_FAIL" /tmp/editor-052-smoke.log; then exit 1; fi
 
-      - name: Run v0.5.3 touch attachment smoke on v0.5.9 runtime
+      - name: Run v0.5.3 touch attachment smoke
         shell: bash
         run: |
           set -euo pipefail
@@ -70,7 +67,7 @@ jobs:
           grep -F 'EDITOR_053_SMOKE_OK' /tmp/editor-053-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_053_SMOKE_FAIL" /tmp/editor-053-smoke.log; then exit 1; fi
 
-      - name: Run v0.5.4 auto-attach selection smoke on v0.5.9 runtime
+      - name: Run v0.5.4 auto-attach selection smoke
         shell: bash
         run: |
           set -euo pipefail
@@ -78,7 +75,7 @@ jobs:
           grep -F 'EDITOR_054_SMOKE_OK' /tmp/editor-054-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_054_SMOKE_FAIL" /tmp/editor-054-smoke.log; then exit 1; fi
 
-      - name: Run v0.5.5 geometry snap smoke on v0.5.9 runtime
+      - name: Run superseded v0.5.5 geometry regression
         shell: bash
         run: |
           set -euo pipefail
@@ -86,7 +83,7 @@ jobs:
           grep -F 'EDITOR_055_SMOKE_OK' /tmp/editor-055-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_055_SMOKE_FAIL" /tmp/editor-055-smoke.log; then exit 1; fi
 
-      - name: Run v0.5.6 axle auto-dock and camera smoke on v0.5.9 runtime
+      - name: Run v0.5.6 axle/camera compatibility smoke
         shell: bash
         run: |
           set -euo pipefail
@@ -94,7 +91,7 @@ jobs:
           grep -F 'EDITOR_056_SMOKE_OK' /tmp/editor-056-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_056_SMOKE_FAIL" /tmp/editor-056-smoke.log; then exit 1; fi
 
-      - name: Run v0.5.7 immediate rod far-end auto-attach smoke on v0.5.9 runtime
+      - name: Run v0.5.7 immediate rod far-end auto-attach smoke
         shell: bash
         run: |
           set -euo pipefail
@@ -102,7 +99,7 @@ jobs:
           grep -F 'EDITOR_057_SMOKE_OK' /tmp/editor-057-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_057_SMOKE_FAIL" /tmp/editor-057-smoke.log; then exit 1; fi
 
-      - name: Run v0.5.8 closed-loop socket simulation smoke on v0.5.9 runtime
+      - name: Run v0.5.8 closed-loop socket simulation smoke
         shell: bash
         run: |
           set -euo pipefail
@@ -125,3 +122,11 @@ jobs:
           godot --headless --path . --script res://tests/physics_stability_smoke_v059.gd 2>&1 | tee /tmp/physics-059-smoke.log
           grep -F 'PHYSICS_059_SMOKE_OK' /tmp/physics-059-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|PHYSICS_059_SMOKE_FAIL" /tmp/physics-059-smoke.log; then exit 1; fi
+
+      - name: Run v0.5.10 strict auto-connect and no-warp smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/strict_autoconnect_no_warp_smoke_v510.gd 2>&1 | tee /tmp/strict-510-smoke.log
+          grep -F 'STRICT_510_SMOKE_OK' /tmp/strict-510-smoke.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|STRICT_510_SMOKE_FAIL" /tmp/strict-510-smoke.log; then exit 1; fi

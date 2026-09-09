@@ -1,38 +1,37 @@
-# Connex Lab v0.5.9
+# Connex Lab v0.5.10
 
-Camera-control and simulation-stability release following the v0.5.8 closed-loop SOCKET fix.
+Correction release for the v0.5.9 device regressions where a rod could auto-connect across a visible gap and pressing SIMULATE could reshape the construction before physics began.
 
-### Camera controls rebuilt
-- one-finger drag now has one clear job: orbit;
-- two-finger movement pans the view while pinch/spread zooms;
-- when a second finger joins, control transfers cleanly to the two-finger gesture;
-- after a two-finger gesture, the remaining finger stays inert until all fingers are lifted, preventing the common 2→1 handoff jump and accidental tap/selection;
-- orbit sensitivity is viewport-relative instead of being tied to raw screen pixels, making the same gesture more consistent across phone/tablet resolutions;
-- existing reverse-axis and camera-sensitivity settings remain supported;
-- editor gizmo/tool drags retain priority over camera gestures.
+### Auto-connect is now overlap-only
+- a free rod end is considered for automatic SOCKET attachment only when it is already directly inside the intended socket area;
+- capture distance is reduced to 0.38 world units, lateral miss to 0.22, with strong 0.98 directional alignment;
+- a nearby rod that is merely pointing toward a socket stays free;
+- automatic attachment no longer translates, rotates, bends, relaxes, or otherwise moves an existing component to manufacture a connection;
+- v0.5.7's immediate far-end attachment remains, but only when the newly created rod already physically reaches the second socket.
 
-### Delayed physics explosion fixed
-The unstable behavior was not primarily a gravity/friction setting problem. The project still contained the legacy v0.1.4 workaround for an over-constrained fixed-joint graph. v0.5.8 had to restore real closed-loop SOCKET joints so visible connections did not open, but restoring the entire redundant 6DOF weld also restored the solver condition that could build energy over time and produce waving frames, jumping axles, spinning parts, and explosive motion.
+### SIMULATE no longer edits the build
+The visible warp was caused by two inherited editor operations being run as part of simulation preflight: v0.5.5 re-projected all recorded attachment geometry and v0.5.6 performed a last automatic dock/connection pass. Both are disabled at simulation start in v0.5.10.
 
-v0.5.9 keeps the v0.5.8 physical-connection guarantee while changing how only redundant closed-loop SOCKET edges are represented during SIMULATE:
-- every real SOCKET stays solver-active and positionally closed;
-- the three redundant angular locks on a cycle-closing SOCKET are released during simulation;
-- the rest of the rigid connection path continues to determine orientation;
-- BUILD/Restore returns those sockets to their full authoritative fixed constraints;
-- existing duplicate-axle suppression remains active.
+- pressing SIMULATE does not auto-orient connectors;
+- it does not search for new nearby SOCKET attachments;
+- it does not normalize or relax body positions/rotations;
+- preflight snapshots the complete build pose and has a hard safeguard that preserves those transforms while the solver graph is prepared.
 
-### Regression guard retained
-The v0.5.8 rule is permanent: a real closed-loop SOCKET must never be made non-physical merely to simplify the solver graph. GitHub issue #42 records this invariant for future physics work.
+### Physics protections retained
+- the permanent v0.5.8 rule remains: every real closed-loop SOCKET stays physically connected in simulation;
+- v0.5.9's redundant cycle angular-lock softening remains active to avoid the delayed over-constraint instability;
+- duplicate axle suppression and connected-component collision handling remain active;
+- camera behavior is intentionally unchanged in this release.
 
-### Validation
-- all previous editor/attachment regressions through v0.5.8 pass on the v0.5.9 runtime;
-- a deterministic camera test verifies one-finger orbit, two-finger pan/zoom, and no 2→1 handoff jump;
-- the v0.5.8 closed-loop test still verifies every real SOCKET remains active and closed;
-- a new 420-physics-frame stress test runs a closed flat frame plus a horizontal axle assembly and watches socket separation, axle radial escape, and runaway velocity;
-- validated stress-run maxima were 0.151 socket gap, 0.155 axle radial offset, 14.60 linear speed, and 5.97 angular speed, all below the instability guards.
+### Regression coverage
+- a 1.0-unit visible rod/socket gap must remain unconnected and unchanged;
+- a 0.10-unit true overlap must attach without moving either connector or the rod assembly;
+- simulation preflight must preserve every build transform exactly;
+- old v0.5.4/v0.5.5 tests that required wide proximity snapping were explicitly reversed because that behavior is now considered a bug;
+- the v0.5.8 closed-loop SOCKET regression and v0.5.9 long physics stability test continue to pass.
 
 ### Signing / update compatibility
-- Android versionCode is 33;
-- Android versionName is `0.5.9`;
+- Android versionCode is 34;
+- Android versionName is `0.5.10`;
 - package ID remains `com.pixel375.connex`;
-- the existing permanent Connex signing certificate is retained for an in-place update over v0.5.8.
+- the existing permanent Connex signing certificate is retained for an in-place update over v0.5.9.

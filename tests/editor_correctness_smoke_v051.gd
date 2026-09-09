@@ -27,7 +27,7 @@ func _run() -> void:
 	await process_frame
 
 	var runtime_path: String = str(main.get_script().resource_path)
-	if not (runtime_path.ends_with("main_v053.gd") or runtime_path.ends_with("main_v054.gd") or runtime_path.ends_with("main_v055.gd")):
+	if not (runtime_path.ends_with("main_v053.gd") or runtime_path.ends_with("main_v054.gd") or runtime_path.ends_with("main_v055.gd") or runtime_path.ends_with("main_v056.gd")):
 		_fail("Main is not using a validated v0.5.1+ runtime")
 		return
 
@@ -94,7 +94,7 @@ func _run() -> void:
 			_fail("%s exposes %d spatial ATTACH sockets; expected %d" % [str(pair[0]), spatial_count, int(pair[1])])
 			return
 
-	print("EDITOR_051_SMOKE_OK: mode mapping + ITEM/WORLD + accessible saves/physics + rendered parts + vertical pan + spatial ports")
+	print("EDITOR_051_SMOKE_OK: mode mapping + ITEM/STRUCTURE + accessible saves/physics + rendered parts + vertical pan + spatial ports")
 	main.queue_free()
 	await process_frame
 	quit(0)

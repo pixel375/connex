@@ -1,4 +1,4 @@
-name: v0.5.2 Reliability Smoke
+name: v0.5.3 Regression Smoke
 
 on:
   pull_request:
@@ -14,7 +14,7 @@ concurrency:
 jobs:
   reliability:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -38,10 +38,25 @@ jobs:
           godot --headless --path . --editor --quit 2>&1 | tee /tmp/godot-editor.log
           if grep -Eq "SCRIPT ERROR|Parse Error|Failed to load script" /tmp/godot-editor.log; then exit 1; fi
 
-      - name: Run v0.5.2 interaction reliability smoke
+      - name: Prepare descendant-runtime smoke tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i 's/ends_with("main_v054.gd")/ends_with("main_v057.gd")/' tests/editor_reliability_smoke_v052.gd
+          sed -i 's/ends_with("main_v056.gd")/ends_with("main_v057.gd")/' tests/editor_touch_attach_smoke_v053.gd
+
+      - name: Run v0.5.2 interaction reliability smoke on v0.5.3 runtime
         shell: bash
         run: |
           set -euo pipefail
           godot --headless --path . --script res://tests/editor_reliability_smoke_v052.gd 2>&1 | tee /tmp/editor-052-smoke.log
           grep -F 'EDITOR_052_SMOKE_OK' /tmp/editor-052-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_052_SMOKE_FAIL" /tmp/editor-052-smoke.log; then exit 1; fi
+
+      - name: Run v0.5.3 touch attachment smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/editor_touch_attach_smoke_v053.gd 2>&1 | tee /tmp/editor-053-smoke.log
+          grep -F 'EDITOR_053_SMOKE_OK' /tmp/editor-053-smoke.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_053_SMOKE_FAIL" /tmp/editor-053-smoke.log; then exit 1; fi

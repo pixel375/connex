@@ -20,7 +20,7 @@ func _run() -> void:
 	await process_frame
 
 	var runtime_path: String = str(main.get_script().resource_path)
-	if not (runtime_path.ends_with("main_v050_hotfix.gd") or runtime_path.ends_with("main_v051.gd") or runtime_path.ends_with("main_v052.gd") or runtime_path.ends_with("main_v053.gd") or runtime_path.ends_with("main_v054.gd") or runtime_path.ends_with("main_v055.gd")):
+	if not (runtime_path.ends_with("main_v050_hotfix.gd") or runtime_path.ends_with("main_v051.gd") or runtime_path.ends_with("main_v052.gd") or runtime_path.ends_with("main_v053.gd") or runtime_path.ends_with("main_v054.gd") or runtime_path.ends_with("main_v055.gd") or runtime_path.ends_with("main_v056.gd")):
 		_fail("Main scene is not using a validated v0.5.x runtime")
 		return
 	if main.get("parts_panel_v050") == null or main.get("builds_panel_v050") == null:

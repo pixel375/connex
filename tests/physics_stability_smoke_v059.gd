@@ -51,8 +51,8 @@ func _run() -> void:
 	root.add_child(main)
 	await process_frame
 
-	if not str(main.get_script().resource_path).ends_with("main_v064.gd"):
-		_fail("Main is not using v0.5.9 runtime")
+	if not str(main.get_script().resource_path).ends_with("main_v066.gd"):
+		_fail("Main is not using v0.5.11 runtime")
 		return
 
 	# Closed flat frame: this is the exact class of construction that used to
@@ -95,15 +95,14 @@ func _run() -> void:
 		_fail("axle fixture did not create a rod")
 		return
 
-	# Preflight must still exercise the v0.5.8 closed-loop path, but v0.5.9 should
-	# convert at least one redundant SOCKET from a full 6DOF weld to positional
-	# closure rather than leaving the over-constrained hard loop in the solver.
+	# v0.5.9 broke exact redundant welds by making cycle-closing SOCKETs angularly
+	# free. v0.5.11 keeps that solver relief but adds a small non-zero flex limit.
 	main.call("_prepare_stable_simulation_graph")
 	if int(main.get("restored_socket_loop_constraints_v063")) < 1:
 		_fail("fixture did not exercise v0.5.8 restored socket-loop path")
 		return
 	if int(main.get("softened_socket_loop_count_v064")) < 1:
-		_fail("v0.5.9 did not soften any redundant socket cycle edge")
+		_fail("closed frame did not produce a stabilized socket cycle edge")
 		return
 	var softened_found := false
 	for joint_value in (main.get("joints") as Array):
@@ -112,14 +111,19 @@ func _run() -> void:
 			continue
 		if str(joint.get_meta("connection_kind_v020", "")) == "socket" and bool(joint.get_meta("sim_soft_socket_cycle_v064", false)):
 			softened_found = true
-			if bool((joint as Generic6DOFJoint3D).get("angular_limit_x/enabled")):
-				_fail("soft socket cycle still has hard angular X lock")
+			var socket_joint := joint as Generic6DOFJoint3D
+			if not bool(socket_joint.get("angular_limit_x/enabled")):
+				_fail("v0.5.11 left a closed-loop SOCKET as a completely free angular hinge")
+				return
+			var upper := float(socket_joint.get("angular_limit_x/upper_angle"))
+			if upper <= 0.0 or upper > deg_to_rad(2.0):
+				_fail("v0.5.11 default cycle flex is outside the intended stable rigidity range: %.3f deg" % rad_to_deg(upper))
 				return
 		if str(joint.get_meta("connection_kind_v020", "")) == "socket" and bool(joint.get_meta("sim_disabled", false)):
 			_fail("a real SOCKET was physically removed instead of stabilized")
 			return
 	if not softened_found:
-		_fail("softened SOCKET marker not found")
+		_fail("stabilized SOCKET marker not found")
 		return
 
 	main.call("_toggle_simulation")
@@ -158,7 +162,7 @@ func _run() -> void:
 		_fail("runaway angular velocity indicates solver explosion: %.2f" % max_angular)
 		return
 
-	print("PHYSICS_059_SMOKE_OK: 420-frame closed-loop + axle run stable; gap=%.3f radial=%.3f vmax=%.2f wmax=%.2f" % [max_socket_gap, max_axle_radial, max_linear, max_angular])
+	print("PHYSICS_059_SMOKE_OK: v0.5.11 flex-limited closed loop + axle stable; gap=%.3f radial=%.3f vmax=%.2f wmax=%.2f" % [max_socket_gap, max_axle_radial, max_linear, max_angular])
 	main.queue_free()
 	await process_frame
 	quit(0)

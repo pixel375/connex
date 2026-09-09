@@ -25,6 +25,7 @@ pointing/emulate_touch_from_mouse=true
 [physics]
 3d/default_gravity=9.81
 3d/default_gravity_vector=Vector3(0, -1, 0)
+3d/physics_engine="JoltPhysics3D"
 3d/solver/solver_iterations=32
 jolt_physics_3d/simulation/position_steps=4
 jolt_physics_3d/simulation/velocity_steps=20

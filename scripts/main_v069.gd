@@ -66,23 +66,34 @@ func _restore_axle_stop_limits_v069() -> void:
 
 func _o_ring_alongs_for_rod_v069(rod: RigidBody3D, axis: Vector3) -> Array:
 	var result: Array = []
+	# v0.5.13 detaches O-Ring joints before this pass, so those records disappear
+	# from a fresh graph rebuild. The follower list is therefore the authoritative
+	# simulation-time source for ring/host pairs.
+	for follower_value in o_ring_followers_v068:
+		var follower := follower_value as Dictionary
+		if follower.get("rod") != rod:
+			continue
+		var ring := follower.get("ring") as RigidBody3D
+		if is_instance_valid(ring):
+			result.append((ring.global_position - rod.global_position).dot(axis))
+	if not result.is_empty():
+		result.sort()
+		return result
+
+	# Fallback for direct preflight calls before follower conversion.
 	for record_value in connections_v020:
 		var record := record_value as Dictionary
 		if str(record.get("kind", "")) != "o_ring" or record.get("rod") != rod:
 			continue
 		var ring := record.get("ring") as RigidBody3D
-		if not is_instance_valid(ring):
-			continue
-		# Measure the actual BUILD pose. This remains correct after user movement,
-		# undo/redo and saved-build restore even if old host_along metadata exists.
-		result.append((ring.global_position - rod.global_position).dot(axis))
+		if is_instance_valid(ring):
+			result.append((ring.global_position - rod.global_position).dot(axis))
 	result.sort()
 	return result
 
 
 func _apply_axle_stop_limits_v069() -> int:
 	_restore_axle_stop_limits_v069()
-	_rebuild_connection_graph_v020()
 	var applied := 0
 	for record_value in connections_v020:
 		var record := record_value as Dictionary
@@ -145,7 +156,6 @@ func _apply_axle_stop_limits_v069() -> int:
 # exception to the hub's fixed SOCKET/CROSS component for this host axle only.
 # O-Ring stopping is independent and remains solver-native through the Y limit.
 func _apply_axle_component_exceptions_v069() -> int:
-	_rebuild_connection_graph_v020()
 	var added := 0
 	for record_value in connections_v020:
 		var record := record_value as Dictionary
@@ -173,8 +183,8 @@ func _prepare_stable_simulation_graph() -> void:
 	_restore_axle_stop_limits_v069()
 	super._prepare_stable_simulation_graph()
 	# super() has converted O-Rings into collisionless visual followers. Unlike
-	# v0.5.13, no proxy shapes were created. Now turn their positions into hard
-	# travel bounds on every axle connector that shares the host rod.
+	# v0.5.13, no proxy shapes were created. connections_v020 still contains the
+	# axle records from that preflight; follower state supplies the detached rings.
 	_apply_axle_stop_limits_v069()
 	_apply_axle_component_exceptions_v069()
 

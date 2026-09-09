@@ -19,6 +19,8 @@ func _status(text: String) -> void:
 		status_label.text = "Connex Lab v%s  •  %s" % [VERSION_067, text]
 
 
+# Structure Rigidity is a simulation-start parameter. Changing it while the
+# solver is live must never rewrite active Generic6DOF limits.
 func _on_structure_rigidity_v066(value: float) -> void:
 	physics_structure_rigidity_v066 = clampf(value, 0.0, 100.0)
 	if simulating:
@@ -61,14 +63,20 @@ func _reset_physics_v050() -> void:
 	_status("Physics defaults restored; Structure Rigidity %d%% applies next SIMULATE" % int(round(physics_structure_rigidity_v066)))
 
 
+# v0.2+ stores axle identity in the authoritative connection records. Do not rely
+# on the obsolete early-prototype `axle_connector` rod metadata.
 func _is_axle_rod_v067(body: RigidBody3D) -> bool:
-	if not is_instance_valid(body) or str(body.get_meta("kind", "")) != "rod" or not body.has_meta("axle_connector"):
+	if not is_instance_valid(body) or str(body.get_meta("kind", "")) != "rod":
 		return false
-	var connector := body.get_meta("axle_connector") as RigidBody3D
-	return is_instance_valid(connector)
+	for record_value in connections_v020:
+		var record := record_value as Dictionary
+		if str(record.get("kind", "")) == "axle" and record.get("rod") == body:
+			return true
+	return false
 
 
 func _wake_axle_rods_v067() -> int:
+	_rebuild_connection_graph_v020()
 	var count := 0
 	for body_value in bodies:
 		var body := body_value as RigidBody3D
@@ -124,7 +132,7 @@ func _update_help_text_v030() -> void:
 		return
 	var label: Label = _find_label_v030(help_panel)
 	if label != null:
-		label.text += "\n\nv0.5.12 PHYSICS SAFETY: Structure Rigidity is applied when SIMULATE begins. Moving the rigidity slider while physics is already running saves the value for the next run and does not rewrite active joint limits. This prevents the live-limit lock/freeze seen in v0.5.11. Axle rods are also kept awake during simulation so the intentionally free slide axis continues responding to gravity and support/contact changes."
+		label.text += "\n\nv0.5.12 PHYSICS SAFETY: Structure Rigidity is applied when SIMULATE begins. Moving the rigidity slider while physics is already running saves the value for the next run and does not rewrite active joint limits. This prevents the live-limit lock/freeze seen in v0.5.11. Axle rods are identified from the connection graph and kept awake during simulation so their intentionally free slide axis continues responding to gravity and support/contact changes."
 
 
 func _on_update_request_completed_v021(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:

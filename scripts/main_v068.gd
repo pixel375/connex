@@ -8,6 +8,8 @@ const RUNAWAY_ANGULAR_RECOVER_V068 := 24.0
 
 var runaway_guard_events_v068: int = 0
 var runaway_guard_last_status_ms_v068: int = 0
+var o_ring_followers_v068: Array = []
+var o_ring_proxy_shapes_v068: Array = []
 
 
 func _ready() -> void:
@@ -15,7 +17,7 @@ func _ready() -> void:
 	_update_help_text_v030()
 	if update_status_v021 != null:
 		_set_update_status_v021("Current version: v%s" % VERSION_068)
-	_status("O-Ring Stops now release with the rest of the build in SIMULATE; mixed-joint stability guard is active.")
+	_status("O-Ring Stops now move with their host rods without adding unstable extra rigid-body welds.")
 
 
 func _status(text: String) -> void:
@@ -23,83 +25,139 @@ func _status(text: String) -> void:
 		status_label.text = "Connex Lab v%s  •  %s" % [VERSION_068, text]
 
 
-func _release_o_rings_v068() -> int:
-	var released := 0
-	for ring_value in o_ring_stops:
-		var ring := ring_value as RigidBody3D
-		if not is_instance_valid(ring):
+# O-Ring Stops are physically fixed to their rod. Simulating each ring as a
+# separate RigidBody3D connected by another hard 6DOF weld creates a tiny,
+# high-frequency constrained body that can inject enormous angular energy on
+# ground/axle impacts. Treat it as what it physically is: part of the host rod.
+#
+# During SIMULATE:
+# - the ring's standalone collision body is disabled;
+# - its fixed joint is detached from the solver;
+# - an equivalent collision shape is copied into the host rod;
+# - the visible ring follows its saved host-local transform exactly.
+#
+# This preserves stop collisions against axle connectors while removing the
+# redundant ring rigid body/joint pair from the solver entirely.
+func _disable_o_ring_joint_v068(joint: Joint3D) -> void:
+	if not is_instance_valid(joint) or bool(joint.get_meta("sim_o_ring_detached_v068", false)):
+		return
+	joint.set_meta("sim_o_ring_saved_node_a_v068", joint.node_a)
+	joint.set_meta("sim_o_ring_saved_node_b_v068", joint.node_b)
+	joint.set_meta("sim_o_ring_detached_v068", true)
+	joint.node_a = NodePath()
+	joint.node_b = NodePath()
+
+
+func _restore_o_ring_joint_v068(joint: Joint3D) -> void:
+	if not is_instance_valid(joint) or not bool(joint.get_meta("sim_o_ring_detached_v068", false)):
+		return
+	joint.node_a = joint.get_meta("sim_o_ring_saved_node_a_v068", NodePath()) as NodePath
+	joint.node_b = joint.get_meta("sim_o_ring_saved_node_b_v068", NodePath()) as NodePath
+	joint.remove_meta("sim_o_ring_saved_node_a_v068")
+	joint.remove_meta("sim_o_ring_saved_node_b_v068")
+	joint.remove_meta("sim_o_ring_detached_v068")
+
+
+func _add_o_ring_proxy_shapes_v068(ring: RigidBody3D, rod: RigidBody3D) -> int:
+	var added := 0
+	for child_value in ring.get_children():
+		var source := child_value as CollisionShape3D
+		if source == null or source.shape == null or source.disabled:
 			continue
-		ring.linear_velocity = Vector3.ZERO
-		ring.angular_velocity = Vector3.ZERO
-		ring.freeze = false
-		ring.sleeping = false
-		ring.can_sleep = false
-		released += 1
-	return released
+		var proxy := CollisionShape3D.new()
+		proxy.name = "O_Ring_Stop_Proxy_%d" % o_ring_proxy_shapes_v068.size()
+		proxy.shape = source.shape.duplicate(true)
+		var world_shape: Transform3D = ring.global_transform * source.transform
+		proxy.transform = rod.global_transform.affine_inverse() * world_shape
+		proxy.set_meta("sim_o_ring_proxy_v068", true)
+		rod.add_child(proxy)
+		o_ring_proxy_shapes_v068.append(proxy)
+		added += 1
+	return added
 
 
-func _restore_o_rings_build_v068() -> void:
-	for ring_value in o_ring_stops:
-		var ring := ring_value as RigidBody3D
-		if not is_instance_valid(ring):
-			continue
-		ring.can_sleep = true
-		ring.freeze = true
-		ring.sleeping = false
-		ring.linear_velocity = Vector3.ZERO
-		ring.angular_velocity = Vector3.ZERO
-		if ring.has_meta("build_transform"):
-			ring.global_transform = ring.get_meta("build_transform") as Transform3D
-
-
-# A circular O-Ring needs all translation and tilt constrained, but axial spin is
-# physically irrelevant. Align its 6DOF frame to the host rod and remove that
-# redundant sixth weld constraint.
-func _prepare_o_ring_joints_v068() -> int:
+func _prepare_o_ring_followers_v068() -> int:
+	_restore_o_ring_followers_v068(false)
 	_rebuild_connection_graph_v020()
-	var tuned := 0
+	var prepared := 0
 	for record_value in connections_v020:
 		var record := record_value as Dictionary
 		if str(record.get("kind", "")) != "o_ring":
 			continue
-		var joint := record.get("joint") as Generic6DOFJoint3D
+		var joint := record.get("joint") as Joint3D
 		var ring := record.get("ring") as RigidBody3D
 		var rod := record.get("rod") as RigidBody3D
 		if not is_instance_valid(joint) or not is_instance_valid(ring) or not is_instance_valid(rod):
 			continue
-		var axis := _rod_axis_v020(rod).normalized()
-		if axis.length_squared() < 0.5:
-			continue
-		var basis := Basis(Quaternion(Vector3.UP, axis)).orthonormalized()
-		joint.global_transform = Transform3D(basis, ring.global_position)
-		for axis_name in ["x", "y", "z"]:
-			joint.set("linear_limit_%s/enabled" % axis_name, true)
-			joint.set("linear_limit_%s/lower_distance" % axis_name, 0.0)
-			joint.set("linear_limit_%s/upper_distance" % axis_name, 0.0)
-		for axis_name in ["x", "z"]:
-			joint.set("angular_limit_%s/enabled" % axis_name, true)
-			joint.set("angular_limit_%s/lower_angle" % axis_name, 0.0)
-			joint.set("angular_limit_%s/upper_angle" % axis_name, 0.0)
-		joint.set("angular_limit_y/enabled", false)
-		joint.exclude_nodes_from_collision = true
-		joint.set_meta("sim_o_ring_axis_joint_v068", true)
-		tuned += 1
-	if tuned > 0:
+
+		var local_transform: Transform3D = rod.global_transform.affine_inverse() * ring.global_transform
+		o_ring_followers_v068.append({
+			"ring": ring,
+			"rod": rod,
+			"joint": joint,
+			"local_transform": local_transform,
+			"collision_layer": ring.collision_layer,
+			"collision_mask": ring.collision_mask,
+		})
+
+		_disable_o_ring_joint_v068(joint)
+		_add_o_ring_proxy_shapes_v068(ring, rod)
+
+		ring.linear_velocity = Vector3.ZERO
+		ring.angular_velocity = Vector3.ZERO
+		ring.freeze = true
+		ring.sleeping = false
+		ring.can_sleep = true
+		ring.collision_layer = 0
+		ring.collision_mask = 0
+		ring.continuous_cd = false
+		prepared += 1
+
+	if prepared > 0:
 		_rebind_all_joints()
-	return tuned
+	return prepared
 
 
-func _prepare_o_ring_collision_groups_v068() -> void:
-	_rebuild_connection_graph_v020()
-	for ring_value in o_ring_stops:
-		var ring := ring_value as RigidBody3D
+func _sync_o_ring_followers_v068() -> void:
+	if not simulating:
+		return
+	for follower_value in o_ring_followers_v068:
+		var follower := follower_value as Dictionary
+		var ring := follower.get("ring") as RigidBody3D
+		var rod := follower.get("rod") as RigidBody3D
+		if not is_instance_valid(ring) or not is_instance_valid(rod):
+			continue
+		var local_transform := follower.get("local_transform", Transform3D.IDENTITY) as Transform3D
+		ring.global_transform = rod.global_transform * local_transform
+		ring.linear_velocity = rod.linear_velocity
+		ring.angular_velocity = rod.angular_velocity
+
+
+func _restore_o_ring_followers_v068(restore_build_pose: bool = true) -> void:
+	for proxy_value in o_ring_proxy_shapes_v068:
+		var proxy := proxy_value as CollisionShape3D
+		if is_instance_valid(proxy):
+			proxy.queue_free()
+	o_ring_proxy_shapes_v068.clear()
+
+	for follower_value in o_ring_followers_v068:
+		var follower := follower_value as Dictionary
+		var ring := follower.get("ring") as RigidBody3D
+		var joint := follower.get("joint") as Joint3D
+		_restore_o_ring_joint_v068(joint)
 		if not is_instance_valid(ring):
 			continue
-		var component: Array = _fixed_component_v020(ring, -1)
-		for other_value in component:
-			var other := other_value as RigidBody3D
-			if is_instance_valid(other) and other != ring:
-				_add_simulation_collision_exception(ring, other)
+		ring.collision_layer = int(follower.get("collision_layer", 1))
+		ring.collision_mask = int(follower.get("collision_mask", 1))
+		ring.freeze = true
+		ring.sleeping = false
+		ring.can_sleep = true
+		ring.linear_velocity = Vector3.ZERO
+		ring.angular_velocity = Vector3.ZERO
+		if restore_build_pose and ring.has_meta("build_transform"):
+			ring.global_transform = ring.get_meta("build_transform") as Transform3D
+	o_ring_followers_v068.clear()
+	_rebind_all_joints()
 
 
 # Long thin rods can move farther than their radius in one 60 Hz step during a
@@ -110,16 +168,11 @@ func _set_simulation_ccd_v068(enabled: bool) -> void:
 		var body := body_value as RigidBody3D
 		if is_instance_valid(body):
 			body.continuous_cd = enabled
-	for ring_value in o_ring_stops:
-		var ring := ring_value as RigidBody3D
-		if is_instance_valid(ring):
-			ring.continuous_cd = enabled
 
 
 func _prepare_stable_simulation_graph() -> void:
 	super._prepare_stable_simulation_graph()
-	_prepare_o_ring_joints_v068()
-	_prepare_o_ring_collision_groups_v068()
+	_prepare_o_ring_followers_v068()
 	_set_simulation_ccd_v068(true)
 
 
@@ -127,31 +180,31 @@ func _release_physics() -> void:
 	await super._release_physics()
 	if not simulating:
 		return
-	var ring_count: int = _release_o_rings_v068()
-	_status("Physics running — Structure Rigidity %d%%; %d axle slides awake; %d O-Ring Stop%s dynamic" % [
+	_sync_o_ring_followers_v068()
+	_status("Physics running — Structure Rigidity %d%%; %d axle slides awake; %d O-Ring Stop%s welded to host physics" % [
 		int(round(active_structure_rigidity_v067)),
 		_wake_axle_rods_v067(),
-		ring_count,
-		"" if ring_count == 1 else "s"
+		o_ring_followers_v068.size(),
+		"" if o_ring_followers_v068.size() == 1 else "s"
 	])
 
 
 func _reset_pose() -> void:
 	_set_simulation_ccd_v068(false)
+	_restore_o_ring_followers_v068(true)
 	super._reset_pose()
-	_restore_o_rings_build_v068()
 
 
 func _restore_state(snapshot: Dictionary) -> void:
 	_set_simulation_ccd_v068(false)
+	_restore_o_ring_followers_v068(false)
 	super._restore_state(snapshot)
-	_restore_o_rings_build_v068()
 
 
 func _restart_build() -> void:
 	_set_simulation_ccd_v068(false)
+	_restore_o_ring_followers_v068(false)
 	super._restart_build()
-	_restore_o_rings_build_v068()
 
 
 func _guard_body_energy_v068(body: RigidBody3D) -> bool:
@@ -175,8 +228,6 @@ func _guard_simulation_energy_v068() -> bool:
 	var tripped := false
 	for body_value in bodies:
 		tripped = _guard_body_energy_v068(body_value as RigidBody3D) or tripped
-	for ring_value in o_ring_stops:
-		tripped = _guard_body_energy_v068(ring_value as RigidBody3D) or tripped
 	if not tripped:
 		return false
 	runaway_guard_events_v068 += 1
@@ -188,11 +239,13 @@ func _guard_simulation_energy_v068() -> bool:
 
 
 func _physics_process(_delta: float) -> void:
+	_sync_o_ring_followers_v068()
 	_guard_simulation_energy_v068()
 
 
 func _process(delta: float) -> void:
 	super._process(delta)
+	_sync_o_ring_followers_v068()
 
 
 func _update_help_text_v030() -> void:
@@ -201,7 +254,7 @@ func _update_help_text_v030() -> void:
 		return
 	var label: Label = _find_label_v030(help_panel)
 	if label != null:
-		label.text += "\n\nv0.5.13 O-RINGS / STABILITY: O-Ring Stops are no longer left frozen when SIMULATE begins. They release with their host construction and return to their saved BUILD pose on Restore. Their joint is aligned to the host rod and leaves only physically irrelevant axial spin free. O-Rings participate in fixed-component self-collision suppression. SIMULATE enables continuous collision detection for the thin construction pieces, and the project uses higher constraint-solver iteration counts so hard ground impacts are resolved without injecting runaway energy. A physics-tick stability guard remains as a last resort for pathological solver spikes."
+		label.text += "\n\nv0.5.13 O-RINGS / STABILITY: an O-Ring Stop is physically welded into its host rod during SIMULATE instead of being solved as a separate tiny rigid body plus hard 6DOF joint. Its visible ring follows the rod exactly and its collision shape is temporarily copied into the host rod, so it still acts as a real axle stop without becoming an invisible world anchor or an unstable high-frequency constraint. BUILD/Restore returns the original editable ring body and joint. SIMULATE also enables continuous collision detection on construction bodies and uses higher solver iteration counts for hard impacts."
 
 
 func _on_update_request_completed_v021(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:

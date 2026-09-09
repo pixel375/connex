@@ -56,6 +56,9 @@ func _run() -> void:
 		_fail("Main is not using v0.5.13 runtime")
 		return
 
+	# Intentionally awkward mixed build: one long axle, two independently sliding
+	# hubs, five offset fixed spokes, and stops at both ends. This fixture is meant
+	# to hit the floor asymmetrically and used to gain impossible solver energy.
 	var axle := main.call("_make_rod", 4, Vector3(0, 13, 0), Vector3(0, 29, 0)) as RigidBody3D
 	var hub_a := main.call("_make_connector", 6, Transform3D(Basis.IDENTITY, Vector3(0, 19, 0))) as RigidBody3D
 	var hub_b := main.call("_make_connector", 6, Transform3D(Basis.IDENTITY, Vector3(0, 23, 0))) as RigidBody3D
@@ -72,24 +75,33 @@ func _run() -> void:
 
 	var ring_low_start_y := ring_low.global_position.y
 	var ring_high_start_y := ring_high.global_position.y
-	var low_local_before: Vector3 = axle.global_transform.affine_inverse() * ring_low.global_position
-	var high_local_before: Vector3 = axle.global_transform.affine_inverse() * ring_high.global_position
+	var low_local_before: Transform3D = axle.global_transform.affine_inverse() * ring_low.global_transform
+	var high_local_before: Transform3D = axle.global_transform.affine_inverse() * ring_high.global_transform
 
 	main.call("_toggle_simulation")
 	for _i in range(12):
 		await physics_frame
 
-	if ring_low.freeze or ring_high.freeze:
-		_fail("O-Ring Stop remained frozen after SIMULATE release")
+	# v0.5.13 intentionally removes the tiny independent O-Ring rigid body from the
+	# live solver. The visible ring stays frozen/non-colliding and follows the host;
+	# its collision shape is duplicated into the host rod instead.
+	if int((main.get("o_ring_followers_v068") as Array).size()) != 2:
+		_fail("O-Ring Stops were not converted to host-follow physics")
 		return
-	if ring_low.can_sleep or ring_high.can_sleep:
-		_fail("O-Ring Stop was allowed to sleep independently during active simulation")
+	if int((main.get("o_ring_proxy_shapes_v068") as Array).size()) < 2:
+		_fail("O-Ring stop collision shapes were not merged into the host rod")
+		return
+	if not ring_low.freeze or not ring_high.freeze:
+		_fail("standalone O-Ring rigid bodies remained live in the solver")
+		return
+	if ring_low.collision_layer != 0 or ring_high.collision_layer != 0:
+		_fail("standalone O-Ring collision bodies were not disabled")
 		return
 
 	for _i in range(72):
 		await physics_frame
 	if ring_low.global_position.y > ring_low_start_y - 0.30 or ring_high.global_position.y > ring_high_start_y - 0.30:
-		_fail("O-Ring Stops did not fall with their host construction under gravity")
+		_fail("O-Ring Stops did not fall visually with their host construction under gravity")
 		return
 
 	var max_linear := 0.0
@@ -102,9 +114,7 @@ func _run() -> void:
 	var first_over_30 := ""
 	for frame_index in range(420):
 		await physics_frame
-		var all_dynamic: Array = (main.get("bodies") as Array).duplicate()
-		all_dynamic.append_array(main.get("o_ring_stops") as Array)
-		for body_value in all_dynamic:
+		for body_value in (main.get("bodies") as Array):
 			var body := body_value as RigidBody3D
 			if not is_instance_valid(body):
 				continue
@@ -125,6 +135,13 @@ func _run() -> void:
 					frame_index, linear, angular, str(body.global_position), int(main.get("runaway_guard_events_v068"))]
 				print("ORING_STABILITY_DIAG_FIRST_OVER_30: %s" % first_over_30)
 
+		# The visible O-Ring transform must remain exactly welded to the moving axle.
+		var low_expected: Transform3D = axle.global_transform * low_local_before
+		var high_expected: Transform3D = axle.global_transform * high_local_before
+		if ring_low.global_position.distance_to(low_expected.origin) > 0.03 or ring_high.global_position.distance_to(high_expected.origin) > 0.03:
+			_fail("O-Ring visual follower drifted away from the host rod")
+			return
+
 	if max_linear > 41.9:
 		_fail("mixed build runaway: vmax=%.2f actor=%s frame=%d pos=%s; wmax=%.2f actor=%s frame=%d; first_over_30=%s; guard_events=%d" % [max_linear, max_linear_name, max_linear_frame, str(max_linear_pos), max_angular, max_angular_name, max_angular_frame, first_over_30, int(main.get("runaway_guard_events_v068"))])
 		return
@@ -133,12 +150,6 @@ func _run() -> void:
 		return
 	if int(main.get("runaway_guard_events_v068")) != 0:
 		_fail("ordinary mixed fixture needed the emergency stability guard (%d events); first_over_30=%s" % [int(main.get("runaway_guard_events_v068")), first_over_30])
-		return
-
-	var low_local_after: Vector3 = axle.global_transform.affine_inverse() * ring_low.global_position
-	var high_local_after: Vector3 = axle.global_transform.affine_inverse() * ring_high.global_position
-	if low_local_after.distance_to(low_local_before) > 0.35 or high_local_after.distance_to(high_local_before) > 0.35:
-		_fail("O-Ring Stop drifted away from its fixed host position")
 		return
 
 	var guard_probe := main.call("_make_rod", 0, Vector3(40, 10, 0), Vector3(40, 15, 0)) as RigidBody3D
@@ -152,7 +163,7 @@ func _run() -> void:
 		_fail("runaway stability guard did not dissipate the extreme velocity spike")
 		return
 
-	print("ORING_STABILITY_063_SMOKE_OK: O-Rings dynamic + host-relative fixed + mixed axle/spoke fixture stable; vmax=%.2f wmax=%.2f" % [max_linear, max_angular])
+	print("ORING_STABILITY_063_SMOKE_OK: O-Rings welded into host physics + mixed axle/spoke impact stable; vmax=%.2f wmax=%.2f" % [max_linear, max_angular])
 	main.queue_free()
 	await process_frame
 	quit(0)

@@ -59,6 +59,46 @@ func _restore_o_rings_build_v068() -> void:
 			ring.global_transform = ring.get_meta("build_transform") as Transform3D
 
 
+# A circular O-Ring does not need a sixth hard constraint around its own axis.
+# The old generic fixed joint locked all 3 linear + all 3 angular axes. In a
+# mixed assembly the ring/rod pair could therefore contribute a redundant angular
+# weld next to one or more AXLE constraints and collision contacts. Align the
+# joint frame to the rod and leave only axial spin free. The stop remains fixed at
+# exactly the same point on the rod and cannot tilt or translate.
+func _prepare_o_ring_joints_v068() -> int:
+	_rebuild_connection_graph_v020()
+	var tuned := 0
+	for record_value in connections_v020:
+		var record := record_value as Dictionary
+		if str(record.get("kind", "")) != "o_ring":
+			continue
+		var joint := record.get("joint") as Generic6DOFJoint3D
+		var ring := record.get("ring") as RigidBody3D
+		var rod := record.get("rod") as RigidBody3D
+		if not is_instance_valid(joint) or not is_instance_valid(ring) or not is_instance_valid(rod):
+			continue
+		var axis := _rod_axis_v020(rod).normalized()
+		if axis.length_squared() < 0.5:
+			continue
+		var basis := Basis(Quaternion(Vector3.UP, axis)).orthonormalized()
+		joint.global_transform = Transform3D(basis, ring.global_position)
+		for axis_name in ["x", "y", "z"]:
+			joint.set("linear_limit_%s/enabled" % axis_name, true)
+			joint.set("linear_limit_%s/lower_distance" % axis_name, 0.0)
+			joint.set("linear_limit_%s/upper_distance" % axis_name, 0.0)
+		for axis_name in ["x", "z"]:
+			joint.set("angular_limit_%s/enabled" % axis_name, true)
+			joint.set("angular_limit_%s/lower_angle" % axis_name, 0.0)
+			joint.set("angular_limit_%s/upper_angle" % axis_name, 0.0)
+		joint.set("angular_limit_y/enabled", false)
+		joint.exclude_nodes_from_collision = true
+		joint.set_meta("sim_o_ring_axis_joint_v068", true)
+		tuned += 1
+	if tuned > 0:
+		_rebind_all_joints()
+	return tuned
+
+
 # The legacy fixed-component collision pass only enumerates `bodies`, so O-Ring
 # bodies were omitted from its no-self-collision set. Add each ring to the same
 # fixed component collision policy while preserving collisions against axle
@@ -78,6 +118,7 @@ func _prepare_o_ring_collision_groups_v068() -> void:
 
 func _prepare_stable_simulation_graph() -> void:
 	super._prepare_stable_simulation_graph()
+	_prepare_o_ring_joints_v068()
 	_prepare_o_ring_collision_groups_v068()
 
 
@@ -128,22 +169,34 @@ func _guard_body_energy_v068(body: RigidBody3D) -> bool:
 	return true
 
 
-func _process(delta: float) -> void:
-	super._process(delta)
+func _guard_simulation_energy_v068() -> bool:
 	if not simulating:
-		return
+		return false
 	var tripped := false
 	for body_value in bodies:
 		tripped = _guard_body_energy_v068(body_value as RigidBody3D) or tripped
 	for ring_value in o_ring_stops:
 		tripped = _guard_body_energy_v068(ring_value as RigidBody3D) or tripped
 	if not tripped:
-		return
+		return false
 	runaway_guard_events_v068 += 1
 	var now := Time.get_ticks_msec()
 	if now - runaway_guard_last_status_ms_v068 > 700:
 		runaway_guard_last_status_ms_v068 = now
 		_status("Stability guard damped a pathological solver-energy spike; build connections remain intact.")
+	return true
+
+
+# Guard on physics ticks, not render/process ticks. A pathological constraint can
+# inject enough energy to leave the visible scene in a single solver step.
+func _physics_process(_delta: float) -> void:
+	_guard_simulation_energy_v068()
+
+
+func _process(delta: float) -> void:
+	# Preserve inherited selection-highlight animation. Physics safety is handled
+	# separately in _physics_process so it also runs deterministically headless.
+	super._process(delta)
 
 
 func _update_help_text_v030() -> void:
@@ -152,7 +205,7 @@ func _update_help_text_v030() -> void:
 		return
 	var label: Label = _find_label_v030(help_panel)
 	if label != null:
-		label.text += "\n\nv0.5.13 O-RINGS / STABILITY: O-Ring Stops are no longer left frozen when SIMULATE begins. They release with their host construction and return to their saved BUILD pose on Restore. O-Rings also participate in fixed-component self-collision suppression. A high-threshold stability guard dissipates only pathological solver-energy spikes so unusually constrained builds cannot launch themselves across the scene."
+		label.text += "\n\nv0.5.13 O-RINGS / STABILITY: O-Ring Stops are no longer left frozen when SIMULATE begins. They release with their host construction and return to their saved BUILD pose on Restore. Their joint is aligned to the host rod and leaves only physically irrelevant axial spin free, avoiding a redundant sixth hard constraint. O-Rings also participate in fixed-component self-collision suppression. A physics-tick stability guard dissipates only pathological solver-energy spikes so unusually constrained builds cannot launch themselves across the scene."
 
 
 func _on_update_request_completed_v021(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:

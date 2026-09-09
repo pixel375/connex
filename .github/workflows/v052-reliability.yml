@@ -1,4 +1,4 @@
-name: v0.5.12 Regression Smoke
+name: v0.5.13 Regression Smoke
 
 on:
   pull_request:
@@ -14,7 +14,7 @@ concurrency:
 jobs:
   reliability:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 32
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -42,7 +42,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v067.gd")/g' \
+          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v068.gd")/g' \
             tests/editor_reliability_smoke_v052.gd \
             tests/editor_touch_attach_smoke_v053.gd \
             tests/editor_autoattach_selection_smoke_v054.gd \
@@ -53,7 +53,8 @@ jobs:
             tests/camera_gesture_smoke_v059.gd \
             tests/physics_stability_smoke_v059.gd \
             tests/strict_autoconnect_no_warp_smoke_v510.gd \
-            tests/structure_rigidity_smoke_v061.gd || true
+            tests/structure_rigidity_smoke_v061.gd \
+            tests/rigidity_live_axle_smoke_v062.gd || true
 
       - name: Run v0.5.2 interaction reliability smoke
         shell: bash
@@ -150,3 +151,11 @@ jobs:
           godot --headless --path . --script res://tests/rigidity_live_axle_smoke_v062.gd 2>&1 | tee /tmp/rigidity-axle-062-smoke.log
           grep -F 'RIGIDITY_AXLE_062_SMOKE_OK' /tmp/rigidity-axle-062-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|RIGIDITY_AXLE_062_SMOKE_FAIL" /tmp/rigidity-axle-062-smoke.log; then exit 1; fi
+
+      - name: Run v0.5.13 O-Ring and mixed-build stability smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/o_ring_mixed_stability_smoke_v063.gd 2>&1 | tee /tmp/oring-stability-063-smoke.log
+          grep -F 'ORING_STABILITY_063_SMOKE_OK' /tmp/oring-stability-063-smoke.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|ORING_STABILITY_063_SMOKE_FAIL" /tmp/oring-stability-063-smoke.log; then exit 1; fi

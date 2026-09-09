@@ -19,23 +19,11 @@ func _status(text: String) -> void:
 		status_label.text = "Connex Lab v%s  •  %s" % [VERSION_067, text]
 
 
-# -----------------------------------------------------------------------------
-# Structure Rigidity is a build/simulation-start parameter, not a live joint edit.
-#
-# v0.5.11 changed Generic6DOF angular limits immediately when the slider moved.
-# If a cycle joint had already flexed outside the new limit, Godot had to solve a
-# large instantaneous correction. On Android this could make the assembly appear
-# frozen/locked after touching the slider. Store the new value immediately, but
-# never mutate a running solver. The next SIMULATE preflight uses the new value.
-# -----------------------------------------------------------------------------
-
 func _on_structure_rigidity_v066(value: float) -> void:
 	physics_structure_rigidity_v066 = clampf(value, 0.0, 100.0)
 	if simulating:
 		rigidity_pending_for_next_run_v067 = absf(physics_structure_rigidity_v066 - active_structure_rigidity_v067) > 0.01
 	else:
-		# No softened simulation-only socket joints should exist in BUILD, but this
-		# keeps headless/direct test calls deterministic if one is present.
 		_apply_structure_rigidity_to_softened_v066()
 		rigidity_pending_for_next_run_v067 = false
 	_refresh_physics_labels_v050()
@@ -53,16 +41,10 @@ func _refresh_physics_labels_v050() -> void:
 
 
 func _reset_physics_v050() -> void:
-	# Parent resets every physics setting and the rigidity value. During SIMULATE,
-	# parent v0.5.11 would also apply the new rigidity live, so preserve the active
-	# cycle limits and treat the reset rigidity as next-run only.
 	if not simulating:
 		super._reset_physics_v050()
 		rigidity_pending_for_next_run_v067 = false
 		return
-
-	# Reset the ordinary body/material settings live, which is safe, while leaving
-	# active joint angular limits untouched.
 	physics_gravity_v050 = 9.81
 	physics_friction_v050 = 0.72
 	physics_bounce_v050 = 0.04
@@ -79,17 +61,11 @@ func _reset_physics_v050() -> void:
 	_status("Physics defaults restored; Structure Rigidity %d%% applies next SIMULATE" % int(round(physics_structure_rigidity_v066)))
 
 
-# -----------------------------------------------------------------------------
-# Axles: free-slide DOF must stay awake.
-#
-# Axle joints intentionally leave linear Y and angular Y free. A rod can sleep
-# while its carrier structure settles, however, which makes a vertical axle look
-# pinned even though the joint DOF is open. During SIMULATE, axle rods are kept
-# awake so gravity/contact changes continue to resolve along the free slide axis.
-# -----------------------------------------------------------------------------
-
 func _is_axle_rod_v067(body: RigidBody3D) -> bool:
-	return is_instance_valid(body) and str(body.get_meta("kind", "")) == "rod" and is_instance_valid(body.get_meta("axle_connector", null) as RigidBody3D)
+	if not is_instance_valid(body) or str(body.get_meta("kind", "")) != "rod" or not body.has_meta("axle_connector"):
+		return false
+	var connector := body.get_meta("axle_connector") as RigidBody3D
+	return is_instance_valid(connector)
 
 
 func _wake_axle_rods_v067() -> int:

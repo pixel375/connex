@@ -27,7 +27,7 @@ func _socket_records_between(main: Node, connector: RigidBody3D, rods: Array) ->
 	return result
 
 
-func _make_surrounding_rods(main: Node, center: Vector3, directions: Array, gap: float = 0.58) -> Array:
+func _make_surrounding_rods(main: Node, center: Vector3, directions: Array, gap: float) -> Array:
 	var rods: Array = []
 	var connector_d: float = float(main.get("CONNECTOR_D")) if main.get("CONNECTOR_D") != null else 1.35
 	for direction_value in directions:
@@ -49,21 +49,17 @@ func _run() -> void:
 	root.add_child(main)
 	await process_frame
 
-	if not str(main.get_script().resource_path).ends_with("main_v061.gd"):
-		_fail("Main is not using v0.5.6 runtime")
+	if not str(main.get_script().resource_path).ends_with("main_v065.gd"):
+		_fail("Main is not using current descendant runtime")
 		return
 
-	# ------------------------------------------------------------------
-	# Exact device scenario: a vertical axle rod already sits inside a group of
-	# three inward-facing free horizontal rod ends. Placing the 8-port connector
-	# on that axle must roll it to the surrounding rods and create three SOCKET
-	# graph records immediately, not merely look close.
-	# ------------------------------------------------------------------
+	# Axle auto-roll may still orient a newly placed free connector, but SOCKET
+	# creation is now strict: surrounding rod ends must already overlap the jaws.
 	var center := Vector3(55.0, 12.0, 18.0)
 	var host: RigidBody3D = main.call("_make_rod", 2, center - Vector3.UP * 8.0, center + Vector3.UP * 8.0) as RigidBody3D
 	host.set_meta("build_transform", host.global_transform)
 	var directions: Array = [Vector3.RIGHT, Vector3.BACK, Vector3.LEFT]
-	var side_rods: Array = _make_surrounding_rods(main, center, directions, 0.62)
+	var side_rods: Array = _make_surrounding_rods(main, center, directions, 0.18)
 	main.set("selected_connector_type", 6)
 	main.call("_place_connector_on_rod_as_axle", host, center)
 	await process_frame
@@ -78,39 +74,37 @@ func _run() -> void:
 		return
 	var immediate_records: Array = _socket_records_between(main, placed, side_rods)
 	if immediate_records.size() < 3:
-		_fail("axle placement created only %d/3 surrounding SOCKET joints" % immediate_records.size())
+		_fail("overlapping axle placement created only %d/3 SOCKET joints" % immediate_records.size())
 		return
 	for record_value in immediate_records:
 		var gap: float = float(main.call("_connection_gap_v059", record_value as Dictionary))
-		if gap > 0.10:
-			_fail("immediate auto-dock left a visible socket gap %.3f" % gap)
+		if gap > 0.25:
+			_fail("overlapping axle auto-dock produced an excessive socket gap %.3f" % gap)
 			return
 
-	# ------------------------------------------------------------------
-	# Simulation must repair an unrecorded visually-close socket too. Create a
-	# fourth rod after placement, aligned with an unused 8-port direction. Before
-	# preflight it has no socket record; after preflight it must be fused.
-	# ------------------------------------------------------------------
+	# v0.5.10 reverses the old v0.5.6 simulation behavior. A nearby-but-not-
+	# overlapping fourth rod must remain free, and SIMULATE preflight must not
+	# rotate the axle connector or move that rod to manufacture a connection.
 	var fourth_rods: Array = _make_surrounding_rods(main, center, [Vector3.FORWARD], 0.54)
 	var fourth: RigidBody3D = fourth_rods[0] as RigidBody3D
 	main.call("_rebuild_connection_graph_v020")
 	if not _socket_records_between(main, placed, [fourth]).is_empty():
-		_fail("fourth rod unexpectedly started connected; fixture invalid")
+		_fail("0.54-gap fourth rod unexpectedly started connected")
 		return
+	var placed_before: Transform3D = placed.global_transform
+	var fourth_before: Transform3D = fourth.global_transform
 	main.call("_prepare_stable_simulation_graph")
 	main.call("_rebuild_connection_graph_v020")
-	var preflight_records: Array = _socket_records_between(main, placed, [fourth])
-	if preflight_records.is_empty():
-		_fail("simulation preflight did not create the missing nearby SOCKET joint")
+	if not _socket_records_between(main, placed, [fourth]).is_empty():
+		_fail("simulation preflight manufactured a nearby SOCKET joint")
 		return
-	if float(main.call("_connection_gap_v059", preflight_records[0] as Dictionary)) > 0.10:
-		_fail("simulation preflight created a joint but did not snap its geometry closed")
+	if placed.global_transform != placed_before or fourth.global_transform != fourth_before:
+		_fail("simulation preflight moved geometry while looking for attachments")
 		return
+	main.call("_restore_simulation_joint_graph")
 
-	# ------------------------------------------------------------------
-	# Camera regression: high-distance pan must stay bounded and pinch must be
-	# ratio based, monotonic, and honor the 3..420 range.
-	# ------------------------------------------------------------------
+	# Existing camera math remains regression-covered but is not changed by
+	# v0.5.10.
 	main.set("camera_distance", 400.0)
 	var target_before: Vector3 = main.get("camera_target") as Vector3
 	main.call("_pan_camera", Vector2(100.0, 100.0))
@@ -141,7 +135,7 @@ func _run() -> void:
 		_fail("camera zoom crossed maximum distance")
 		return
 
-	print("EDITOR_056_SMOKE_OK: axle-mounted 8-port auto-roll + 3 immediate socket fusions + simulation missing-joint preflight + closed geometry + bounded pan + ratio pinch zoom")
+	print("EDITOR_056_SMOKE_OK: axle auto-roll only fuses overlapping rods + SIMULATE does not manufacture connections or move geometry + camera math retained")
 	main.queue_free()
 	await process_frame
 	quit(0)

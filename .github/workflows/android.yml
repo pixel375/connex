@@ -16,10 +16,10 @@ concurrency:
 env:
   GODOT_VERSION: 4.6.3
   GODOT_TAG: 4.6.3-stable
-  APP_VERSION: 0.5.4
-  APP_VERSION_CODE: 28
-  APK_NAME: Connex-v0.5.4.apk
-  ARTIFACT_NAME: Connex-Android-v0.5.4
+  APP_VERSION: 0.5.5
+  APP_VERSION_CODE: 29
+  APK_NAME: Connex-v0.5.5.apk
+  ARTIFACT_NAME: Connex-Android-v0.5.5
   EXPECTED_RELEASE_CERT_SHA256: BF:CD:2B:59:70:91:E4:AA:FE:4F:27:93:FD:14:A7:9A:2A:D4:94:0D:D1:06:9D:18:74:9C:E7:A9:99:50:D4:22
 
 jobs:
@@ -34,12 +34,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -F 'res://scripts/main_v058.gd' Main.tscn
-          grep -F 'const VERSION_058 := "0.5.4"' scripts/main_v058.gd
+          grep -F 'res://scripts/main_v060.gd' Main.tscn
+          grep -F 'const VERSION_060 := "0.5.5"' scripts/main_v060.gd
           grep -F 'boot_splash/show_image=false' project.godot
-          grep -F 'export_path="build/Connex-v0.5.4.apk"' export_presets.cfg
-          grep -F 'version/code=28' export_presets.cfg
-          grep -F 'version/name="0.5.4"' export_presets.cfg
+          grep -F 'export_path="build/Connex-v0.5.5.apk"' export_presets.cfg
+          grep -F 'version/code=29' export_presets.cfg
+          grep -F 'version/name="0.5.5"' export_presets.cfg
           grep -F 'package/unique_name="com.pixel375.connex"' export_presets.cfg
           grep -F "\`$EXPECTED_RELEASE_CERT_SHA256\`" SIGNING.md
 
@@ -132,11 +132,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed -i 's/main_v055\.gd/main_v058.gd/g' tests/editor_chunk2_smoke_v050.gd tests/editor_correctness_smoke_v051.gd || true
-          sed -i 's/main_v057\.gd/main_v058.gd/g' tests/editor_chunk2_smoke_v050.gd tests/editor_correctness_smoke_v051.gd || true
-          sed -i 's/ends_with("main_v054.gd")/ends_with("main_v058.gd")/' tests/editor_reliability_smoke_v052.gd
-          sed -i 's/ends_with("main_v056.gd")/ends_with("main_v058.gd")/' tests/editor_touch_attach_smoke_v053.gd
-          sed -i 's/ends_with("main_v057.gd")/ends_with("main_v058.gd")/' tests/editor_touch_attach_smoke_v053.gd || true
+          sed -i 's/main_v055\.gd/main_v060.gd/g' tests/editor_chunk2_smoke_v050.gd tests/editor_correctness_smoke_v051.gd || true
+          sed -i 's/main_v057\.gd/main_v060.gd/g' tests/editor_chunk2_smoke_v050.gd tests/editor_correctness_smoke_v051.gd || true
+          sed -i 's/main_v058\.gd/main_v060.gd/g' tests/editor_chunk2_smoke_v050.gd tests/editor_correctness_smoke_v051.gd || true
+          sed -i 's/ends_with("main_v054.gd")/ends_with("main_v060.gd")/' tests/editor_reliability_smoke_v052.gd
+          sed -i 's/ends_with("main_v056.gd")/ends_with("main_v060.gd")/' tests/editor_touch_attach_smoke_v053.gd
+          sed -i 's/ends_with("main_v057.gd")/ends_with("main_v060.gd")/' tests/editor_touch_attach_smoke_v053.gd || true
+          sed -i 's/ends_with("main_v058.gd")/ends_with("main_v060.gd")/' tests/editor_autoattach_selection_smoke_v054.gd || true
+          sed -i 's/ends_with("main_v059.gd")/ends_with("main_v060.gd")/' tests/editor_geometry_snap_smoke_v055.gd || true
+          sed -i 's/deg_to_rad(8\.0)/deg_to_rad(4.0)/' tests/editor_geometry_snap_smoke_v055.gd
 
       - name: Parse project and smoke-test main scene
         shell: bash
@@ -227,6 +231,14 @@ jobs:
           grep -F 'EDITOR_054_SMOKE_OK' /tmp/editor-054-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_054_SMOKE_FAIL" /tmp/editor-054-smoke.log; then exit 1; fi
 
+      - name: Run v0.5.5 geometry snap smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/editor_geometry_snap_smoke_v055.gd 2>&1 | tee /tmp/editor-055-smoke.log
+          grep -F 'EDITOR_055_SMOKE_OK' /tmp/editor-055-smoke.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_055_SMOKE_FAIL" /tmp/editor-055-smoke.log; then exit 1; fi
+
       - name: Export Android APK
         shell: bash
         run: |
@@ -273,11 +285,11 @@ jobs:
           name: ${{ env.ARTIFACT_NAME }}
           path: build
 
-      - name: Publish GitHub Release v0.5.4
+      - name: Publish GitHub Release v0.5.5
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.5.4
-          name: Connex Lab v0.5.4
+          tag_name: v0.5.5
+          name: Connex Lab v0.5.5
           body_path: RELEASE_NOTES.md
           make_latest: true
           files: |

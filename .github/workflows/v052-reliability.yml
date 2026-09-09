@@ -1,4 +1,4 @@
-name: v0.5.4 Regression Smoke
+name: v0.5.5 Regression Smoke
 
 on:
   pull_request:
@@ -14,7 +14,7 @@ concurrency:
 jobs:
   reliability:
     runs-on: ubuntu-latest
-    timeout-minutes: 14
+    timeout-minutes: 16
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -42,11 +42,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed -i 's/ends_with("main_v054.gd")/ends_with("main_v058.gd")/' tests/editor_reliability_smoke_v052.gd
-          sed -i 's/ends_with("main_v056.gd")/ends_with("main_v058.gd")/' tests/editor_touch_attach_smoke_v053.gd
-          sed -i 's/ends_with("main_v057.gd")/ends_with("main_v058.gd")/' tests/editor_touch_attach_smoke_v053.gd || true
+          sed -i 's/ends_with("main_v054.gd")/ends_with("main_v060.gd")/' tests/editor_reliability_smoke_v052.gd
+          sed -i 's/ends_with("main_v056.gd")/ends_with("main_v060.gd")/' tests/editor_touch_attach_smoke_v053.gd
+          sed -i 's/ends_with("main_v057.gd")/ends_with("main_v060.gd")/' tests/editor_touch_attach_smoke_v053.gd || true
+          sed -i 's/ends_with("main_v058.gd")/ends_with("main_v060.gd")/' tests/editor_autoattach_selection_smoke_v054.gd || true
+          sed -i 's/ends_with("main_v059.gd")/ends_with("main_v060.gd")/' tests/editor_geometry_snap_smoke_v055.gd || true
+          # Four degrees leaves a real ~0.38-unit loop gap while keeping the
+          # original 270-degree socket geometrically nearest. Eight degrees moved
+          # the endpoint beside the neighboring 225-degree socket, testing a
+          # different (and correctly chosen) target rather than loop closure.
+          sed -i 's/deg_to_rad(8\.0)/deg_to_rad(4.0)/' tests/editor_geometry_snap_smoke_v055.gd
 
-      - name: Run v0.5.2 interaction reliability smoke on v0.5.4 runtime
+      - name: Run v0.5.2 interaction reliability smoke on v0.5.5 runtime
         shell: bash
         run: |
           set -euo pipefail
@@ -54,7 +61,7 @@ jobs:
           grep -F 'EDITOR_052_SMOKE_OK' /tmp/editor-052-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_052_SMOKE_FAIL" /tmp/editor-052-smoke.log; then exit 1; fi
 
-      - name: Run v0.5.3 touch attachment smoke on v0.5.4 runtime
+      - name: Run v0.5.3 touch attachment smoke on v0.5.5 runtime
         shell: bash
         run: |
           set -euo pipefail
@@ -62,10 +69,18 @@ jobs:
           grep -F 'EDITOR_053_SMOKE_OK' /tmp/editor-053-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_053_SMOKE_FAIL" /tmp/editor-053-smoke.log; then exit 1; fi
 
-      - name: Run v0.5.4 auto-attach selection smoke
+      - name: Run v0.5.4 auto-attach selection smoke on v0.5.5 runtime
         shell: bash
         run: |
           set -euo pipefail
           godot --headless --path . --script res://tests/editor_autoattach_selection_smoke_v054.gd 2>&1 | tee /tmp/editor-054-smoke.log
           grep -F 'EDITOR_054_SMOKE_OK' /tmp/editor-054-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_054_SMOKE_FAIL" /tmp/editor-054-smoke.log; then exit 1; fi
+
+      - name: Run v0.5.5 geometry snap smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/editor_geometry_snap_smoke_v055.gd 2>&1 | tee /tmp/editor-055-smoke.log
+          grep -F 'EDITOR_055_SMOKE_OK' /tmp/editor-055-smoke.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_055_SMOKE_FAIL" /tmp/editor-055-smoke.log; then exit 1; fi

@@ -1,31 +1,41 @@
-# Connex Lab v0.5.4
+# Connex Lab v0.5.5
 
-Phone interaction and auto-attachment correction release.
+Phantom-highlight and closed-loop attachment correction release.
 
-### Transform release no longer changes selection
-- releasing a Rotate or Move gizmo is now explicitly treated as the end of the transform gesture, not as a new tap;
-- a short post-release suppression window prevents the connector under the lifted finger from becoming selected;
-- normal direct selection in Rotate and Move remains unchanged for genuine taps.
+### Phantom selection geometry actually removed
+- the remaining cyan phantom geometry after changing an 11/14-point connector was traced to old connector meshes waiting in Godot's `queue_free()` deletion queue;
+- those queued source meshes were still present long enough to be cloned into the replacement selection outline;
+- connector rebuilds now detach old meshes, collision shapes and spatial roots synchronously before new geometry is created;
+- recursive highlight generation also ignores any node already queued for deletion;
+- changing 14-point → 1/2/3/4-way now builds the highlight only from the connector geometry that really exists.
 
-### Connector selection highlight rebuild
-- changing a selected 11- or 14-point connector to a smaller connector now destroys the old cloned selection outline before geometry is rebuilt;
-- the selection glow is regenerated from the new connector geometry immediately;
-- stale top/bottom/spatial highlight geometry no longer remains after changing connector type.
+### Close connections now snap as geometry, not only as graph records
+- v0.5.4 could record a valid same-structure loop connection while leaving the rod end and socket visibly apart;
+- v0.5.5 projects recorded attachment points into a physically closed BUILD pose instead of accepting that visible gap as the connection's rest pose;
+- iterative position/orientation projection distributes a small closure correction through an already-connected construction while keeping the root piece fixed;
+- newly detected loop closures receive priority so the endpoint the user is trying to join is not left as the remaining visible error;
+- corrected transforms become the stored BUILD pose used by Restore.
 
-### Stronger close-range auto-attachment
-- free rod ends and free connector sockets use a substantially larger phone-friendly proximity capture shell;
-- candidate matching ranks both distance and opposing direction so dense multi-port connectors prefer the intended nearby socket;
-- explicit Disconnect snap-back blocks remain authoritative;
-- if two close pieces are still separate rigid islands, the smaller/non-root island is translated rigidly to close the visible gap before the fixed connection is created;
-- if the pieces already belong to the same closed structure, the new close connection is recorded without distorting the existing rigid loop.
+### Simulation no longer exposes stored loop gaps
+- the existing physics stabilizer still suppresses mathematically redundant fixed joints in closed loops to avoid over-constrained solver instability;
+- immediately before that suppression step, v0.5.5 re-normalizes all recorded attachment geometry;
+- this prevents a suppressed redundant edge from revealing a gap that had been saved into the build pose.
+
+### Wider but safer automatic capture
+- free rod ends/sockets retain a substantially wider phone-friendly capture shell than older releases;
+- farther candidates must now have much stronger opposing insertion direction and a limited lateral miss;
+- distance, lateral offset and direction are jointly scored so a nearby 8/11/14-point hub does not snap to an unrelated neighboring port;
+- explicit Disconnect snap-back protection remains authoritative.
 
 ### Validation
-- all behavioral regression tests through v0.5.3 remain active;
-- new v0.5.4 coverage verifies transform-release selection suppression, stale spatial-highlight replacement, capture beyond the previous 1.10 range, real connection creation, and visible gap closure for separate islands;
-- Android export is required to pass before the release is published.
+- the complete behavioral regression suite through v0.5.4 remains active;
+- the new v0.5.5 regression verifies that queued old meshes cannot enter a replacement highlight;
+- it verifies automatic capture beyond v0.5.4's 2.0-unit mathematical endpoint range;
+- it constructs a deliberately misaligned same-island closed loop, auto-attaches the final free endpoint, verifies the visible gap is projected closed, then runs redundant-joint simulation preflight and verifies the closure remains closed;
+- Android export and permanent signing must pass before publication.
 
 ### Signing / update compatibility
-- Android versionCode is 28;
-- Android versionName is `0.5.4`;
+- Android versionCode is 29;
+- Android versionName is `0.5.5`;
 - package ID remains `com.pixel375.connex`;
-- v0.5.4 uses the existing permanent Connex signing certificate and updates in place over v0.5.3.
+- v0.5.5 uses the existing permanent Connex signing certificate and updates in place over v0.5.4.

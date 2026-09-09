@@ -62,8 +62,6 @@ func _run() -> void:
 		_fail("Main is not using v0.5.14 runtime")
 		return
 
-	# Intentionally awkward mixed build retained from v0.5.13: one long axle,
-	# two independently sliding hubs, five offset fixed spokes, and two O-Rings.
 	var axle := main.call("_make_rod", 4, Vector3(0, 13, 0), Vector3(0, 29, 0)) as RigidBody3D
 	var hub_a := main.call("_make_connector", 6, Transform3D(Basis.IDENTITY, Vector3(0, 19, 0))) as RigidBody3D
 	var hub_b := main.call("_make_connector", 6, Transform3D(Basis.IDENTITY, Vector3(0, 23, 0))) as RigidBody3D
@@ -87,9 +85,6 @@ func _run() -> void:
 	for _i in range(12):
 		await physics_frame
 
-	# v0.5.14 keeps the stable collisionless visual followers from v0.5.13, but it
-	# MUST NOT create a collision proxy on the host rod. The axle joint itself is
-	# the stopper, because connector-vs-host collision is intentionally excluded.
 	if int((main.get("o_ring_followers_v068") as Array).size()) != 2:
 		_fail("O-Ring Stops were not converted to host-follow visuals")
 		return
@@ -110,6 +105,14 @@ func _run() -> void:
 		_fail("standalone O-Ring follower bodies were left active in physics")
 		return
 
+	print("ORING_LIMIT_DIAG_A: joint=[%.3f,%.3f] connector=[%.3f,%.3f] hub=%.3f rings=[%.3f,%.3f]" % [
+		float(axle_joint_a.get("linear_limit_y/lower_distance")),
+		float(axle_joint_a.get("linear_limit_y/upper_distance")),
+		float(axle_joint_a.get_meta("sim_axle_stop_lower_v069", 0.0)),
+		float(axle_joint_a.get_meta("sim_axle_stop_upper_v069", 0.0)),
+		_along(main, hub_a, axle), _along(main, ring_low, axle), _along(main, ring_high, axle)
+	])
+
 	for _i in range(72):
 		await physics_frame
 	if ring_low.global_position.y > ring_low_start_y - 0.30 or ring_high.global_position.y > ring_high_start_y - 0.30:
@@ -118,7 +121,7 @@ func _run() -> void:
 
 	var max_linear := 0.0
 	var max_angular := 0.0
-	for _frame_index in range(420):
+	for frame_index in range(420):
 		await physics_frame
 		for body_value in (main.get("bodies") as Array):
 			var body := body_value as RigidBody3D
@@ -127,24 +130,22 @@ func _run() -> void:
 			max_linear = maxf(max_linear, body.linear_velocity.length())
 			max_angular = maxf(max_angular, body.angular_velocity.length())
 
-		# The visible O-Rings must remain welded to the moving host rod.
 		var low_expected: Transform3D = axle.global_transform * low_local_before
 		var high_expected: Transform3D = axle.global_transform * high_local_before
 		if ring_low.global_position.distance_to(low_expected.origin) > 0.03 or ring_high.global_position.distance_to(high_expected.origin) > 0.03:
 			_fail("O-Ring visual follower drifted away from the host rod")
 			return
 
-		# Both hubs must remain between the O-Ring barriers with physical clearance.
 		var low_along := _along(main, ring_low, axle)
 		var high_along := _along(main, ring_high, axle)
 		var hub_a_along := _along(main, hub_a, axle)
 		var hub_b_along := _along(main, hub_b, axle)
 		var clearance := float(main.get("AXLE_STOP_CLEARANCE_V069")) if main.get("AXLE_STOP_CLEARANCE_V069") != null else 0.46
 		if hub_a_along < low_along + clearance - 0.12 or hub_a_along > high_along - clearance + 0.12:
-			_fail("hub A crossed an O-Ring axle stop")
+			_fail("hub A crossed O-Ring: frame=%d hub=%.3f rings=[%.3f,%.3f] clearance=%.3f joint=[%.3f,%.3f] v=%s" % [frame_index, hub_a_along, low_along, high_along, clearance, float(axle_joint_a.get("linear_limit_y/lower_distance")), float(axle_joint_a.get("linear_limit_y/upper_distance")), str(hub_a.linear_velocity)])
 			return
 		if hub_b_along < low_along + clearance - 0.12 or hub_b_along > high_along - clearance + 0.12:
-			_fail("hub B crossed an O-Ring axle stop")
+			_fail("hub B crossed O-Ring: frame=%d hub=%.3f rings=[%.3f,%.3f] clearance=%.3f joint=[%.3f,%.3f] v=%s" % [frame_index, hub_b_along, low_along, high_along, clearance, float(axle_joint_b.get("linear_limit_y/lower_distance")), float(axle_joint_b.get("linear_limit_y/upper_distance")), str(hub_b.linear_velocity)])
 			return
 
 	if max_linear > 41.9 or max_angular > 54.9:

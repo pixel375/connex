@@ -23,11 +23,6 @@ func _status(text: String) -> void:
 		status_label.text = "Connex Lab v%s  •  %s" % [VERSION_068, text]
 
 
-# O-Rings were introduced as separate RigidBody3D objects in o_ring_stops rather
-# than in bodies. Every simulation release path since then only unfroze bodies,
-# leaving each ring frozen in world space while a hard fixed joint still tied it
-# to its host rod. That silently turned an O-Ring into a world anchor and could
-# inject huge constraint energy into otherwise valid axle/cross assemblies.
 func _release_o_rings_v068() -> int:
 	var released := 0
 	for ring_value in o_ring_stops:
@@ -38,8 +33,6 @@ func _release_o_rings_v068() -> int:
 		ring.angular_velocity = Vector3.ZERO
 		ring.freeze = false
 		ring.sleeping = false
-		# Fixed rings should follow their host immediately instead of being allowed
-		# to sleep independently while the attached structure is still moving.
 		ring.can_sleep = false
 		released += 1
 	return released
@@ -59,12 +52,9 @@ func _restore_o_rings_build_v068() -> void:
 			ring.global_transform = ring.get_meta("build_transform") as Transform3D
 
 
-# A circular O-Ring does not need a sixth hard constraint around its own axis.
-# The old generic fixed joint locked all 3 linear + all 3 angular axes. In a
-# mixed assembly the ring/rod pair could therefore contribute a redundant angular
-# weld next to one or more AXLE constraints and collision contacts. Align the
-# joint frame to the rod and leave only axial spin free. The stop remains fixed at
-# exactly the same point on the rod and cannot tilt or translate.
+# A circular O-Ring needs all translation and tilt constrained, but axial spin is
+# physically irrelevant. Align its 6DOF frame to the host rod and remove that
+# redundant sixth weld constraint.
 func _prepare_o_ring_joints_v068() -> int:
 	_rebuild_connection_graph_v020()
 	var tuned := 0
@@ -99,10 +89,6 @@ func _prepare_o_ring_joints_v068() -> int:
 	return tuned
 
 
-# The legacy fixed-component collision pass only enumerates `bodies`, so O-Ring
-# bodies were omitted from its no-self-collision set. Add each ring to the same
-# fixed component collision policy while preserving collisions against axle
-# connectors (axle edges are intentionally not part of a fixed component).
 func _prepare_o_ring_collision_groups_v068() -> void:
 	_rebuild_connection_graph_v020()
 	for ring_value in o_ring_stops:
@@ -116,10 +102,25 @@ func _prepare_o_ring_collision_groups_v068() -> void:
 				_add_simulation_collision_exception(ring, other)
 
 
+# Long thin rods can move farther than their radius in one 60 Hz step during a
+# fall. Continuous collision detection prevents a ground impact from beginning as
+# a deep penetration which the joint solver then has to correct explosively.
+func _set_simulation_ccd_v068(enabled: bool) -> void:
+	for body_value in bodies:
+		var body := body_value as RigidBody3D
+		if is_instance_valid(body):
+			body.continuous_cd = enabled
+	for ring_value in o_ring_stops:
+		var ring := ring_value as RigidBody3D
+		if is_instance_valid(ring):
+			ring.continuous_cd = enabled
+
+
 func _prepare_stable_simulation_graph() -> void:
 	super._prepare_stable_simulation_graph()
 	_prepare_o_ring_joints_v068()
 	_prepare_o_ring_collision_groups_v068()
+	_set_simulation_ccd_v068(true)
 
 
 func _release_physics() -> void:
@@ -136,24 +137,23 @@ func _release_physics() -> void:
 
 
 func _reset_pose() -> void:
+	_set_simulation_ccd_v068(false)
 	super._reset_pose()
 	_restore_o_rings_build_v068()
 
 
 func _restore_state(snapshot: Dictionary) -> void:
+	_set_simulation_ccd_v068(false)
 	super._restore_state(snapshot)
 	_restore_o_rings_build_v068()
 
 
 func _restart_build() -> void:
+	_set_simulation_ccd_v068(false)
 	super._restart_build()
 	_restore_o_rings_build_v068()
 
 
-# Last-resort numerical safety. Normal falls/impacts are far below these limits;
-# this only catches the solver-energy runaway visible in pathological mixed-joint
-# builds, dissipating the spike instead of allowing the entire model to launch
-# hundreds of units away. Geometry and connection topology are never rewritten.
 func _guard_body_energy_v068(body: RigidBody3D) -> bool:
 	if not is_instance_valid(body) or body.freeze:
 		return false
@@ -187,15 +187,11 @@ func _guard_simulation_energy_v068() -> bool:
 	return true
 
 
-# Guard on physics ticks, not render/process ticks. A pathological constraint can
-# inject enough energy to leave the visible scene in a single solver step.
 func _physics_process(_delta: float) -> void:
 	_guard_simulation_energy_v068()
 
 
 func _process(delta: float) -> void:
-	# Preserve inherited selection-highlight animation. Physics safety is handled
-	# separately in _physics_process so it also runs deterministically headless.
 	super._process(delta)
 
 
@@ -205,7 +201,7 @@ func _update_help_text_v030() -> void:
 		return
 	var label: Label = _find_label_v030(help_panel)
 	if label != null:
-		label.text += "\n\nv0.5.13 O-RINGS / STABILITY: O-Ring Stops are no longer left frozen when SIMULATE begins. They release with their host construction and return to their saved BUILD pose on Restore. Their joint is aligned to the host rod and leaves only physically irrelevant axial spin free, avoiding a redundant sixth hard constraint. O-Rings also participate in fixed-component self-collision suppression. A physics-tick stability guard dissipates only pathological solver-energy spikes so unusually constrained builds cannot launch themselves across the scene."
+		label.text += "\n\nv0.5.13 O-RINGS / STABILITY: O-Ring Stops are no longer left frozen when SIMULATE begins. They release with their host construction and return to their saved BUILD pose on Restore. Their joint is aligned to the host rod and leaves only physically irrelevant axial spin free. O-Rings participate in fixed-component self-collision suppression. SIMULATE enables continuous collision detection for the thin construction pieces, and the project uses higher constraint-solver iteration counts so hard ground impacts are resolved without injecting runaway energy. A physics-tick stability guard remains as a last resort for pathological solver spikes."
 
 
 func _on_update_request_completed_v021(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:

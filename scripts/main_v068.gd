@@ -1,6 +1,6 @@
 extends "res://scripts/main_v067.gd"
 
-const VERSION_068 := "0.5.13-dev"
+const VERSION_068 := "0.5.13"
 const RUNAWAY_LINEAR_TRIGGER_V068 := 42.0
 const RUNAWAY_ANGULAR_TRIGGER_V068 := 55.0
 const RUNAWAY_LINEAR_RECOVER_V068 := 18.0
@@ -103,8 +103,6 @@ func _prepare_o_ring_followers_v068() -> int:
 		ring.collision_mask = 0
 		ring.continuous_cd = false
 
-		# Make the visible ring a direct transform child of the host rod. This is
-		# deterministic and cannot lag one physics frame behind the host.
 		ring.reparent(rod, true)
 		ring.transform = local_transform
 		prepared += 1

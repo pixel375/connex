@@ -4,10 +4,12 @@ const VERSION_069 := "0.5.14"
 const AXLE_STOP_CLEARANCE_V069 := CONNECTOR_THICKNESS * 0.5 + O_RING_HEIGHT * 0.5 + 0.03
 const AXLE_END_CLEARANCE_V069 := CONNECTOR_THICKNESS * 0.5 + 0.04
 const AXLE_LIMIT_EPS_V069 := 0.001
+const AXLE_STOP_SLOP_V069 := 0.015
 const AXLE_SOLVER_PRIORITY_V069 := 8
 
 var axle_stop_limit_count_v069: int = 0
 var axle_component_exception_count_v069: int = 0
+var axle_bound_records_v069: Array = []
 
 
 func _ready() -> void:
@@ -15,7 +17,7 @@ func _ready() -> void:
 	_update_help_text_v030()
 	if update_status_v021 != null:
 		_set_update_status_v021("Current version: v%s" % VERSION_069)
-	_status("O-Ring Stops now bound the axle slide itself; no proxy collision is used as a stopper.")
+	_status("O-Ring Stops now hard-stop axle travel instead of relying on collision proxies.")
 
 
 func _status(text: String) -> void:
@@ -23,13 +25,6 @@ func _status(text: String) -> void:
 		status_label.text = "Connex Lab v%s  •  %s" % [VERSION_069, text]
 
 
-# v0.5.13 copied each O-Ring collision shape onto the host axle rod. Axle joints
-# deliberately exclude connector-vs-host-rod collision, so an axle connector
-# could never collide with that proxy. Other pieces in the connector's rigid
-# structure still could, which is exactly the wrong combination: the hub passed
-# through the stop while the surrounding build could receive violent proxy hits.
-# v0.5.14 intentionally creates no host-rod proxy. The stop is expressed in the
-# prismatic axle joint's free Y translation instead.
 func _add_o_ring_proxy_shapes_v068(_ring: RigidBody3D, _rod: RigidBody3D) -> int:
 	return 0
 
@@ -61,14 +56,12 @@ func _restore_axle_stop_limits_v069() -> void:
 		joint.remove_meta("sim_axle_stop_lower_v069")
 		joint.remove_meta("sim_axle_stop_upper_v069")
 		joint.remove_meta("sim_axle_stop_count_v069")
+	axle_bound_records_v069.clear()
 	axle_stop_limit_count_v069 = 0
 
 
 func _o_ring_alongs_for_rod_v069(rod: RigidBody3D, axis: Vector3) -> Array:
 	var result: Array = []
-	# v0.5.13 detaches O-Ring joints before this pass, so those records disappear
-	# from a fresh graph rebuild. The follower list is therefore the authoritative
-	# simulation-time source for ring/host pairs.
 	for follower_value in o_ring_followers_v068:
 		var follower := follower_value as Dictionary
 		if follower.get("rod") != rod:
@@ -79,8 +72,6 @@ func _o_ring_alongs_for_rod_v069(rod: RigidBody3D, axis: Vector3) -> Array:
 	if not result.is_empty():
 		result.sort()
 		return result
-
-	# Fallback for direct preflight calls before follower conversion.
 	for record_value in connections_v020:
 		var record := record_value as Dictionary
 		if str(record.get("kind", "")) != "o_ring" or record.get("rod") != rod:
@@ -112,10 +103,6 @@ func _apply_axle_stop_limits_v069() -> int:
 			continue
 		var start_along: float = (connector.global_position - rod.global_position).dot(axis)
 		var half_len: float = maxf(0.10, float(rod.get_meta("visual_length", 0.0)) * 0.5)
-
-		# Rod ends are physical travel stops too. Axle joints otherwise have an
-		# infinite Y slide and can remain constrained after the hub visibly leaves
-		# the rod, which is another source of bad solver leverage.
 		var lower_center: float = -half_len + AXLE_END_CLEARANCE_V069
 		var upper_center: float = half_len - AXLE_END_CLEARANCE_V069
 		var stop_count := 0
@@ -128,19 +115,16 @@ func _apply_axle_stop_limits_v069() -> int:
 				upper_center = minf(upper_center, ring_along - AXLE_STOP_CLEARANCE_V069)
 				stop_count += 1
 
-		# Allowed connector-center displacement relative to the host rod.
 		var connector_lower_rel: float = minf(0.0, lower_center - start_along)
 		var connector_upper_rel: float = maxf(0.0, upper_center - start_along)
 		if connector_lower_rel > connector_upper_rel:
 			connector_lower_rel = 0.0
 			connector_upper_rel = 0.0
 
-		# _make_axle_joint() binds node_a=connector and node_b=rod. Generic6DOF
-		# linear Y measures B relative to A at the joint frames, so connector motion
-		# relative to the rod has the opposite sign. Map [Cmin,Cmax] -> [-Cmax,-Cmin].
+		# Generic6DOF uses p2-p1 and node_a is the connector, so its translation
+		# sign is opposite the connector's geometric travel along the rod.
 		var joint_lower: float = -connector_upper_rel
 		var joint_upper: float = -connector_lower_rel
-
 		_save_axle_joint_limits_v069(joint)
 		joint.set("linear_limit_y/enabled", true)
 		joint.set("linear_limit_y/lower_distance", joint_lower)
@@ -149,16 +133,87 @@ func _apply_axle_stop_limits_v069() -> int:
 		joint.set_meta("sim_axle_stop_lower_v069", connector_lower_rel)
 		joint.set_meta("sim_axle_stop_upper_v069", connector_upper_rel)
 		joint.set_meta("sim_axle_stop_count_v069", stop_count)
+
+		var component: Array = _fixed_component_v020(connector, -1)
+		if component.is_empty():
+			component = [connector]
+		axle_bound_records_v069.append({
+			"connector": connector,
+			"rod": rod,
+			"lower_center": lower_center,
+			"upper_center": upper_center,
+			"component": component,
+			"has_o_ring": stop_count > 0,
+		})
 		applied += 1
 	axle_stop_limit_count_v069 = applied
 	return applied
 
 
-# A connector carried by an axle may be the root of a much larger fixed frame.
-# Simplified collision hulls around that frame must not fight the very axle that
-# guides it. The axle joint already excludes hub-vs-rod collision; extend that
-# exception to the hub's fixed SOCKET/CROSS component for this host axle only.
-# O-Ring stopping is independent and remains solver-native through the Y limit.
+func _apply_component_axis_velocity_delta_v069(component: Array, axis_delta: Vector3) -> void:
+	if axis_delta.length_squared() < 0.00000001:
+		return
+	for member_value in component:
+		var member := member_value as RigidBody3D
+		if is_instance_valid(member) and not member.freeze:
+			member.linear_velocity += axis_delta
+			member.sleeping = false
+
+
+func _translate_component_v069(component: Array, delta: Vector3) -> void:
+	if delta.length_squared() < 0.00000001:
+		return
+	for member_value in component:
+		var member := member_value as RigidBody3D
+		if is_instance_valid(member) and not member.freeze:
+			member.global_position += delta
+			member.sleeping = false
+
+
+# Jolt's 6DOF limit is a solver limit, not continuous collision. A fast loaded
+# carriage can penetrate it by a fraction of a unit for one physics step before
+# correction. The O-Ring must behave like a real stopper, so we also perform a
+# predictive, inelastic travel guard on the SAME axle degree of freedom. It does
+# not add a collider or an extra joint and therefore cannot kick the frame.
+func _enforce_axle_bounds_v069(delta: float) -> void:
+	if not simulating or axle_bound_records_v069.is_empty():
+		return
+	var dt := maxf(delta, 0.0001)
+	for bound_value in axle_bound_records_v069:
+		var bound := bound_value as Dictionary
+		var connector := bound.get("connector") as RigidBody3D
+		var rod := bound.get("rod") as RigidBody3D
+		var component := bound.get("component", []) as Array
+		if not is_instance_valid(connector) or not is_instance_valid(rod):
+			continue
+		var axis := _rod_axis_v020(rod).normalized()
+		if axis.length_squared() < 0.5:
+			continue
+		var lower := float(bound.get("lower_center", -INF))
+		var upper := float(bound.get("upper_center", INF))
+		var safe_lower := lower + AXLE_STOP_SLOP_V069
+		var safe_upper := upper - AXLE_STOP_SLOP_V069
+		if safe_lower > safe_upper:
+			var midpoint := (lower + upper) * 0.5
+			safe_lower = midpoint
+			safe_upper = midpoint
+
+		var along := (connector.global_position - rod.global_position).dot(axis)
+		if along < safe_lower:
+			_translate_component_v069(component, axis * (safe_lower - along))
+			along = safe_lower
+		elif along > safe_upper:
+			_translate_component_v069(component, axis * (safe_upper - along))
+			along = safe_upper
+
+		var relative_speed := (connector.linear_velocity - rod.linear_velocity).dot(axis)
+		var min_speed := (safe_lower - along) / dt
+		var max_speed := (safe_upper - along) / dt
+		var clamped_speed := clampf(relative_speed, min_speed, max_speed)
+		if absf(clamped_speed - relative_speed) > 0.0001:
+			_apply_component_axis_velocity_delta_v069(component, axis * (clamped_speed - relative_speed))
+
+
 func _apply_axle_component_exceptions_v069() -> int:
 	var added := 0
 	for record_value in connections_v020:
@@ -183,14 +238,15 @@ func _apply_axle_component_exceptions_v069() -> int:
 
 
 func _prepare_stable_simulation_graph() -> void:
-	# Restore any previous run's temporary limit state before inherited preflight.
 	_restore_axle_stop_limits_v069()
 	super._prepare_stable_simulation_graph()
-	# super() has converted O-Rings into collisionless visual followers. Unlike
-	# v0.5.13, no proxy shapes were created. connections_v020 still contains the
-	# axle records from that preflight; follower state supplies the detached rings.
 	_apply_axle_stop_limits_v069()
 	_apply_axle_component_exceptions_v069()
+
+
+func _physics_process(delta: float) -> void:
+	_enforce_axle_bounds_v069(delta)
+	super._physics_process(delta)
 
 
 func _reset_pose() -> void:
@@ -212,7 +268,7 @@ func _release_physics() -> void:
 	await super._release_physics()
 	if not simulating:
 		return
-	_status("Physics running — %d axle guide%s bounded by rod ends/O-Rings; %d guide self-collision exception%s active" % [
+	_status("Physics running — %d axle guide%s hard-bounded by rod ends/O-Rings; %d guide self-collision exception%s active" % [
 		axle_stop_limit_count_v069,
 		"" if axle_stop_limit_count_v069 == 1 else "s",
 		axle_component_exception_count_v069,
@@ -226,7 +282,7 @@ func _update_help_text_v030() -> void:
 		return
 	var label: Label = _find_label_v030(help_panel)
 	if label != null:
-		label.text += "\n\nv0.5.14 AXLE STOPS: O-Rings no longer rely on a collision shape copied onto the host axle rod. Axle joints intentionally exclude hub-vs-host collision, so that v0.5.13 proxy could never stop the hub and could instead strike surrounding fixed pieces. O-Rings now directly bound the axle joint's free slide range, including connector thickness and rod-end limits. The fixed structure carried by an axle also ignores collision with its own guide rod, preventing simplified construction hulls from fighting the axle constraint."
+		label.text += "\n\nv0.5.14 AXLE STOPS: O-Rings directly bound axle travel. The old host-rod collision proxy is gone. A solver-native 6DOF travel limit is backed by a predictive non-penetration guard on the same slide degree of freedom, so a loaded connector cannot tunnel through an O-Ring during a fast physics step. The whole fixed carriage is corrected together and its relative velocity into the stop is removed, avoiding the violent collision impulse that caused the device-video instability."
 
 
 func _on_update_request_completed_v021(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:

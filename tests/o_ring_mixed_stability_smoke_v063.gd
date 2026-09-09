@@ -56,11 +56,6 @@ func _run() -> void:
 		_fail("Main is not using v0.5.13 runtime")
 		return
 
-	# Build a deliberately awkward mixed assembly like the device video: one long
-	# vertical axle, two sliding connector hubs with offset spokes, and two O-Ring
-	# Stops fixed to the axle rod. In v0.5.12 the rings remained frozen in world
-	# space while their fixed joints pulled on the falling rod, eventually injecting
-	# enough solver energy to fling the model out of view.
 	var axle := main.call("_make_rod", 4, Vector3(0, 13, 0), Vector3(0, 29, 0)) as RigidBody3D
 	var hub_a := main.call("_make_connector", 6, Transform3D(Basis.IDENTITY, Vector3(0, 19, 0))) as RigidBody3D
 	var hub_b := main.call("_make_connector", 6, Transform3D(Basis.IDENTITY, Vector3(0, 23, 0))) as RigidBody3D
@@ -99,39 +94,53 @@ func _run() -> void:
 
 	var max_linear := 0.0
 	var max_angular := 0.0
-	for _frame in range(420):
+	var max_linear_name := ""
+	var max_linear_frame := -1
+	var max_linear_pos := Vector3.ZERO
+	var max_angular_name := ""
+	var max_angular_frame := -1
+	var first_over_30 := ""
+	for frame_index in range(420):
 		await physics_frame
-		for body_value in (main.get("bodies") as Array):
+		var all_dynamic: Array = (main.get("bodies") as Array).duplicate()
+		all_dynamic.append_array(main.get("o_ring_stops") as Array)
+		for body_value in all_dynamic:
 			var body := body_value as RigidBody3D
-			if is_instance_valid(body):
-				max_linear = maxf(max_linear, body.linear_velocity.length())
-				max_angular = maxf(max_angular, body.angular_velocity.length())
-		for ring_value in (main.get("o_ring_stops") as Array):
-			var ring := ring_value as RigidBody3D
-			if is_instance_valid(ring):
-				max_linear = maxf(max_linear, ring.linear_velocity.length())
-				max_angular = maxf(max_angular, ring.angular_velocity.length())
+			if not is_instance_valid(body):
+				continue
+			var linear := body.linear_velocity.length()
+			var angular := body.angular_velocity.length()
+			if linear > max_linear:
+				max_linear = linear
+				max_linear_name = "%s[%s]" % [body.name, str(body.get_meta("kind", ""))]
+				max_linear_frame = frame_index
+				max_linear_pos = body.global_position
+			if angular > max_angular:
+				max_angular = angular
+				max_angular_name = "%s[%s]" % [body.name, str(body.get_meta("kind", ""))]
+				max_angular_frame = frame_index
+			if first_over_30.is_empty() and linear > 30.0:
+				first_over_30 = "%s frame=%d v=%.2f w=%.2f pos=%s guard_events=%d" % [
+					"%s[%s]" % [body.name, str(body.get_meta("kind", ""))],
+					frame_index, linear, angular, str(body.global_position), int(main.get("runaway_guard_events_v068"))]
+				print("ORING_STABILITY_DIAG_FIRST_OVER_30: %s" % first_over_30)
 
 	if max_linear > 41.9:
-		_fail("mixed O-Ring/axle build developed runaway linear speed: %.2f" % max_linear)
+		_fail("mixed build runaway: vmax=%.2f actor=%s frame=%d pos=%s; wmax=%.2f actor=%s frame=%d; first_over_30=%s; guard_events=%d" % [max_linear, max_linear_name, max_linear_frame, str(max_linear_pos), max_angular, max_angular_name, max_angular_frame, first_over_30, int(main.get("runaway_guard_events_v068"))])
 		return
 	if max_angular > 54.9:
-		_fail("mixed O-Ring/axle build developed runaway angular speed: %.2f" % max_angular)
+		_fail("mixed build runaway angular speed: %.2f actor=%s frame=%d; first_over_30=%s; guard_events=%d" % [max_angular, max_angular_name, max_angular_frame, first_over_30, int(main.get("runaway_guard_events_v068"))])
 		return
 	if int(main.get("runaway_guard_events_v068")) != 0:
-		_fail("ordinary mixed fixture needed the emergency stability guard")
+		_fail("ordinary mixed fixture needed the emergency stability guard (%d events); first_over_30=%s" % [int(main.get("runaway_guard_events_v068")), first_over_30])
 		return
 
-	# Rings remain fixed stops on their host rod; only the whole construction is
-	# dynamic. Their host-relative positions should therefore remain stable.
 	var low_local_after: Vector3 = axle.global_transform.affine_inverse() * ring_low.global_position
 	var high_local_after: Vector3 = axle.global_transform.affine_inverse() * ring_high.global_position
 	if low_local_after.distance_to(low_local_before) > 0.35 or high_local_after.distance_to(high_local_before) > 0.35:
 		_fail("O-Ring Stop drifted away from its fixed host position")
 		return
 
-	# Explicitly verify the last-resort energy limiter without relying on a real
-	# solver failure to occur in CI.
 	var guard_probe := main.call("_make_rod", 0, Vector3(40, 10, 0), Vector3(40, 15, 0)) as RigidBody3D
 	guard_probe.freeze = false
 	guard_probe.linear_velocity = Vector3(100, 0, 0)

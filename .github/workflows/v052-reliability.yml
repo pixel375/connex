@@ -38,11 +38,17 @@ jobs:
           godot --headless --path . --editor --quit 2>&1 | tee /tmp/godot-editor.log
           if grep -Eq "SCRIPT ERROR|Parse Error|Failed to load script" /tmp/godot-editor.log; then exit 1; fi
 
+      - name: Prepare descendant-runtime smoke tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i 's/ends_with("main_v054.gd")/ends_with("main_v057.gd")/' tests/editor_reliability_smoke_v052.gd
+          sed -i 's/ends_with("main_v056.gd")/ends_with("main_v057.gd")/' tests/editor_touch_attach_smoke_v053.gd
+
       - name: Run v0.5.2 interaction reliability smoke on v0.5.3 runtime
         shell: bash
         run: |
           set -euo pipefail
-          sed -i 's/ends_with("main_v054.gd")/ends_with("main_v056.gd")/' tests/editor_reliability_smoke_v052.gd
           godot --headless --path . --script res://tests/editor_reliability_smoke_v052.gd 2>&1 | tee /tmp/editor-052-smoke.log
           grep -F 'EDITOR_052_SMOKE_OK' /tmp/editor-052-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_052_SMOKE_FAIL" /tmp/editor-052-smoke.log; then exit 1; fi

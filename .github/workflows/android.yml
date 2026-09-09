@@ -16,9 +16,10 @@ concurrency:
 env:
   GODOT_VERSION: 4.6.3
   GODOT_TAG: 4.6.3-stable
-  APP_VERSION: 0.5.2
-  APP_VERSION_CODE: 26
-  APK_NAME: Connex-v0.5.2.apk
+  APP_VERSION: 0.5.3
+  APP_VERSION_CODE: 27
+  APK_NAME: Connex-v0.5.3.apk
+  ARTIFACT_NAME: Connex-Android-v0.5.3
   EXPECTED_RELEASE_CERT_SHA256: BF:CD:2B:59:70:91:E4:AA:FE:4F:27:93:FD:14:A7:9A:2A:D4:94:0D:D1:06:9D:18:74:9C:E7:A9:99:50:D4:22
 
 jobs:
@@ -33,17 +34,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            grep -F 'res://scripts/main_v056.gd' Main.tscn
-            grep -F 'const VERSION_056 := "0.5.3-dev"' scripts/main_v056.gd
-          else
-            grep -F 'res://scripts/main_v055.gd' Main.tscn
-            grep -F 'const VERSION_055 := "0.5.2"' scripts/main_v055.gd
-          fi
+          grep -F 'res://scripts/main_v057.gd' Main.tscn
+          grep -F 'const VERSION_057 := "0.5.3"' scripts/main_v057.gd
           grep -F 'boot_splash/show_image=false' project.godot
-          grep -F 'export_path="build/Connex-v0.5.2.apk"' export_presets.cfg
-          grep -F 'version/code=26' export_presets.cfg
-          grep -F 'version/name="0.5.2"' export_presets.cfg
+          grep -F 'export_path="build/Connex-v0.5.3.apk"' export_presets.cfg
+          grep -F 'version/code=27' export_presets.cfg
+          grep -F 'version/name="0.5.3"' export_presets.cfg
           grep -F 'package/unique_name="com.pixel375.connex"' export_presets.cfg
           grep -F "\`$EXPECTED_RELEASE_CERT_SHA256\`" SIGNING.md
 
@@ -132,6 +128,14 @@ jobs:
           echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=$CONNEX_KEY_ALIAS" >> "$GITHUB_ENV"
           echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=$CONNEX_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
 
+      - name: Prepare descendant-runtime smoke tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i 's/main_v055\.gd/main_v057.gd/g' tests/editor_chunk2_smoke_v050.gd tests/editor_correctness_smoke_v051.gd || true
+          sed -i 's/ends_with("main_v054.gd")/ends_with("main_v057.gd")/' tests/editor_reliability_smoke_v052.gd
+          sed -i 's/ends_with("main_v056.gd")/ends_with("main_v057.gd")/' tests/editor_touch_attach_smoke_v053.gd
+
       - name: Parse project and smoke-test main scene
         shell: bash
         run: |
@@ -201,17 +205,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            sed -i 's/ends_with("main_v054.gd")/ends_with("main_v056.gd")/' tests/editor_reliability_smoke_v052.gd
-          else
-            sed -i 's/ends_with("main_v054.gd")/ends_with("main_v055.gd")/' tests/editor_reliability_smoke_v052.gd
-          fi
           godot --headless --path . --script res://tests/editor_reliability_smoke_v052.gd 2>&1 | tee /tmp/editor-052-smoke.log
           grep -F 'EDITOR_052_SMOKE_OK' /tmp/editor-052-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_052_SMOKE_FAIL" /tmp/editor-052-smoke.log; then exit 1; fi
 
       - name: Run v0.5.3 touch attachment smoke
-        if: github.event_name == 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
@@ -241,7 +239,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Connex-Android-v0.5.2
+          name: ${{ env.ARTIFACT_NAME }}
           path: |
             build/${{ env.APK_NAME }}
             build/${{ env.APK_NAME }}.sha256
@@ -262,14 +260,14 @@ jobs:
       - name: Download validated APK artifact
         uses: actions/download-artifact@v4
         with:
-          name: Connex-Android-v0.5.2
+          name: ${{ env.ARTIFACT_NAME }}
           path: build
 
-      - name: Publish GitHub Release v0.5.2
+      - name: Publish GitHub Release v0.5.3
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.5.2
-          name: Connex Lab v0.5.2
+          tag_name: v0.5.3
+          name: Connex Lab v0.5.3
           body_path: RELEASE_NOTES.md
           make_latest: true
           files: |

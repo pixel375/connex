@@ -89,12 +89,9 @@ func _run() -> void:
 		_fail("Main is not using v0.5.14 runtime")
 		return
 
-	# Recreate the important topology from the user's device video:
-	# - a rigid closed rectangular frame;
-	# - one corner hub slides/rotates on a vertical axle rod;
-	# - an O-Ring sits immediately below that hub as the intended stop;
-	# - the bottom of the axle reaches the floor first, loading the frame onto the
-	#   O-Ring while the closed frame experiences an asymmetric impact.
+	# Device-video topology: closed rectangular frame riding one vertical axle,
+	# with an O-Ring immediately below its axle hub. The axle/floor impact loads the
+	# hub directly onto the stop while the rectangular frame lands asymmetrically.
 	var axle_x := 44.0
 	var axle_z := 18.0
 	var axle := main.call("_make_rod", 4, Vector3(axle_x, 0.42, axle_z), Vector3(axle_x, 13.42, axle_z)) as RigidBody3D
@@ -126,21 +123,30 @@ func _run() -> void:
 		_fail("simulation did not start")
 		return
 	if int((main.get("o_ring_proxy_shapes_v068") as Array).size()) != 0:
-		_fail("host-rod O-Ring proxy collision was recreated")
+		_fail("v0.5.13 host-rod O-Ring proxy collision was recreated")
 		return
-	if not bool(axle_joint.get("linear_limit_y/enabled")):
-		_fail("video fixture axle is still unbounded along Y")
+	if int(main.get("o_ring_stop_pair_count_v069")) < 1:
+		_fail("video fixture did not configure an O-Ring/axle-hub stop pair")
 		return
-	if int(axle_joint.get_meta("sim_axle_stop_count_v069", 0)) < 1:
-		_fail("video fixture axle joint did not register the O-Ring")
+	if not ring.freeze or ring.freeze_mode != RigidBody3D.FREEZE_MODE_KINEMATIC:
+		_fail("video fixture O-Ring is not a frozen kinematic stopper")
+		return
+	if ring.collision_layer != int(main.get("O_RING_STOP_LAYER_V069")) or ring.collision_mask != int(main.get("AXLE_STOP_TARGET_LAYER_V069")):
+		_fail("video fixture O-Ring collision channels are wrong")
+		return
+	if (a.collision_layer & int(main.get("AXLE_STOP_TARGET_LAYER_V069"))) == 0 or (a.collision_mask & int(main.get("O_RING_STOP_LAYER_V069"))) == 0:
+		_fail("video fixture axle hub is not paired to O-Ring collision channel")
+		return
+	if bool(axle_joint.get("linear_limit_y/enabled")):
+		_fail("video fixture axle slide was converted into a hard Y joint limit")
 		return
 
 	var max_linear := 0.0
 	var max_angular := 0.0
 	var min_stop_clearance := INF
 	var max_gap := 0.0
-	var clearance := 0.46
-	for _frame_index in range(720):
+	const CLEARANCE := 0.43
+	for frame_index in range(720):
 		await physics_frame
 		for body_value in (main.get("bodies") as Array):
 			var body := body_value as RigidBody3D
@@ -156,16 +162,16 @@ func _run() -> void:
 		var ring_along := _along(main, ring, axle)
 		var stop_clearance := hub_along - ring_along
 		min_stop_clearance = minf(min_stop_clearance, stop_clearance)
-		if stop_clearance < clearance - 0.12:
-			_fail("axle hub crossed through O-Ring: clearance=%.3f required≈%.3f" % [stop_clearance, clearance])
+		if stop_clearance < CLEARANCE - 0.12:
+			_fail("axle hub crossed through O-Ring at frame %d: clearance=%.3f required≈%.3f" % [frame_index, stop_clearance, CLEARANCE])
 			return
 
 		var ring_expected: Transform3D = axle.global_transform * ring_local_before
 		if ring.global_position.distance_to(ring_expected.origin) > 0.03:
-			_fail("O-Ring visual drifted off its axle rod")
+			_fail("O-Ring kinematic follower drifted off its axle rod")
 			return
 
-		if _frame_index % 30 == 0:
+		if frame_index % 30 == 0:
 			max_gap = maxf(max_gap, _max_socket_gap(main))
 
 	if int(main.get("runaway_guard_events_v068")) != 0:
@@ -178,7 +184,7 @@ func _run() -> void:
 		_fail("closed frame opened while settling on O-Ring; max socket gap=%.3f" % max_gap)
 		return
 
-	print("AXLE_ORING_VIDEO_064_SMOKE_OK: loaded closed frame cannot cross O-Ring and settles without runaway; min_clearance=%.3f vmax=%.2f wmax=%.2f gap=%.3f" % [min_stop_clearance, max_linear, max_angular, max_gap])
+	print("AXLE_ORING_VIDEO_064_SMOKE_OK: kinematic O-Ring physically stops loaded axle hub and frame settles; min_clearance=%.3f vmax=%.2f wmax=%.2f gap=%.3f" % [min_stop_clearance, max_linear, max_angular, max_gap])
 	main.queue_free()
 	await process_frame
 	quit(0)

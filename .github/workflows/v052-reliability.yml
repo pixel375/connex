@@ -1,4 +1,4 @@
-name: v0.5.10 Regression Smoke
+name: v0.5.11 Regression Smoke
 
 on:
   pull_request:
@@ -14,7 +14,7 @@ concurrency:
 jobs:
   reliability:
     runs-on: ubuntu-latest
-    timeout-minutes: 24
+    timeout-minutes: 28
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -42,14 +42,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed -i 's/ends_with("main_v054.gd")/ends_with("main_v065.gd")/' tests/editor_reliability_smoke_v052.gd
-          sed -i 's/ends_with("main_v056.gd")/ends_with("main_v065.gd")/' tests/editor_touch_attach_smoke_v053.gd
-          sed -i 's/ends_with("main_v057.gd")/ends_with("main_v065.gd")/' tests/editor_touch_attach_smoke_v053.gd || true
-          sed -i 's/ends_with("main_v058.gd")/ends_with("main_v065.gd")/' tests/editor_autoattach_selection_smoke_v054.gd || true
-          sed -i 's/ends_with("main_v062.gd")/ends_with("main_v065.gd")/' tests/rod_far_end_autoattach_smoke_v057.gd || true
-          sed -i 's/ends_with("main_v063.gd")/ends_with("main_v065.gd")/' tests/socket_loop_simulation_smoke_v058.gd || true
-          sed -i 's/ends_with("main_v064.gd")/ends_with("main_v065.gd")/' tests/camera_gesture_smoke_v059.gd || true
-          sed -i 's/ends_with("main_v064.gd")/ends_with("main_v065.gd")/' tests/physics_stability_smoke_v059.gd || true
+          sed -i 's/ends_with("main_v054.gd")/ends_with("main_v066.gd")/' tests/editor_reliability_smoke_v052.gd
+          sed -Ei 's/ends_with\("main_v(056|057)\.gd"\)/ends_with("main_v066.gd")/g' tests/editor_touch_attach_smoke_v053.gd || true
+          sed -i 's/ends_with("main_v058.gd")/ends_with("main_v066.gd")/' tests/editor_autoattach_selection_smoke_v054.gd || true
+          sed -i 's/ends_with("main_v062.gd")/ends_with("main_v066.gd")/' tests/rod_far_end_autoattach_smoke_v057.gd || true
+          sed -i 's/ends_with("main_v063.gd")/ends_with("main_v066.gd")/' tests/socket_loop_simulation_smoke_v058.gd || true
+          sed -i 's/ends_with("main_v064.gd")/ends_with("main_v066.gd")/' tests/camera_gesture_smoke_v059.gd || true
+          sed -i 's/ends_with("main_v065.gd")/ends_with("main_v066.gd")/' tests/strict_autoconnect_no_warp_smoke_v510.gd || true
 
       - name: Run v0.5.2 interaction reliability smoke
         shell: bash
@@ -115,7 +114,7 @@ jobs:
           grep -F 'CAMERA_059_SMOKE_OK' /tmp/camera-059-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|CAMERA_059_SMOKE_FAIL" /tmp/camera-059-smoke.log; then exit 1; fi
 
-      - name: Run v0.5.9 long physics stability smoke
+      - name: Run v0.5.9 long physics stability smoke on v0.5.11 rigidity runtime
         shell: bash
         run: |
           set -euo pipefail
@@ -130,3 +129,11 @@ jobs:
           godot --headless --path . --script res://tests/strict_autoconnect_no_warp_smoke_v510.gd 2>&1 | tee /tmp/strict-510-smoke.log
           grep -F 'STRICT_510_SMOKE_OK' /tmp/strict-510-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|STRICT_510_SMOKE_FAIL" /tmp/strict-510-smoke.log; then exit 1; fi
+
+      - name: Run v0.5.11 structure rigidity smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/structure_rigidity_smoke_v061.gd 2>&1 | tee /tmp/rigidity-061-smoke.log
+          grep -F 'RIGIDITY_061_SMOKE_OK' /tmp/rigidity-061-smoke.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|RIGIDITY_061_SMOKE_FAIL" /tmp/rigidity-061-smoke.log; then exit 1; fi

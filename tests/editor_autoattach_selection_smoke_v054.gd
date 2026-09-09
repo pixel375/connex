@@ -21,8 +21,8 @@ func _run() -> void:
 	var main: Node = packed.instantiate()
 	root.add_child(main)
 	await process_frame
-	if not str(main.get_script().resource_path).ends_with("main_v058.gd"):
-		_fail("Main is not using v0.5.4 runtime")
+	if not str(main.get_script().resource_path).ends_with("main_v065.gd"):
+		_fail("Main is not using current descendant runtime")
 		return
 	var bodies: Array = main.get("bodies") as Array
 	if bodies.is_empty():
@@ -64,6 +64,9 @@ func _run() -> void:
 		_fail("stale spatial highlight survived connector type change")
 		return
 
+	# Historical v0.5.4/v0.5.5 behavior accepted this 1.1..2.0 gap and moved the
+	# construction to force a connection. v0.5.10 explicitly supersedes that:
+	# once disconnected and visibly separated, the rod must remain free.
 	var anchor: RigidBody3D = main.call("_make_connector", 6, Transform3D(Basis.IDENTITY, Vector3(70.0, 12.0, 0.0))) as RigidBody3D
 	await process_frame
 	main.call("_set_selected", anchor)
@@ -72,7 +75,7 @@ func _run() -> void:
 	bodies = main.get("bodies") as Array
 	var rod: RigidBody3D = bodies[bodies.size() - 1] as RigidBody3D
 	if rod == null or str(rod.get_meta("kind", "")) != "rod":
-		_fail("could not create rod for proximity auto-attach test")
+		_fail("could not create rod for strict auto-attach test")
 		return
 	var rod_records: Array = main.call("_connections_for_piece_v020", rod) as Array
 	if rod_records.is_empty():
@@ -85,9 +88,6 @@ func _run() -> void:
 		_fail("initial socket connection metadata incomplete")
 		return
 	main.call("_detach_record_raw_v032", record)
-	# _detach_record_raw_v032 intentionally creates the same snap-back guard as a
-	# real user Disconnect. This test is about ordinary proximity capture, so remove
-	# only the synthetic guard created by test setup.
 	var blocks: Dictionary = main.get("manual_detach_blocks_v030") as Dictionary
 	blocks.erase(main.call("_pair_key_v030", rod, anchor))
 	main.call("_rebuild_connection_graph_v020")
@@ -96,28 +96,30 @@ func _run() -> void:
 	rod.global_position += socket_dir * 1.55
 	main.call("_refresh_joint_frames_v020")
 	main.call("_rebuild_connection_graph_v020")
+	var before_tf: Transform3D = rod.global_transform
 	var before_gap: float = (main.call("_rod_end_v020", rod, sign_value) as Vector3).distance_to((main.call("_socket_world_v020", anchor, slot) as Dictionary).get("point", anchor.global_position) as Vector3)
 	if before_gap <= 1.10 or before_gap > 2.00:
-		_fail("test did not create the intended v0.5.4-only capture gap: %.3f" % before_gap)
+		_fail("test did not create intended visible separation: %.3f" % before_gap)
 		return
 	var best: Dictionary = main.call("_best_socket_for_end_v020", rod, sign_value) as Dictionary
-	if best.is_empty() or best.get("connector") != anchor:
-		_fail("proximity matcher did not find the intended close free socket")
+	if not best.is_empty():
+		_fail("strict matcher still accepted the old proximity-only gap")
 		return
 	var fused: int = int(main.call("_auto_connect_all_v020"))
-	if fused < 1:
-		_fail("close free rod/socket did not auto-attach")
+	if fused != 0:
+		_fail("visibly separated rod/socket auto-attached")
 		return
 	main.call("_rebuild_connection_graph_v020")
 	var endpoint: Dictionary = {"type": "rod_end", "body": rod, "sign": sign_value, "point": main.call("_rod_end_v020", rod, sign_value)}
-	if (main.call("_connection_record_for_point_v032", endpoint) as Dictionary).is_empty():
-		_fail("auto-attach did not record the rod-end connection")
+	if not (main.call("_connection_record_for_point_v032", endpoint) as Dictionary).is_empty():
+		_fail("rejected proximity candidate still created a graph record")
 		return
 	var after_gap: float = (main.call("_rod_end_v020", rod, sign_value) as Vector3).distance_to((main.call("_socket_world_v020", anchor, slot) as Dictionary).get("point", anchor.global_position) as Vector3)
-	if after_gap > 0.08:
-		_fail("separate-island auto-snap did not visibly close the gap: %.3f" % after_gap)
+	if absf(after_gap - before_gap) > 0.001 or rod.global_transform != before_tf:
+		_fail("rejected proximity candidate moved the rod or changed its gap")
 		return
-	print("EDITOR_054_SMOKE_OK: transform-release selection suppression + fresh spatial highlight rebuild + wider proximity auto-attach + visible separate-island snap")
+
+	print("EDITOR_054_SMOKE_OK: transform-release suppression + fresh spatial highlight rebuild + old proximity auto-snap retired without geometry movement")
 	main.queue_free()
 	await process_frame
 	quit(0)

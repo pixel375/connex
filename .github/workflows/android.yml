@@ -16,16 +16,16 @@ concurrency:
 env:
   GODOT_VERSION: 4.6.3
   GODOT_TAG: 4.6.3-stable
-  APP_VERSION: 0.5.10
-  APP_VERSION_CODE: 34
-  APK_NAME: Connex-v0.5.10.apk
-  ARTIFACT_NAME: Connex-Android-v0.5.10
+  APP_VERSION: 0.5.11
+  APP_VERSION_CODE: 35
+  APK_NAME: Connex-v0.5.11.apk
+  ARTIFACT_NAME: Connex-Android-v0.5.11
   EXPECTED_RELEASE_CERT_SHA256: BF:CD:2B:59:70:91:E4:AA:FE:4F:27:93:FD:14:A7:9A:2A:D4:94:0D:D1:06:9D:18:74:9C:E7:A9:99:50:D4:22
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -34,12 +34,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -F 'res://scripts/main_v065.gd' Main.tscn
-          grep -F 'const VERSION_065 := "0.5.10"' scripts/main_v065.gd
+          grep -F 'res://scripts/main_v066.gd' Main.tscn
+          grep -F 'const VERSION_066 := "0.5.11"' scripts/main_v066.gd
           grep -F 'boot_splash/show_image=false' project.godot
-          grep -F 'export_path="build/Connex-v0.5.10.apk"' export_presets.cfg
-          grep -F 'version/code=34' export_presets.cfg
-          grep -F 'version/name="0.5.10"' export_presets.cfg
+          grep -F 'export_path="build/Connex-v0.5.11.apk"' export_presets.cfg
+          grep -F 'version/code=35' export_presets.cfg
+          grep -F 'version/name="0.5.11"' export_presets.cfg
           grep -F 'package/unique_name="com.pixel375.connex"' export_presets.cfg
           grep -F "\`$EXPECTED_RELEASE_CERT_SHA256\`" SIGNING.md
 
@@ -132,16 +132,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed -Ei 's/main_v(055|057|058|060|061|062|063|064)\.gd/main_v065.gd/g' tests/editor_chunk2_smoke_v050.gd tests/editor_correctness_smoke_v051.gd || true
-          sed -i 's/ends_with("main_v054.gd")/ends_with("main_v065.gd")/' tests/editor_reliability_smoke_v052.gd || true
-          sed -i 's/ends_with("main_v056.gd")/ends_with("main_v065.gd")/' tests/editor_touch_attach_smoke_v053.gd || true
-          sed -i 's/ends_with("main_v057.gd")/ends_with("main_v065.gd")/' tests/editor_touch_attach_smoke_v053.gd || true
-          sed -i 's/ends_with("main_v058.gd")/ends_with("main_v065.gd")/' tests/editor_autoattach_selection_smoke_v054.gd || true
-          sed -i 's/ends_with("main_v061.gd")/ends_with("main_v065.gd")/' tests/editor_autodock_camera_smoke_v056.gd || true
-          sed -i 's/ends_with("main_v062.gd")/ends_with("main_v065.gd")/' tests/rod_far_end_autoattach_smoke_v057.gd || true
-          sed -i 's/ends_with("main_v063.gd")/ends_with("main_v065.gd")/' tests/socket_loop_simulation_smoke_v058.gd || true
-          sed -i 's/ends_with("main_v064.gd")/ends_with("main_v065.gd")/' tests/camera_gesture_smoke_v059.gd || true
-          sed -i 's/ends_with("main_v064.gd")/ends_with("main_v065.gd")/' tests/physics_stability_smoke_v059.gd || true
+          sed -Ei 's/main_v[0-9]+\.gd/main_v066.gd/g' \
+            tests/editor_chunk2_smoke_v050.gd \
+            tests/editor_correctness_smoke_v051.gd || true
+          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v066.gd")/g' \
+            tests/editor_reliability_smoke_v052.gd \
+            tests/editor_touch_attach_smoke_v053.gd \
+            tests/editor_autoattach_selection_smoke_v054.gd \
+            tests/editor_geometry_snap_smoke_v055.gd \
+            tests/editor_autodock_camera_smoke_v056.gd \
+            tests/rod_far_end_autoattach_smoke_v057.gd \
+            tests/socket_loop_simulation_smoke_v058.gd \
+            tests/camera_gesture_smoke_v059.gd \
+            tests/strict_autoconnect_no_warp_smoke_v510.gd || true
 
       - name: Parse project and smoke-test main scene
         shell: bash
@@ -152,141 +155,37 @@ jobs:
           godot --headless --path . --quit-after 2 2>&1 | tee /tmp/godot-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|Failed to load script" /tmp/godot-smoke.log; then exit 1; fi
 
-      - name: Run v0.3.8 behavioral audit smoke
+      - name: Run complete regression suite through v0.5.11
         shell: bash
         run: |
           set -euo pipefail
-          godot --headless --path . --script res://tests/audit_smoke_v038.gd 2>&1 | tee /tmp/audit-smoke.log
-          grep -F 'AUDIT_SMOKE_OK' /tmp/audit-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|AUDIT_SMOKE_FAIL" /tmp/audit-smoke.log; then exit 1; fi
-
-      - name: Run v0.3.9 deselect and O-Ring smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/selection_smoke_v039.gd 2>&1 | tee /tmp/selection-smoke.log
-          grep -F 'SELECTION_SMOKE_OK' /tmp/selection-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|SELECTION_SMOKE_FAIL" /tmp/selection-smoke.log; then exit 1; fi
-
-      - name: Run v0.3.10 interaction smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/interaction_smoke_v040.gd 2>&1 | tee /tmp/interaction-smoke.log
-          grep -F 'INTERACTION_SMOKE_OK' /tmp/interaction-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|INTERACTION_SMOKE_FAIL" /tmp/interaction-smoke.log; then exit 1; fi
-
-      - name: Run v0.3.11 spatial connector smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/spatial_connectors_smoke_v041.gd 2>&1 | tee /tmp/spatial-smoke.log
-          grep -F 'SPATIAL_SMOKE_OK' /tmp/spatial-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|SPATIAL_SMOKE_FAIL" /tmp/spatial-smoke.log; then exit 1; fi
-
-      - name: Run v0.4.0 editor UX smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/editor_ux_smoke_v042.gd 2>&1 | tee /tmp/editor-ux-smoke.log
-          grep -F 'EDITOR_UX_SMOKE_OK' /tmp/editor-ux-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_UX_SMOKE_FAIL" /tmp/editor-ux-smoke.log; then exit 1; fi
-
-      - name: Run v0.5.0 editor chunk 2 smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/editor_chunk2_smoke_v050.gd 2>&1 | tee /tmp/chunk2-smoke.log
-          grep -F 'CHUNK2_SMOKE_OK' /tmp/chunk2-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|CHUNK2_SMOKE_FAIL" /tmp/chunk2-smoke.log; then exit 1; fi
-
-      - name: Run v0.5.1 editor correctness smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/editor_correctness_smoke_v051.gd 2>&1 | tee /tmp/editor-051-smoke.log
-          grep -F 'EDITOR_051_SMOKE_OK' /tmp/editor-051-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_051_SMOKE_FAIL" /tmp/editor-051-smoke.log; then exit 1; fi
-
-      - name: Run v0.5.2 interaction reliability smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/editor_reliability_smoke_v052.gd 2>&1 | tee /tmp/editor-052-smoke.log
-          grep -F 'EDITOR_052_SMOKE_OK' /tmp/editor-052-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_052_SMOKE_FAIL" /tmp/editor-052-smoke.log; then exit 1; fi
-
-      - name: Run v0.5.3 touch attachment smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/editor_touch_attach_smoke_v053.gd 2>&1 | tee /tmp/editor-053-smoke.log
-          grep -F 'EDITOR_053_SMOKE_OK' /tmp/editor-053-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_053_SMOKE_FAIL" /tmp/editor-053-smoke.log; then exit 1; fi
-
-      - name: Run v0.5.4 auto-attach selection smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/editor_autoattach_selection_smoke_v054.gd 2>&1 | tee /tmp/editor-054-smoke.log
-          grep -F 'EDITOR_054_SMOKE_OK' /tmp/editor-054-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_054_SMOKE_FAIL" /tmp/editor-054-smoke.log; then exit 1; fi
-
-      - name: Run superseded v0.5.5 geometry regression
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/editor_geometry_snap_smoke_v055.gd 2>&1 | tee /tmp/editor-055-smoke.log
-          grep -F 'EDITOR_055_SMOKE_OK' /tmp/editor-055-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_055_SMOKE_FAIL" /tmp/editor-055-smoke.log; then exit 1; fi
-
-      - name: Run v0.5.6 axle/camera compatibility smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/editor_autodock_camera_smoke_v056.gd 2>&1 | tee /tmp/editor-056-smoke.log
-          grep -F 'EDITOR_056_SMOKE_OK' /tmp/editor-056-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_056_SMOKE_FAIL" /tmp/editor-056-smoke.log; then exit 1; fi
-
-      - name: Run v0.5.7 immediate rod far-end auto-attach smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/rod_far_end_autoattach_smoke_v057.gd 2>&1 | tee /tmp/editor-057-smoke.log
-          grep -F 'EDITOR_057_SMOKE_OK' /tmp/editor-057-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_057_SMOKE_FAIL" /tmp/editor-057-smoke.log; then exit 1; fi
-
-      - name: Run v0.5.8 closed-loop socket simulation smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/socket_loop_simulation_smoke_v058.gd 2>&1 | tee /tmp/editor-058-smoke.log
-          grep -F 'EDITOR_058_SMOKE_OK' /tmp/editor-058-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_058_SMOKE_FAIL" /tmp/editor-058-smoke.log; then exit 1; fi
-
-      - name: Run v0.5.9 deterministic camera gesture smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/camera_gesture_smoke_v059.gd 2>&1 | tee /tmp/camera-059-smoke.log
-          grep -F 'CAMERA_059_SMOKE_OK' /tmp/camera-059-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|CAMERA_059_SMOKE_FAIL" /tmp/camera-059-smoke.log; then exit 1; fi
-
-      - name: Run v0.5.9 long physics stability smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/physics_stability_smoke_v059.gd 2>&1 | tee /tmp/physics-059-smoke.log
-          grep -F 'PHYSICS_059_SMOKE_OK' /tmp/physics-059-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|PHYSICS_059_SMOKE_FAIL" /tmp/physics-059-smoke.log; then exit 1; fi
-
-      - name: Run v0.5.10 strict auto-connect and no-warp smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/strict_autoconnect_no_warp_smoke_v510.gd 2>&1 | tee /tmp/strict-510-smoke.log
-          grep -F 'STRICT_510_SMOKE_OK' /tmp/strict-510-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|STRICT_510_SMOKE_FAIL" /tmp/strict-510-smoke.log; then exit 1; fi
+          run_smoke() {
+            local script="$1"
+            local marker="$2"
+            local fail_pattern="$3"
+            local slug="$4"
+            godot --headless --path . --script "res://tests/${script}" 2>&1 | tee "/tmp/${slug}.log"
+            grep -F "$marker" "/tmp/${slug}.log"
+            if grep -Eq "SCRIPT ERROR|Parse Error|${fail_pattern}" "/tmp/${slug}.log"; then exit 1; fi
+          }
+          run_smoke audit_smoke_v038.gd AUDIT_SMOKE_OK AUDIT_SMOKE_FAIL audit
+          run_smoke selection_smoke_v039.gd SELECTION_SMOKE_OK SELECTION_SMOKE_FAIL selection
+          run_smoke interaction_smoke_v040.gd INTERACTION_SMOKE_OK INTERACTION_SMOKE_FAIL interaction
+          run_smoke spatial_connectors_smoke_v041.gd SPATIAL_SMOKE_OK SPATIAL_SMOKE_FAIL spatial
+          run_smoke editor_ux_smoke_v042.gd EDITOR_UX_SMOKE_OK EDITOR_UX_SMOKE_FAIL editor-ux
+          run_smoke editor_chunk2_smoke_v050.gd CHUNK2_SMOKE_OK CHUNK2_SMOKE_FAIL chunk2
+          run_smoke editor_correctness_smoke_v051.gd EDITOR_051_SMOKE_OK EDITOR_051_SMOKE_FAIL editor-051
+          run_smoke editor_reliability_smoke_v052.gd EDITOR_052_SMOKE_OK EDITOR_052_SMOKE_FAIL editor-052
+          run_smoke editor_touch_attach_smoke_v053.gd EDITOR_053_SMOKE_OK EDITOR_053_SMOKE_FAIL editor-053
+          run_smoke editor_autoattach_selection_smoke_v054.gd EDITOR_054_SMOKE_OK EDITOR_054_SMOKE_FAIL editor-054
+          run_smoke editor_geometry_snap_smoke_v055.gd EDITOR_055_SMOKE_OK EDITOR_055_SMOKE_FAIL editor-055
+          run_smoke editor_autodock_camera_smoke_v056.gd EDITOR_056_SMOKE_OK EDITOR_056_SMOKE_FAIL editor-056
+          run_smoke rod_far_end_autoattach_smoke_v057.gd EDITOR_057_SMOKE_OK EDITOR_057_SMOKE_FAIL editor-057
+          run_smoke socket_loop_simulation_smoke_v058.gd EDITOR_058_SMOKE_OK EDITOR_058_SMOKE_FAIL editor-058
+          run_smoke camera_gesture_smoke_v059.gd CAMERA_059_SMOKE_OK CAMERA_059_SMOKE_FAIL camera-059
+          run_smoke physics_stability_smoke_v059.gd PHYSICS_059_SMOKE_OK PHYSICS_059_SMOKE_FAIL physics-059
+          run_smoke strict_autoconnect_no_warp_smoke_v510.gd STRICT_510_SMOKE_OK STRICT_510_SMOKE_FAIL strict-510
+          run_smoke structure_rigidity_smoke_v061.gd RIGIDITY_061_SMOKE_OK RIGIDITY_061_SMOKE_FAIL rigidity-061
 
       - name: Export Android APK
         shell: bash
@@ -334,11 +233,11 @@ jobs:
           name: ${{ env.ARTIFACT_NAME }}
           path: build
 
-      - name: Publish GitHub Release v0.5.10
+      - name: Publish GitHub Release v0.5.11
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.5.10
-          name: Connex Lab v0.5.10
+          tag_name: v0.5.11
+          name: Connex Lab v0.5.11
           body_path: RELEASE_NOTES.md
           make_latest: true
           files: |

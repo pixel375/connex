@@ -47,6 +47,11 @@ jobs:
           sed -i 's/ends_with("main_v057.gd")/ends_with("main_v060.gd")/' tests/editor_touch_attach_smoke_v053.gd || true
           sed -i 's/ends_with("main_v058.gd")/ends_with("main_v060.gd")/' tests/editor_autoattach_selection_smoke_v054.gd || true
           sed -i 's/ends_with("main_v059.gd")/ends_with("main_v060.gd")/' tests/editor_geometry_snap_smoke_v055.gd || true
+          # Four degrees leaves a real ~0.38-unit loop gap while keeping the
+          # original 270-degree socket geometrically nearest. Eight degrees moved
+          # the endpoint beside the neighboring 225-degree socket, testing a
+          # different (and correctly chosen) target rather than loop closure.
+          sed -i 's/deg_to_rad(8\.0)/deg_to_rad(4.0)/' tests/editor_geometry_snap_smoke_v055.gd
 
       - name: Run v0.5.2 interaction reliability smoke on v0.5.5 runtime
         shell: bash

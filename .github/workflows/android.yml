@@ -16,16 +16,16 @@ concurrency:
 env:
   GODOT_VERSION: 4.6.3
   GODOT_TAG: 4.6.3-stable
-  APP_VERSION: 0.5.11
-  APP_VERSION_CODE: 35
-  APK_NAME: Connex-v0.5.11.apk
-  ARTIFACT_NAME: Connex-Android-v0.5.11
+  APP_VERSION: 0.5.12
+  APP_VERSION_CODE: 36
+  APK_NAME: Connex-v0.5.12.apk
+  ARTIFACT_NAME: Connex-Android-v0.5.12
   EXPECTED_RELEASE_CERT_SHA256: BF:CD:2B:59:70:91:E4:AA:FE:4F:27:93:FD:14:A7:9A:2A:D4:94:0D:D1:06:9D:18:74:9C:E7:A9:99:50:D4:22
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 42
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -34,12 +34,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -F 'res://scripts/main_v066.gd' Main.tscn
-          grep -F 'const VERSION_066 := "0.5.11"' scripts/main_v066.gd
+          grep -F 'res://scripts/main_v067.gd' Main.tscn
+          grep -F 'const VERSION_067 := "0.5.12"' scripts/main_v067.gd
           grep -F 'boot_splash/show_image=false' project.godot
-          grep -F 'export_path="build/Connex-v0.5.11.apk"' export_presets.cfg
-          grep -F 'version/code=35' export_presets.cfg
-          grep -F 'version/name="0.5.11"' export_presets.cfg
+          grep -F 'export_path="build/Connex-v0.5.12.apk"' export_presets.cfg
+          grep -F 'version/code=36' export_presets.cfg
+          grep -F 'version/name="0.5.12"' export_presets.cfg
           grep -F 'package/unique_name="com.pixel375.connex"' export_presets.cfg
           grep -F "\`$EXPECTED_RELEASE_CERT_SHA256\`" SIGNING.md
 
@@ -132,10 +132,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed -Ei 's/main_v[0-9]+\.gd/main_v066.gd/g' \
+          sed -Ei 's/main_v[0-9]+\.gd/main_v067.gd/g' \
             tests/editor_chunk2_smoke_v050.gd \
             tests/editor_correctness_smoke_v051.gd || true
-          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v066.gd")/g' \
+          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v067.gd")/g' \
             tests/editor_reliability_smoke_v052.gd \
             tests/editor_touch_attach_smoke_v053.gd \
             tests/editor_autoattach_selection_smoke_v054.gd \
@@ -144,7 +144,9 @@ jobs:
             tests/rod_far_end_autoattach_smoke_v057.gd \
             tests/socket_loop_simulation_smoke_v058.gd \
             tests/camera_gesture_smoke_v059.gd \
-            tests/strict_autoconnect_no_warp_smoke_v510.gd || true
+            tests/physics_stability_smoke_v059.gd \
+            tests/strict_autoconnect_no_warp_smoke_v510.gd \
+            tests/structure_rigidity_smoke_v061.gd || true
 
       - name: Parse project and smoke-test main scene
         shell: bash
@@ -155,7 +157,7 @@ jobs:
           godot --headless --path . --quit-after 2 2>&1 | tee /tmp/godot-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|Failed to load script" /tmp/godot-smoke.log; then exit 1; fi
 
-      - name: Run complete regression suite through v0.5.11
+      - name: Run complete regression suite through v0.5.12
         shell: bash
         run: |
           set -euo pipefail
@@ -186,6 +188,7 @@ jobs:
           run_smoke physics_stability_smoke_v059.gd PHYSICS_059_SMOKE_OK PHYSICS_059_SMOKE_FAIL physics-059
           run_smoke strict_autoconnect_no_warp_smoke_v510.gd STRICT_510_SMOKE_OK STRICT_510_SMOKE_FAIL strict-510
           run_smoke structure_rigidity_smoke_v061.gd RIGIDITY_061_SMOKE_OK RIGIDITY_061_SMOKE_FAIL rigidity-061
+          run_smoke rigidity_live_axle_smoke_v062.gd RIGIDITY_AXLE_062_SMOKE_OK RIGIDITY_AXLE_062_SMOKE_FAIL rigidity-axle-062
 
       - name: Export Android APK
         shell: bash
@@ -233,11 +236,11 @@ jobs:
           name: ${{ env.ARTIFACT_NAME }}
           path: build
 
-      - name: Publish GitHub Release v0.5.11
+      - name: Publish GitHub Release v0.5.12
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.5.11
-          name: Connex Lab v0.5.11
+          tag_name: v0.5.12
+          name: Connex Lab v0.5.12
           body_path: RELEASE_NOTES.md
           make_latest: true
           files: |

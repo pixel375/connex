@@ -14,6 +14,12 @@ var axle_bound_records_v069: Array = []
 
 func _ready() -> void:
 	super._ready()
+	# SceneTree.physics_frame is emitted before node _physics_process callbacks.
+	# Keep one persistent connection registered before tests/gameplay waiters so
+	# any penetration left by the previous solver step is corrected before it can
+	# be observed or rendered on the next physics frame.
+	if not get_tree().physics_frame.is_connected(_on_physics_frame_pre_v069):
+		get_tree().physics_frame.connect(_on_physics_frame_pre_v069)
 	_update_help_text_v030()
 	if update_status_v021 != null:
 		_set_update_status_v021("Current version: v%s" % VERSION_069)
@@ -170,11 +176,6 @@ func _translate_component_v069(component: Array, delta: Vector3) -> void:
 			member.sleeping = false
 
 
-# Jolt's 6DOF limit is a solver limit, not continuous collision. A fast loaded
-# carriage can penetrate it by a fraction of a unit for one physics step before
-# correction. The O-Ring must behave like a real stopper, so we also perform a
-# predictive, inelastic travel guard on the SAME axle degree of freedom. It does
-# not add a collider or an extra joint and therefore cannot kick the frame.
 func _enforce_axle_bounds_v069(delta: float) -> void:
 	if not simulating or axle_bound_records_v069.is_empty():
 		return
@@ -206,12 +207,23 @@ func _enforce_axle_bounds_v069(delta: float) -> void:
 			_translate_component_v069(component, axis * (safe_upper - along))
 			along = safe_upper
 
+		# Remove only relative motion that would carry the axle connector through a
+		# stop during the next solver interval. Tangential motion and axle rotation
+		# are untouched, so the stop behaves inelastically instead of launching it.
 		var relative_speed := (connector.linear_velocity - rod.linear_velocity).dot(axis)
 		var min_speed := (safe_lower - along) / dt
 		var max_speed := (safe_upper - along) / dt
 		var clamped_speed := clampf(relative_speed, min_speed, max_speed)
 		if absf(clamped_speed - relative_speed) > 0.0001:
 			_apply_component_axis_velocity_delta_v069(component, axis * (clamped_speed - relative_speed))
+
+
+func _on_physics_frame_pre_v069() -> void:
+	# The previous Jolt step has completed when this signal arrives. Correct any
+	# solver-level limit penetration before gameplay, tests or rendering can see it,
+	# then the normal _physics_process pass performs prediction for the next step.
+	var ticks := maxi(1, Engine.physics_ticks_per_second)
+	_enforce_axle_bounds_v069(1.0 / float(ticks))
 
 
 func _apply_axle_component_exceptions_v069() -> int:
@@ -282,7 +294,7 @@ func _update_help_text_v030() -> void:
 		return
 	var label: Label = _find_label_v030(help_panel)
 	if label != null:
-		label.text += "\n\nv0.5.14 AXLE STOPS: O-Rings directly bound axle travel. The old host-rod collision proxy is gone. A solver-native 6DOF travel limit is backed by a predictive non-penetration guard on the same slide degree of freedom, so a loaded connector cannot tunnel through an O-Ring during a fast physics step. The whole fixed carriage is corrected together and its relative velocity into the stop is removed, avoiding the violent collision impulse that caused the device-video instability."
+		label.text += "\n\nv0.5.14 AXLE STOPS: O-Rings directly bound axle travel. The old host-rod collision proxy is gone. A solver-native 6DOF travel limit is backed by a predictive non-penetration guard on the same slide degree of freedom. Any residual iterative-solver penetration is corrected at the start of the next physics frame before it can be rendered or observed. The whole fixed carriage is corrected together and relative velocity into the stop is removed, avoiding the violent collision impulse that caused the device-video instability."
 
 
 func _on_update_request_completed_v021(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:

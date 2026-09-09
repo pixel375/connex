@@ -1,48 +1,31 @@
-# Connex Lab v0.5.3
+# Connex Lab v0.5.4
 
-Touch interaction, attachment rewiring and rotation-reset correction release.
+Phone interaction and auto-attachment correction release.
 
-### Real touch scrolling
-- Options, Parts, Saves/Recovery, Help, Physics, Rotate and Move now support full-panel finger pull/swipe scrolling;
-- users no longer need to grab the thin scrollbar;
-- vertical swipe intent is detected before button/slider release so a real scroll gesture does not accidentally activate the underlying control;
-- Saves keeps its own ItemList scrolling behavior when the list itself is swiped.
+### Transform release no longer changes selection
+- releasing a Rotate or Move gizmo is now explicitly treated as the end of the transform gesture, not as a new tap;
+- a short post-release suppression window prevents the connector under the lifted finger from becoming selected;
+- normal direct selection in Rotate and Move remains unchanged for genuine taps.
 
-### Modal input ownership
-- open modal menus now intercept outside touches before higher CanvasLayer controls can receive them;
-- construction, toolbar and editor actions behind an open modal no longer receive leaked taps.
+### Connector selection highlight rebuild
+- changing a selected 11- or 14-point connector to a smaller connector now destroys the old cloned selection outline before geometry is rebuilt;
+- the selection glow is regenerated from the new connector geometry immediately;
+- stale top/bottom/spatial highlight geometry no longer remains after changing connector type.
 
-### Rotate / Move terminology and reset
-- WORLD transform mode is renamed STRUCTURE in the user interface;
-- STRUCTURE continues to transform the complete connected construction;
-- Reset Placement Rotation now zeros the selected connector's STRUCTURE/world rotation;
-- free ITEM connectors reset to exact zero rotation;
-- socket-, CROSS- and AXLE-mounted ITEM connectors reset to their canonical physically valid zero-roll state;
-- ITEM gizmo axes are synchronized before validity coloring, removing the initial gray-valid-ring state.
-
-### Selection and CREATE behavior
-- when Select is armed, CREATE placement is disabled until selection succeeds or Select is cancelled;
-- tapping a connector while Select is armed can no longer place a rod instead.
-
-### Attachment rewiring
-- tapping an occupied SOCKET where a rod end overlaps the connector now resolves to the actual connected rod end when that is the movable endpoint;
-- already-attached ends can be moved/re-seated without the old "no free compatible rod end" dead end;
-- the attachment solver no longer guesses an unrelated existing link between the same two pieces as the connection being moved;
-- rigid-loop closure is allowed when the requested new attachment points are already geometrically aligned;
-- perfectly aligned free rod-end/socket pairs can auto-attach even when those pieces already share another rigid link;
-- explicit manual disconnect snap-back protection remains respected.
-
-### 11 / 14-point selection visuals
-- selection highlight traversal is recursive;
-- nested top/bottom spatial jaws and arc geometry on 11- and 14-point connectors glow with the rest of the selected connector.
+### Stronger close-range auto-attachment
+- free rod ends and free connector sockets use a substantially larger phone-friendly proximity capture shell;
+- candidate matching ranks both distance and opposing direction so dense multi-port connectors prefer the intended nearby socket;
+- explicit Disconnect snap-back blocks remain authoritative;
+- if two close pieces are still separate rigid islands, the smaller/non-root island is translated rigidly to close the visible gap before the fixed connection is created;
+- if the pieces already belong to the same closed structure, the new close connection is recorded without distorting the existing rigid loop.
 
 ### Validation
-- complete legacy behavioral suite through v0.5.2 remains active;
-- dedicated v0.5.3 regression coverage verifies pull scrolling, STRUCTURE reset, Select precedence, occupied-end normalization, immediate valid gizmo coloring, recursive spatial highlight and rigid-loop attachment;
-- Android debug export passed on the v0.5.3 candidate before promotion.
+- all behavioral regression tests through v0.5.3 remain active;
+- new v0.5.4 coverage verifies transform-release selection suppression, stale spatial-highlight replacement, capture beyond the previous 1.10 range, real connection creation, and visible gap closure for separate islands;
+- Android export is required to pass before the release is published.
 
 ### Signing / update compatibility
-- Android versionCode is 27;
-- Android versionName is `0.5.3`;
+- Android versionCode is 28;
+- Android versionName is `0.5.4`;
 - package ID remains `com.pixel375.connex`;
-- v0.5.3 uses the existing permanent signing certificate and updates in place over permanently signed Connex builds.
+- v0.5.4 uses the existing permanent Connex signing certificate and updates in place over v0.5.3.

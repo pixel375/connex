@@ -1,7 +1,6 @@
 [gd_scene load_steps=3 format=3]
 
-; v0.5.11 development runtime: res://scripts/main_v066.gd
-; v0.5.10 lineage marker for descendant CI: res://scripts/main_v065.gd
+; v0.5.11 release runtime: res://scripts/main_v066.gd
 [ext_resource type="Script" path="res://scripts/main_v066.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/physics_slider_fix_v052.gd" id="2_physics_fix"]
 

@@ -1,6 +1,6 @@
 extends "res://scripts/main_v065.gd"
 
-const VERSION_066 := "0.5.11-dev"
+const VERSION_066 := "0.5.11"
 const STRUCTURE_RIGIDITY_DEFAULT_V066 := 92.0
 const STRUCTURE_FLEX_MAX_DEG_V066 := 18.0
 const STRUCTURE_FLEX_MIN_DEG_V066 := 0.35

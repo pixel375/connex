@@ -27,8 +27,11 @@ var o_ring_sim_colliders_v074: Array = []
 # - ordinary hub-to-hub collision gets first chance to preserve stacking;
 # - if Jolt genuinely tunnels one hub through another, v073 changes ONLY stop
 #   ownership metadata/ranges to the hub that is physically outermost now;
-# - the handoff itself never changes a body transform or velocity; after the
-#   handoff, the same proven v0.5.15 stop correction is applied to the new owner.
+# - the handoff itself never changes a body transform or velocity;
+# - critically, v074 performs that handoff BEFORE stop correction, so only the
+#   current owner is corrected once. The older v073 order corrected the old
+#   owner, handed off, then corrected the new owner in the same physics step,
+#   which could inject large energy into two separate fixed components.
 #
 # Larger multi-hub O-Ring builds also run at 120 Hz while SIMULATE is active.
 # This reduces one-step tunnelling distance without adding hidden joints,
@@ -85,11 +88,44 @@ func _restore_precision_ticks_v074() -> void:
 
 func _build_axle_stop_ranges_v070() -> void:
 	# v073 builds the stable outer-owner ranges and zero-motion ownership groups.
-	# Do not rewrite those ranges or disable the handoff. Only decide whether this
-	# run benefits from finer temporal resolution.
+	# Do not rewrite those ranges. Only decide whether this run benefits from finer
+	# temporal resolution.
 	super._build_axle_stop_ranges_v070()
 	axle_ranked_stop_count_v074 = _count_complex_o_ring_hubs_v074()
 	_enable_precision_ticks_v074()
+
+
+func _correct_axle_stop_positions_v071() -> void:
+	if not simulating:
+		return
+
+	# Resolve any real hub-order change first. This function changes only range
+	# ownership/segment metadata; it never touches body transforms or velocities.
+	_handoff_axle_stop_ownership_v073()
+
+	# Apply the released v0.5.15 connector-side correction exactly once, now using
+	# the current outer owners. Avoid calling v073's override here because it does
+	# old-owner correction -> handoff -> new-owner correction in one step.
+	for value in axle_stop_ranges_v070:
+		var stop := value as Dictionary
+		var connector := stop.get("connector") as RigidBody3D
+		var rod := stop.get("rod") as RigidBody3D
+		if not is_instance_valid(connector) or not is_instance_valid(rod):
+			continue
+		var axis: Vector3 = _rod_axis_v020(rod).normalized()
+		var along: float = _rod_local_along_v070(connector, rod)
+		var lower: float = float(stop.get("lower", -INF))
+		var upper: float = float(stop.get("upper", INF))
+		if lower > -INF and along < lower - AXLE_STOP_POSITION_EPS_V071:
+			_shift_stop_component_v071(stop, axis * (lower - along))
+			var lower_speed: float = _relative_axial_speed_v071(stop)
+			if lower_speed < 0.0:
+				_shift_component_velocity_v071(stop, axis * -lower_speed)
+		elif upper < INF and along > upper + AXLE_STOP_POSITION_EPS_V071:
+			_shift_stop_component_v071(stop, axis * (upper - along))
+			var upper_speed: float = _relative_axial_speed_v071(stop)
+			if upper_speed > 0.0:
+				_shift_component_velocity_v071(stop, axis * -upper_speed)
 
 
 func _restore_o_ring_followers_v068(restore_build_pose: bool = true) -> void:

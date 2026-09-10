@@ -92,18 +92,18 @@ func _run() -> void:
 		_fail("closed square did not produce a stabilized redundant SOCKET")
 		return
 
-	# Shipping default stays very firm for stability, while the lower half of the
-	# slider now provides clearly visible compliance.
+	# Upper slider range is intentionally exact-fixed. This avoids Jolt's very
+	# different behavior for tiny non-zero angular limits in heavily loaded builds.
 	var expected_default: float = float(main.call("_structure_flex_angle_rad_v066"))
-	if rad_to_deg(expected_default) < 0.10 or rad_to_deg(expected_default) > 0.20:
-		_fail("default 92% rigidity is not in the stable near-rigid range: %.3f°" % rad_to_deg(expected_default))
+	if absf(expected_default) > 0.000001:
+		_fail("default 92% rigidity is not exactly rigid")
 		return
-	if not _assert_all_structure_flex(main, expected_default, "92% rigidity"):
+	if not _assert_all_structure_flex(main, 0.0, "92% rigidity"):
 		return
 
 	main.set("physics_structure_rigidity_v066", 50.0)
 	var mid_expected: float = float(main.call("_structure_flex_angle_rad_v066"))
-	if rad_to_deg(mid_expected) < 3.3 or rad_to_deg(mid_expected) > 3.9:
+	if rad_to_deg(mid_expected) < 2.6 or rad_to_deg(mid_expected) > 3.2:
 		_fail("50% rigidity does not provide visible bounded flex: %.3f°" % rad_to_deg(mid_expected))
 		return
 	main.call("_apply_structure_flex_all_v072")
@@ -147,7 +147,7 @@ func _run() -> void:
 		_fail("runaway angular velocity after whole-structure rigidity: %.2f" % max_angular)
 		return
 
-	print("RIGIDITY_061_SMOKE_OK: all SOCKET/CROSS joints respond to rigidity; 50%%=±%.2f°, 0%%=±12°, 100%%=rigid, stable 92%% default=±%.2f°" % [rad_to_deg(mid_expected), rad_to_deg(expected_default)])
+	print("RIGIDITY_061_SMOKE_OK: all SOCKET/CROSS joints respond to rigidity; 92-100%% exact-rigid, 50%%=±%.2f°, 0%%=±12°, 600-frame stability retained" % rad_to_deg(mid_expected))
 	main.queue_free()
 	await process_frame
 	quit(0)

@@ -1,4 +1,4 @@
-name: v0.5.16 v083 O-Ring Diagnostic
+name: v0.5.16 Physical O-Ring Diagnostic
 
 on:
   pull_request:
@@ -8,13 +8,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: v083-oring-${{ github.ref }}
+  group: physical-oring-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  o-ring-v083:
+  physical-o-ring:
     runs-on: ubuntu-latest
-    timeout-minutes: 24
+    timeout-minutes: 18
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -31,14 +31,11 @@ jobs:
           sudo install -m 0755 "$GODOT_BIN" /usr/local/bin/godot
           godot --version
 
-      - name: Activate v083 only for diagnostic
+      - name: Activate simplified O-Ring runtime
         shell: bash
         run: |
           set -euo pipefail
           sed -Ei 's#res://scripts/main_v[0-9]+\.gd#res://scripts/main_v083.gd#g' Main.tscn
-          sed -Ei 's/main_v[0-9]+\.gd/main_v083.gd/g' \
-            tests/o_ring_mixed_stability_smoke_v063.gd \
-            tests/axle_o_ring_video_stability_smoke_v064.gd || true
           grep -F 'res://scripts/main_v083.gd' Main.tscn
 
       - name: Parse v083
@@ -48,18 +45,12 @@ jobs:
           godot --headless --path . --editor --quit 2>&1 | tee /tmp/v083-parse.log
           if grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script' /tmp/v083-parse.log; then exit 1; fi
 
-      - name: Run v083 O-Ring gates
+      - name: Run physical O-Ring smoke
         shell: bash
         run: |
-          set -euo pipefail
-          run_smoke() {
-            local script="$1" marker="$2" fail="$3" slug="$4"
-            godot --headless --path . --script "res://tests/${script}" 2>&1 | tee "/tmp/${slug}.log"
-            grep -F "$marker" "/tmp/${slug}.log"
-            if grep -Eq "SCRIPT ERROR|Parse Error|${fail}" "/tmp/${slug}.log"; then exit 1; fi
-          }
-          run_smoke o_ring_tunnel_guard_smoke_v083.gd ORING_TUNNEL_083_SMOKE_OK ORING_TUNNEL_083_SMOKE_FAIL tunnel
-          run_smoke o_ring_pair_diagnostic_v074.gd ORING_PAIR_DIAG_074_OK ORING_PAIR_DIAG_074_FAIL pair
-          grep -F 'no inversion/boundary event in 360 frames' /tmp/pair.log
-          run_smoke o_ring_mixed_stability_smoke_v063.gd ORING_STABILITY_063_SMOKE_OK ORING_STABILITY_063_SMOKE_FAIL mixed
-          run_smoke axle_o_ring_video_stability_smoke_v064.gd AXLE_ORING_VIDEO_064_SMOKE_OK AXLE_ORING_VIDEO_064_SMOKE_FAIL video
+          set -o pipefail
+          godot --headless --path . --script res://tests/o_ring_physical_stop_smoke_v083.gd 2>&1 | tee /tmp/oring-physical.log
+          status=${PIPESTATUS[0]}
+          grep -F 'ORING_PHYSICAL_083_OK' /tmp/oring-physical.log
+          if grep -Eq 'SCRIPT ERROR|Parse Error|ORING_PHYSICAL_083_FAIL' /tmp/oring-physical.log; then exit 1; fi
+          exit "$status"

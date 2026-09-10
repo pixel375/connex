@@ -1,15 +1,17 @@
 extends "res://scripts/main_v068.gd"
 
 const VERSION_069 := "0.5.14"
-# Base construction collision channels are ground=1, rods=2, connectors=4.
-# O-Ring stopping uses two simulation-only channels so a stop can contact only
-# axle-mounted connector hubs on its own guide rod. Rods, spokes and the floor
-# never see the stopper collider.
-const O_RING_STOP_LAYER_V069 := 8
-const AXLE_STOP_TARGET_LAYER_V069 := 16
+# The connector hub and O-Ring collision geometry need roughly this much
+# center-to-center separation along an axle. Instead of adding another physics
+# body, v0.5.14 applies this as a temporary bound on the axle joint's existing
+# free Y slide degree of freedom.
+const O_RING_AXLE_CLEARANCE_V069 := 0.43
+const O_RING_UNBOUNDED_TRAVEL_V069 := 1000.0
 
 var o_ring_stop_pair_count_v069: int = 0
-var o_ring_stop_connector_restore_v069: Array = []
+var o_ring_axle_limit_restore_v069: Array = []
+# Kept as an empty compatibility/debug surface so a regression can prove that
+# the abandoned moving-proxy implementation is not recreated.
 var o_ring_stop_proxies_v069: Array = []
 
 
@@ -18,7 +20,7 @@ func _ready() -> void:
 	_update_help_text_v030()
 	if update_status_v021 != null:
 		_set_update_status_v021("Current version: v%s" % VERSION_069)
-	_status("O-Ring Stops now use dedicated moving stopper bodies for axle hubs.")
+	_status("O-Ring Stops now bound the axle joint's real sliding degree of freedom.")
 
 
 func _status(text: String) -> void:
@@ -26,183 +28,157 @@ func _status(text: String) -> void:
 		status_label.text = "Connex Lab v%s  •  %s" % [VERSION_069, text]
 
 
-# v0.5.13 copied the O-Ring collision shape into the host axle rod. Axle joints
-# intentionally exclude connector-vs-host-rod collision, so that shape could
-# never stop the hub. Keep the broken host-rod proxy path permanently disabled.
+# v0.5.13 copied O-Ring collision into the host rod, but the axle joint excludes
+# connector-vs-host collision. Keep that broken route permanently disabled.
 func _add_o_ring_proxy_shapes_v068(_ring: RigidBody3D, _rod: RigidBody3D) -> int:
 	return 0
 
 
-func _restore_o_ring_stop_connectors_v069() -> void:
-	for value in o_ring_stop_connector_restore_v069:
+func _restore_o_ring_axle_limits_v069() -> void:
+	for value in o_ring_axle_limit_restore_v069:
 		var state := value as Dictionary
-		var connector := state.get("connector") as RigidBody3D
-		if not is_instance_valid(connector):
+		var joint := state.get("joint") as Generic6DOFJoint3D
+		if not is_instance_valid(joint):
 			continue
-		connector.collision_layer = int(state.get("collision_layer", connector.collision_layer))
-		connector.collision_mask = int(state.get("collision_mask", connector.collision_mask))
-	o_ring_stop_connector_restore_v069.clear()
+		joint.set("linear_limit_y/enabled", bool(state.get("enabled", false)))
+		joint.set("linear_limit_y/lower_distance", float(state.get("lower", 0.0)))
+		joint.set("linear_limit_y/upper_distance", float(state.get("upper", 0.0)))
+		joint.remove_meta("sim_o_ring_axle_limit_v069")
+	o_ring_axle_limit_restore_v069.clear()
 	o_ring_stop_pair_count_v069 = 0
-
-
-func _clear_o_ring_stop_proxies_v069() -> void:
-	for value in o_ring_stop_proxies_v069:
-		var state := value as Dictionary
-		var proxy := state.get("proxy") as AnimatableBody3D
-		if is_instance_valid(proxy):
-			# Remove collision immediately; queue_free itself is deferred.
-			proxy.collision_layer = 0
-			proxy.collision_mask = 0
-			proxy.queue_free()
 	o_ring_stop_proxies_v069.clear()
 
 
 func _restore_o_ring_followers_v068(restore_build_pose: bool = true) -> void:
-	_clear_o_ring_stop_proxies_v069()
-	_restore_o_ring_stop_connectors_v069()
+	_restore_o_ring_axle_limits_v069()
 	super._restore_o_ring_followers_v068(restore_build_pose)
 
 
-func _copy_o_ring_shape_to_proxy_v069(ring: RigidBody3D, proxy: AnimatableBody3D) -> int:
-	var copied := 0
-	for child_value in ring.get_children():
-		var source := child_value as CollisionShape3D
-		if source == null or source.shape == null or source.disabled:
+func _o_ring_alongs_for_rod_v069(rod: RigidBody3D) -> Array:
+	var result: Array = []
+	if not is_instance_valid(rod):
+		return result
+	var axis: Vector3 = _rod_axis_v020(rod).normalized()
+	if axis.length_squared() < 0.5:
+		return result
+	for follower_value in o_ring_followers_v068:
+		var follower := follower_value as Dictionary
+		if follower.get("rod") != rod:
 			continue
-		var collision := CollisionShape3D.new()
-		collision.name = "O_Ring_Stop_Shape_%d" % copied
-		collision.shape = source.shape.duplicate(true)
-		collision.transform = source.transform
-		proxy.add_child(collision)
-		copied += 1
-	return copied
-
-
-func _create_o_ring_stop_proxy_v069(ring: RigidBody3D, rod: RigidBody3D, local_transform: Transform3D) -> AnimatableBody3D:
-	var proxy := AnimatableBody3D.new()
-	proxy.name = "O_Ring_Stop_Physics_%d" % o_ring_stop_proxies_v069.size()
-	proxy.sync_to_physics = true
-	proxy.collision_layer = O_RING_STOP_LAYER_V069
-	proxy.collision_mask = AXLE_STOP_TARGET_LAYER_V069
-	proxy.set_meta("sim_o_ring_stop_proxy_v069", true)
-	add_child(proxy)
-	proxy.global_transform = rod.global_transform * local_transform
-	if _copy_o_ring_shape_to_proxy_v069(ring, proxy) == 0:
-		proxy.queue_free()
-		return null
-	return proxy
+		var ring := follower.get("ring") as RigidBody3D
+		if not is_instance_valid(ring):
+			continue
+		result.append((ring.global_position - rod.global_position).dot(axis))
+	return result
 
 
 func _configure_o_ring_stoppers_v069() -> int:
-	_clear_o_ring_stop_proxies_v069()
-	_restore_o_ring_stop_connectors_v069()
+	_restore_o_ring_axle_limits_v069()
 	var configured_pairs := 0
-	var configured_connectors: Dictionary = {}
 
-	# Keep v0.5.13's visible O-Ring exactly as a collisionless frozen child of the
-	# host rod. A separate root-level AnimatableBody3D carries only the real ring
-	# collision shape. AnimatableBody3D is designed for code-driven moving
-	# colliders, so it can follow a dynamic axle without becoming another solver
-	# mass or another hard weld in the construction graph.
-	for follower_value in o_ring_followers_v068:
-		var follower := follower_value as Dictionary
-		var ring := follower.get("ring") as RigidBody3D
-		var rod := follower.get("rod") as RigidBody3D
-		var local_transform := follower.get("local_transform", Transform3D.IDENTITY) as Transform3D
-		if not is_instance_valid(ring) or not is_instance_valid(rod):
+	# main_v068 has already converted each visible O-Ring into a collisionless
+	# follower of its host rod. connections_v020 was rebuilt immediately before
+	# that conversion, so its AXLE records still point at the authoritative axle
+	# joint. Bound only that joint's Y slide; X/Z and rotation behavior are left
+	# exactly as the axle implementation defines them.
+	for record_value in connections_v020:
+		var record := record_value as Dictionary
+		if str(record.get("kind", "")) != "axle":
+			continue
+		var connector := record.get("connector") as RigidBody3D
+		var rod := record.get("rod") as RigidBody3D
+		var joint := record.get("joint") as Generic6DOFJoint3D
+		if not is_instance_valid(connector) or not is_instance_valid(rod) or not is_instance_valid(joint):
 			continue
 
-		var proxy := _create_o_ring_stop_proxy_v069(ring, rod, local_transform)
-		if not is_instance_valid(proxy):
+		var ring_alongs: Array = _o_ring_alongs_for_rod_v069(rod)
+		if ring_alongs.is_empty():
 			continue
-		o_ring_stop_proxies_v069.append({
-			"proxy": proxy,
-			"ring": ring,
-			"rod": rod,
-			"local_transform": local_transform,
+		var axis: Vector3 = _rod_axis_v020(rod).normalized()
+		if axis.length_squared() < 0.5:
+			continue
+		var hub_along: float = (connector.global_position - rod.global_position).dot(axis)
+		var lower_limit := -O_RING_UNBOUNDED_TRAVEL_V069
+		var upper_limit := O_RING_UNBOUNDED_TRAVEL_V069
+		var has_lower := false
+		var has_upper := false
+
+		for ring_along_value in ring_alongs:
+			var ring_along := float(ring_along_value)
+			var delta := ring_along - hub_along
+			if delta < 0.0:
+				# Ring below the hub: the hub may move downward only until its center
+				# remains CLEARANCE above that ring.
+				lower_limit = maxf(lower_limit, delta + O_RING_AXLE_CLEARANCE_V069)
+				has_lower = true
+				configured_pairs += 1
+			elif delta > 0.0:
+				# Ring above the hub: mirror the same rule for upward travel.
+				upper_limit = minf(upper_limit, delta - O_RING_AXLE_CLEARANCE_V069)
+				has_upper = true
+				configured_pairs += 1
+			else:
+				# Exact overlap is already an invalid build pose. Lock this run at the
+				# current slide coordinate rather than injecting a corrective impulse.
+				lower_limit = 0.0
+				upper_limit = 0.0
+				has_lower = true
+				has_upper = true
+				configured_pairs += 1
+
+		if not has_lower and not has_upper:
+			continue
+		# Never start a run with an inverted interval. If an edited build already
+		# overlaps two opposing stops, hold the current position instead of asking
+		# the solver to teleport the assembly out of penetration.
+		if lower_limit > upper_limit:
+			lower_limit = 0.0
+			upper_limit = 0.0
+
+		o_ring_axle_limit_restore_v069.append({
+			"joint": joint,
+			"enabled": bool(joint.get("linear_limit_y/enabled")),
+			"lower": float(joint.get("linear_limit_y/lower_distance")),
+			"upper": float(joint.get("linear_limit_y/upper_distance")),
 		})
-
-		# Only connector hubs actually mounted as AXLE on this same rod get the
-		# simulation-only target channel. The attached fixed frame remains on its
-		# normal channels and therefore cannot smack the O-Ring proxy sideways.
-		for record_value in connections_v020:
-			var record := record_value as Dictionary
-			if str(record.get("kind", "")) != "axle" or record.get("rod") != rod:
-				continue
-			var connector := record.get("connector") as RigidBody3D
-			if not is_instance_valid(connector):
-				continue
-			var key := connector.get_instance_id()
-			if not configured_connectors.has(key):
-				configured_connectors[key] = true
-				o_ring_stop_connector_restore_v069.append({
-					"connector": connector,
-					"collision_layer": connector.collision_layer,
-					"collision_mask": connector.collision_mask,
-				})
-				connector.collision_layer |= AXLE_STOP_TARGET_LAYER_V069
-				connector.collision_mask |= O_RING_STOP_LAYER_V069
-				connector.continuous_cd = true
-				connector.sleeping = false
-			configured_pairs += 1
+		joint.set("linear_limit_y/lower_distance", lower_limit)
+		joint.set("linear_limit_y/upper_distance", upper_limit)
+		joint.set("linear_limit_y/enabled", true)
+		joint.set_meta("sim_o_ring_axle_limit_v069", true)
+		connector.sleeping = false
+		rod.sleeping = false
 
 	o_ring_stop_pair_count_v069 = configured_pairs
 	return configured_pairs
 
 
-func _sync_o_ring_stop_proxies_v069() -> void:
-	if not simulating:
-		return
-	for value in o_ring_stop_proxies_v069:
-		var state := value as Dictionary
-		var proxy := state.get("proxy") as AnimatableBody3D
-		var rod := state.get("rod") as RigidBody3D
-		if not is_instance_valid(proxy) or not is_instance_valid(rod):
-			continue
-		var local_transform := state.get("local_transform", Transform3D.IDENTITY) as Transform3D
-		proxy.global_transform = rod.global_transform * local_transform
-
-
 func _prepare_stable_simulation_graph() -> void:
 	super._prepare_stable_simulation_graph()
 	_configure_o_ring_stoppers_v069()
-	_sync_o_ring_stop_proxies_v069()
-
-
-func _physics_process(delta: float) -> void:
-	# Move the kinematic stop to the current host-rod pose before the next physics
-	# solve. AnimatableBody3D derives motion from these physics-tick transforms, so
-	# the stopper carries the axle's motion instead of acting like a world anchor.
-	_sync_o_ring_stop_proxies_v069()
-	super._physics_process(delta)
 
 
 func _release_physics() -> void:
 	await super._release_physics()
 	if not simulating:
 		return
-	_sync_o_ring_stop_proxies_v069()
-	_status("Physics running — %d O-Ring/axle-hub stopper pair%s active; no O-Ring weld or host-rod collision proxy" % [
+	_status("Physics running — %d O-Ring/axle stop relation%s active on native axle limits; no proxy collider or O-Ring weld" % [
 		o_ring_stop_pair_count_v069,
 		"" if o_ring_stop_pair_count_v069 == 1 else "s"
 	])
 
 
 func _reset_pose() -> void:
-	_clear_o_ring_stop_proxies_v069()
-	_restore_o_ring_stop_connectors_v069()
+	_restore_o_ring_axle_limits_v069()
 	super._reset_pose()
 
 
 func _restore_state(snapshot: Dictionary) -> void:
-	_clear_o_ring_stop_proxies_v069()
-	_restore_o_ring_stop_connectors_v069()
+	_restore_o_ring_axle_limits_v069()
 	super._restore_state(snapshot)
 
 
 func _restart_build() -> void:
-	_clear_o_ring_stop_proxies_v069()
-	_restore_o_ring_stop_connectors_v069()
+	_restore_o_ring_axle_limits_v069()
 	super._restart_build()
 
 
@@ -212,7 +188,7 @@ func _update_help_text_v030() -> void:
 		return
 	var label: Label = _find_label_v030(help_panel)
 	if label != null:
-		label.text += "\n\nv0.5.14 O-RING STOPPER: the broken v0.5.13 host-rod collision proxy is removed. The visible O-Ring remains a collisionless frozen follower of its axle. During SIMULATE, a root-level AnimatableBody3D duplicates only the O-Ring's real cylinder collision shape and follows the axle every physics tick. A dedicated collision channel lets that moving stop contact only connector hubs mounted on the same axle; rods, spokes and the floor cannot hit it. This restores a real physical stopper without adding another rigid body mass, another hard weld, joint teleporting, or frame correction."
+		label.text += "\n\nv0.5.14 O-RING STOPPER: the broken v0.5.13 host-rod collision proxy and the experimental moving proxy body are both removed. The visible O-Ring remains a collisionless follower of its axle during SIMULATE. Each connector already mounted as AXLE on that rod gets a temporary lower/upper bound on the same Generic6DOF Y slide it already uses, calculated from the nearest O-Ring positions and physical hub clearance. This blocks crossing without adding collision mass, a world-following collider, a second joint, frame correction, or another over-constrained solver loop. BUILD/Restore returns the axle joint to its original free-slide state."
 
 
 func _on_update_request_completed_v021(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:

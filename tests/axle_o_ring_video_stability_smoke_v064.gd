@@ -56,14 +56,6 @@ func _along(main: Node, body: Node3D, rod: RigidBody3D) -> float:
 	return (body.global_position - rod.global_position).dot(axis)
 
 
-func _replacement_for(main: Node, original: Generic6DOFJoint3D) -> Generic6DOFJoint3D:
-	for value in (main.get("o_ring_axle_replacements_v069") as Array):
-		var state := value as Dictionary
-		if state.get("original") == original:
-			return state.get("replacement") as Generic6DOFJoint3D
-	return null
-
-
 func _max_socket_gap(main: Node) -> float:
 	var max_gap := 0.0
 	main.call("_rebuild_connection_graph_v020")
@@ -99,7 +91,7 @@ func _run() -> void:
 
 	# Device-video topology: closed rectangular frame riding one vertical axle,
 	# with an O-Ring immediately below its axle hub. The axle/floor impact loads the
-	# hub directly onto the stop while the rectangular frame lands asymmetrically.
+	# hub directly onto the physical stop while the rectangular frame lands unevenly.
 	var axle_x := 44.0
 	var axle_z := 18.0
 	var axle := main.call("_make_rod", 4, Vector3(axle_x, 0.42, axle_z), Vector3(axle_x, 13.42, axle_z)) as RigidBody3D
@@ -130,39 +122,48 @@ func _run() -> void:
 	if not bool(main.get("simulating")):
 		_fail("simulation did not start")
 		return
-	if int((main.get("o_ring_proxy_shapes_v068") as Array).size()) != 0:
-		_fail("v0.5.13 host-rod O-Ring proxy collision was recreated")
+	if not (main.get("o_ring_followers_v068") as Array).is_empty():
+		_fail("video O-Ring was incorrectly converted to a collisionless follower")
 		return
-	if int((main.get("o_ring_stop_proxies_v069") as Array).size()) != 0:
-		_fail("v0.5.14 recreated a moving O-Ring proxy body")
+	if not (main.get("o_ring_proxy_shapes_v068") as Array).is_empty():
+		_fail("host-rod O-Ring proxy collision was recreated")
 		return
-	if int(main.get("o_ring_stop_pair_count_v069")) < 1:
-		_fail("video fixture did not configure an O-Ring/axle-hub stop relation")
+	if not (main.get("o_ring_stop_proxies_v069") as Array).is_empty():
+		_fail("moving O-Ring proxy body was recreated")
 		return
-	if not ring.freeze or ring.collision_layer != 0 or ring.collision_mask != 0:
-		_fail("visible video-fixture O-Ring was left active in collision physics")
+	if not (main.get("o_ring_axle_replacements_v069") as Array).is_empty():
+		_fail("AXLE joint was replaced instead of using physical O-Ring contact")
+		return
+	if int(main.get("o_ring_stop_pair_count_v069")) != 1:
+		_fail("video fixture did not keep exactly one physical O-Ring mount")
+		return
+	if ring.freeze or ring.collision_layer != 4 or (ring.collision_mask & 2) == 0:
+		_fail("video-fixture O-Ring is not an active connector-visible collider")
+		return
+	if not ring.continuous_cd:
+		_fail("video-fixture O-Ring CCD was not enabled")
 		return
 
-	var bounded_axle := _replacement_for(main, axle_joint)
-	if not is_instance_valid(bounded_axle):
-		_fail("video fixture did not replace the free BUILD axle with a bounded SIMULATE axle")
+	# Ordinary AXLE semantics are untouched: free longitudinal slide and free spin.
+	if axle_joint.node_a.is_empty() or axle_joint.node_b.is_empty():
+		_fail("normal AXLE joint was detached")
 		return
-	if not axle_joint.node_a.is_empty() or not axle_joint.node_b.is_empty():
-		_fail("original free axle remained live beside video-fixture bounded axle")
+	if bool(axle_joint.get("linear_limit_y/enabled")):
+		_fail("normal AXLE slide was rewritten with an artificial Y limit")
 		return
-	if not bool(bounded_axle.get("linear_limit_y/enabled")):
-		_fail("video fixture bounded axle did not enable Y travel limits")
+	if bool(axle_joint.get("angular_limit_y/enabled")):
+		_fail("normal AXLE rotation was accidentally locked")
 		return
-	if bool(bounded_axle.get("angular_limit_y/enabled")):
-		_fail("video fixture bounded axle accidentally locked axle rotation")
-		return
-	var lower_limit := float(bounded_axle.get("linear_limit_y/lower_distance"))
-	var upper_limit := float(bounded_axle.get("linear_limit_y/upper_distance"))
-	if absf(lower_limit - (-0.49)) > 0.08:
-		_fail("video fixture lower O-Ring stop is wrong: %.3f expected≈-0.490" % lower_limit)
-		return
-	if upper_limit < 100.0:
-		_fail("video fixture unexpectedly bounded the axle above the hub: %.3f" % upper_limit)
+
+	main.call("_rebuild_connection_graph_v020")
+	var ring_mount: Joint3D = null
+	for value in (main.get("connections_v020") as Array):
+		var record := value as Dictionary
+		if str(record.get("kind", "")) == "o_ring" and record.get("ring") == ring:
+			ring_mount = record.get("joint") as Joint3D
+			break
+	if not is_instance_valid(ring_mount) or ring_mount.node_a.is_empty() or ring_mount.node_b.is_empty():
+		_fail("physical O-Ring-to-rod mount is not live")
 		return
 
 	var max_linear := 0.0
@@ -187,12 +188,12 @@ func _run() -> void:
 		var stop_clearance := hub_along - ring_along
 		min_stop_clearance = minf(min_stop_clearance, stop_clearance)
 		if stop_clearance < CLEARANCE - 0.12:
-			_fail("axle hub crossed through O-Ring at frame %d: clearance=%.3f required≈%.3f" % [frame_index, stop_clearance, CLEARANCE])
+			_fail("axle hub crossed through physical O-Ring at frame %d: clearance=%.3f required≈%.3f" % [frame_index, stop_clearance, CLEARANCE])
 			return
 
 		var ring_expected: Transform3D = axle.global_transform * ring_local_before
-		if ring.global_position.distance_to(ring_expected.origin) > 0.03:
-			_fail("visible O-Ring follower drifted off its axle rod")
+		if ring.global_position.distance_to(ring_expected.origin) > 0.10:
+			_fail("physical O-Ring drifted off its axle rod")
 			return
 
 		if frame_index % 30 == 0:
@@ -211,14 +212,14 @@ func _run() -> void:
 	main.call("_toggle_simulation")
 	for _i in range(4):
 		await physics_frame
-	if not (main.get("o_ring_axle_replacements_v069") as Array).is_empty():
-		_fail("video bounded axle survived return to BUILD")
-		return
 	if axle_joint.node_a.is_empty() or axle_joint.node_b.is_empty() or bool(axle_joint.get("linear_limit_y/enabled")):
-		_fail("video fixture original free axle was not restored for BUILD")
+		_fail("normal free AXLE did not survive return to BUILD")
+		return
+	if not ring.freeze or ring.collision_layer != 4:
+		_fail("physical O-Ring did not return to editable BUILD state")
 		return
 
-	print("AXLE_ORING_VIDEO_064_SMOKE_OK: one bounded axle constraint blocks loaded hub and frame settles; min_clearance=%.3f vmax=%.2f wmax=%.2f gap=%.3f" % [min_stop_clearance, max_linear, max_angular, max_gap])
+	print("AXLE_ORING_VIDEO_064_SMOKE_OK: physical rod-mounted O-Ring blocks loaded axle hub and closed frame settles; min_clearance=%.3f vmax=%.2f wmax=%.2f gap=%.3f" % [min_stop_clearance, max_linear, max_angular, max_gap])
 	main.queue_free()
 	await process_frame
 	quit(0)

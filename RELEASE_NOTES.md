@@ -1,39 +1,58 @@
-# Connex Lab v0.5.15
+# Connex Lab v0.5.16
 
-This release fixes the O-Ring axle-stop regression and adds the requested construction/editor workflow improvements.
+Follow-up release based on hands-on v0.5.15 testing. This update focuses on O-Ring reliability and construction editing behavior.
 
-### O-Ring axle stops
-O-Rings now use simple rod-relative stop semantics during SIMULATE. The visible O-Ring follows its host rod exactly and does not participate as an independent collision body or host-rod proxy.
+### O-Ring selection and axle stops
+O-Rings keep their small visual/physical size but now have a much larger screen-space selection target, making them substantially easier to select for MOVE/ROTATE on a phone even when larger parts overlap nearby.
 
-AXLE connectors retain their normal free slide and free rotation around the axle. The runtime constrains only longitudinal travel: an O-Ring becomes a stop coordinate on the rod, and the physical rod ends are also travel limits. This works from relative motion, so it prevents both a connector falling/sliding off the rod and a moving/falling rod passing through the connector beyond an O-Ring.
+The axle-stop solver is also strengthened for larger constructions. Every AXLE connector in an O-Ring/rod-end segment receives a finite ranked travel range rather than leaving interior hubs unbounded. Multiple hubs retain their original order and stacking space instead of being projected onto one stop coordinate. Connector-side stop correction explicitly cannot traverse into the host axle rod through another fixed path in a complex construction.
 
-When several axle connectors share the same segment, only the connector nearest each O-Ring or rod end owns that boundary. Other axle connectors remain freely sliding and can stack through ordinary connector contact. Predictive relative-velocity limiting prevents crossings without turning the O-Ring into a high-energy physics contact, and any residual boundary correction is applied only to the connector-side rigid assembly. The host rod is never teleported by an O-Ring stop.
+O-Rings remain exact rod-relative followers with no collision proxy or independently solved stopper body. AXLE rotation remains free; only longitudinal travel is stopped by O-Rings and physical rod ends.
 
-The original v0.5.13 host-rod proxy collision system is disabled. No moving proxy body or replacement AXLE joint is used.
+### Structure Rigidity works across the construction
+The Structure Rigidity control now applies bounded angular compliance to all SOCKET/CROSS structure joints during SIMULATE, not only a redundant joint in a closed loop.
 
-### CROSS creation
-In CREATE + CROSS mode, a connector socket can now be tapped to grow a rod directly from that socket. Tapping a rod body still performs normal CROSS connector placement.
+- 100% = rigid / 0° angular flex.
+- 92% default remains near-rigid at roughly ±1°.
+- Lower values progressively allow visible flex for more realistic movement.
+- 0% is still bounded (about ±12°), not an uncontrolled free hinge.
+- Linear socket positions remain locked at every setting.
 
-### New free parts
-CREATE mode now includes **New Rod** and **New Connector** actions. Arm one, then tap empty workspace to create the currently selected rod or connector as a free/unattached part.
+Rigidity changes made while simulation is running continue to take effect on the next SIMULATE run, preserving deterministic setup.
 
-### 11-point / 14-point socket selection
-All sockets on the 11-point and 14-point 3D connectors are now selectable, including the eight surrounding planar sockets. Socket picking uses the visible jaw instead of relying on one tiny projected mouth point, and overlapping front/back jaws are disambiguated by camera depth.
+### Correct CROSS rod creation
+CREATE + CROSS now creates the selected rod through the **side/middle** of the tapped connector socket. The rod is perpendicular to the socket direction and centered at the socket mouth, leaving both rod ends free. This is intentionally different from SOCKET mode, where a rod end is inserted into the socket.
 
-### Change an existing connector socket
-ATTACH now supports re-seating an existing socket connection. Select the connector socket you want to use, then select the rod that is already attached to that connector. If the change is geometrically valid, Connex rotates/re-seats the connector-side structure onto that socket while keeping the target rod in place. Invalid changes are rejected without altering the construction.
+Existing behavior for placing a CROSS connector onto the body of an existing rod remains available.
+
+### Reconnect auto-snap
+After **Disconnect Selected**, explicitly reconnecting one socket now re-enables other previously detached rods from that same connector only when they are still geometrically aligned with a free socket. Those aligned rods automatically snap back instead of remaining artificially blocked by the disconnect safeguard.
+
+Unrelated intentionally detached pairs remain blocked and will not silently reconnect.
+
+### Multi-rod socket re-seat
+Socket changing now supports connectors whose rods are attached to structures at their other ends. Re-seat keeps the rods and their remote structures fixed, rotates only the connector, and atomically remaps all existing connector mounts onto the sockets that now occupy the same valid positions.
+
+This supports operations such as rotating a multi-socket connector one socket left/right while two or more connected rods stay in place. The change is rejected without modifying the construction if any existing rod, CROSS mount, or AXLE cannot remain geometrically valid.
+
+### Retained v0.5.15 improvements
+- 11-point and 14-point socket picking remains fixed.
+- New Rod / New Connector free placement remains available.
+- O-Ring closed-frame/device-video stability coverage remains active.
 
 ### Validation
-The complete regression suite includes all retained editor/physics tests plus dedicated v0.5.15 coverage for:
-- mixed multi-hub O-Ring axle behavior;
-- the reported closed-frame + axle + O-Ring device-video topology;
-- 11-point and 14-point socket picking;
-- CROSS socket-to-rod creation;
-- free rod and connector creation;
-- validated socket-to-existing-rod re-seat without moving the target rod.
+v0.5.16 adds regression coverage for:
+- three AXLE hubs sharing one O-Ring segment, including previously interior hubs;
+- connector-side O-Ring correction in complex graphs;
+- enlarged O-Ring touch selection;
+- whole-structure rigidity at 0%, 92%, and 100%;
+- true side-middle CROSS rod creation;
+- second-rod auto-snap after explicit reconnect;
+- multi-rod socket re-seat while rods and far-end structures remain fixed;
+- all existing editor, camera, closed-loop, O-Ring and Android regression tests.
 
 ### Android / update compatibility
-- Android versionCode: 39
-- Android versionName: `0.5.15`
+- Android versionCode: 40
+- Android versionName: `0.5.16`
 - package ID: `com.pixel375.connex`
 - permanent Connex signing certificate retained for in-place update compatibility.

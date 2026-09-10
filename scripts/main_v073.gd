@@ -3,8 +3,6 @@ extends "res://scripts/main_v072.gd"
 const VERSION_073 := "0.5.16"
 const STRUCTURE_FLEX_CURVE_POWER_V073 := 1.75
 const STRUCTURE_FLEX_RIGID_THRESHOLD_V073 := 90.0
-const AXLE_HUB_PASS_GUARD_SPACING_V073 := 0.62
-const AXLE_HUB_ORDER_EPS_V073 := 0.001
 
 var axle_order_groups_v073: Array = []
 var axle_order_guard_events_v073: int = 0
@@ -14,7 +12,7 @@ func _ready() -> void:
 	super._ready()
 	if update_status_v021 != null:
 		_set_update_status_v021("Current version: v%s" % VERSION_073)
-	_status("v0.5.16 ready — durable O-Ring topology guard, stable closed-loop rigidity and progressive realistic flex below 90%.")
+	_status("v0.5.16 ready — durable O-Ring ownership handoff, stable closed-loop rigidity and progressive realistic flex below 90%.")
 
 
 func _status(text: String) -> void:
@@ -64,11 +62,8 @@ func _apply_structure_flex_all_v072() -> int:
 			continue
 		var is_cycle: bool = bool(joint.get_meta("sim_soft_socket_cycle_v064", false))
 		var applied_flex: float = cycle_relief if high_end and is_cycle else global_flex
-		# v0.5.15 was stable because ordinary fixed joints were never rewritten at
-		# the default high-rigidity setting. Jolt can materially change behavior
-		# when live 6DOF limits are written even when the numeric value remains 0.
-		# Preserve that exact path. We only touch an ordinary high-end joint when
-		# this helper previously made it flexible and must now restore it to fixed.
+		# Preserve the stable v0.5.15 high-end path: ordinary fixed joints do not
+		# get rewritten merely to set their already-zero angular limits to zero.
 		var prior_flex: float = float(joint.get_meta("sim_structure_flex_rad_v066", 0.0))
 		var must_write: bool = not high_end or is_cycle or absf(prior_flex) > 0.000001
 		if must_write:
@@ -98,13 +93,11 @@ func _stop_component_v071(stop: Dictionary) -> Array:
 	var legacy_component: Array = _fixed_component_v020(connector, excluded_uid)
 	if legacy_component.is_empty():
 		legacy_component = [connector]
-	# Ordinary axle assemblies use exactly the proven v0.5.15 component path.
-	# Only fall back to host-excluding traversal when another fixed route really
-	# loops back to the host axle, the complex case this v0.5.16 safeguard exists
-	# to handle.
 	if not is_instance_valid(host_rod) or not (host_rod in legacy_component):
 		return legacy_component
 
+	# Only a complex fixed loop can put the host axle into the connector-side
+	# component. In that case traverse the same fixed graph but stop at host_rod.
 	var result: Array = []
 	var queue: Array = [connector]
 	var seen: Dictionary = {connector.get_instance_id(): true}
@@ -130,17 +123,14 @@ func _stop_component_v071(stop: Dictionary) -> Array:
 
 
 # -----------------------------------------------------------------------------
-# Durable O-Ring stops without artificial per-hub floors
+# Durable O-Ring stops with event-driven boundary ownership
 #
-# Keep the stable nearest-hub ownership used by v0.5.15: only the lowest hub in
-# an O-Ring segment owns its lower boundary and only the highest owns its upper
-# boundary. Interior hubs stack through normal connector collision.
-#
-# The missing case from larger device builds was tunnelling: an interior hub can
-# pass completely through the current boundary owner in one physics step and is
-# then free to continue through the O-Ring. Record the original hub order and
-# correct only an actual post-step order reversal. Normal Jolt contact therefore
-# resolves ordinary hub collisions without custom pre-emptive velocity changes.
+# The proven v0.5.15 model gives only the outer AXLE hubs in an O-Ring segment
+# finite O-Ring/rod-end bounds; interior hubs stack by ordinary connector
+# collision. Rare high-energy Jolt steps can tunnel one hub through another.
+# Do not fight that by moving bodies or injecting velocity. If actual hub order
+# changes, hand the finite boundaries to the hubs that are now outermost. The
+# normal v0.5.15 stop solver then catches whichever hub reaches the O-Ring.
 # -----------------------------------------------------------------------------
 
 func _build_axle_stop_ranges_v070() -> void:
@@ -216,10 +206,10 @@ func _build_axle_stop_ranges_v070() -> void:
 			if segment < rings.size():
 				upper_boundary = float(rings[segment]) - O_RING_AXLE_CLEARANCE_V070
 
-			var ordered_guards: Array = []
+			var ordered_hubs: Array = []
 			for i in range(segment_axles.size()):
 				var axle := segment_axles[i] as Dictionary
-				var stop := {
+				axle_stop_ranges_v070.append({
 					"connector": axle.get("connector"),
 					"rod": rod,
 					"uid": int(axle.get("uid", -1)),
@@ -229,88 +219,101 @@ func _build_axle_stop_ranges_v070() -> void:
 					"segment": segment,
 					"segment_index": i,
 					"segment_size": segment_axles.size(),
-				}
-				axle_stop_ranges_v070.append(stop)
-				ordered_guards.append({
+				})
+				ordered_hubs.append({
 					"connector": axle.get("connector"),
 					"rod": rod,
 					"uid": int(axle.get("uid", -1)),
 				})
-			# With one or two hubs there is no interior hub that can bypass a
-			# boundary owner. Leave the proven v0.5.15 path completely untouched.
-			# The topology guard is reserved for 3+ hubs, where an interior hub
-			# genuinely has no O-Ring boundary of its own.
-			if ordered_guards.size() > 2:
+			if ordered_hubs.size() > 1:
 				axle_order_groups_v073.append({
 					"rod": rod,
-					"hubs": ordered_guards,
+					"hubs": ordered_hubs,
 					"segment": segment,
 					"lower": lower_boundary,
 					"upper": upper_boundary,
 				})
 
 
-func _hub_guard_axial_speed_v073(guard: Dictionary, axis: Vector3, rod: RigidBody3D) -> float:
-	var connector := guard.get("connector") as RigidBody3D
-	if not is_instance_valid(connector) or not is_instance_valid(rod):
-		return 0.0
-	return (connector.linear_velocity - rod.linear_velocity).dot(axis)
-
-
-func _guard_component_contains_v073(guard: Dictionary, body: RigidBody3D) -> bool:
-	if not is_instance_valid(body):
-		return false
-	for value in _stop_component_v071(guard):
-		var member := value as RigidBody3D
-		if is_instance_valid(member) and member == body:
+func _current_hub_order_v073(group: Dictionary) -> Array:
+	var rod := group.get("rod") as RigidBody3D
+	var ordered: Array = (group.get("hubs", []) as Array).duplicate()
+	if not is_instance_valid(rod):
+		return ordered
+	ordered.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var body_a := a.get("connector") as RigidBody3D
+		var body_b := b.get("connector") as RigidBody3D
+		if not is_instance_valid(body_a):
+			return false
+		if not is_instance_valid(body_b):
 			return true
-	return false
+		return _rod_local_along_v070(body_a, rod) < _rod_local_along_v070(body_b, rod)
+	)
+	return ordered
 
 
-# Leave ordinary approaching hubs entirely to Jolt. Pre-step prediction was
-# injecting velocity changes into attached assemblies before real contact and
-# could manufacture energy in the mixed O-Ring fixture.
-func _predict_axle_order_v073(_delta: float) -> void:
-	pass
+func _same_hub_order_v073(a: Array, b: Array) -> bool:
+	if a.size() != b.size():
+		return false
+	for i in range(a.size()):
+		if (a[i] as Dictionary).get("connector") != (b[i] as Dictionary).get("connector"):
+			return false
+	return true
 
 
-func _correct_axle_order_v073() -> void:
+func _handoff_axle_stop_ownership_v073() -> bool:
 	if not simulating:
-		return
+		return false
+	var any_changed := false
 	for group_value in axle_order_groups_v073:
 		var group := group_value as Dictionary
 		var rod := group.get("rod") as RigidBody3D
 		if not is_instance_valid(rod):
 			continue
-		var axis: Vector3 = _rod_axis_v020(rod).normalized()
+		var previous: Array = group.get("hubs", []) as Array
+		var current: Array = _current_hub_order_v073(group)
+		if _same_hub_order_v073(previous, current):
+			continue
+		var segment: int = int(group.get("segment", 0))
+		var lower_boundary: float = float(group.get("lower", -INF))
 		var upper_boundary: float = float(group.get("upper", INF))
-		var hubs: Array = group.get("hubs", []) as Array
-		for i in range(hubs.size() - 1):
-			var low := hubs[i] as Dictionary
-			var high := hubs[i + 1] as Dictionary
-			var low_body := low.get("connector") as RigidBody3D
-			var high_body := high.get("connector") as RigidBody3D
-			if not is_instance_valid(low_body) or not is_instance_valid(high_body):
-				continue
-			if _guard_component_contains_v073(low, high_body) or _guard_component_contains_v073(high, low_body):
-				continue
-			var low_along: float = _rod_local_along_v070(low_body, rod)
-			var high_along: float = _rod_local_along_v070(high_body, rod)
-			if high_along >= low_along - AXLE_HUB_ORDER_EPS_V073:
-				continue
-			# A center-order reversal means collision tunnelling already occurred.
-			# Restore the upper hub just beyond physical overlap and match the lower
-			# hub's axial speed. This path is inactive during ordinary contact.
-			var target: float = low_along + AXLE_HUB_PASS_GUARD_SPACING_V073
-			if upper_boundary < INF:
-				target = minf(target, upper_boundary)
-			if target <= low_along:
-				target = low_along + AXLE_HUB_ORDER_EPS_V073
-			_shift_stop_component_v071(high, axis * (target - high_along))
-			var low_speed: float = _hub_guard_axial_speed_v073(low, axis, rod)
-			var high_speed: float = _hub_guard_axial_speed_v073(high, axis, rod)
-			_shift_component_velocity_v071(high, axis * (low_speed - high_speed))
-			axle_order_guard_events_v073 += 1
+
+		# Clear only this rod/segment's old finite ownership.
+		for stop_value in axle_stop_ranges_v070:
+			var stop := stop_value as Dictionary
+			if stop.get("rod") == rod and int(stop.get("segment", -999)) == segment:
+				stop["lower"] = -INF
+				stop["upper"] = INF
+				stop["segment_index"] = -1
+
+		# Reassign boundaries to the hubs that are physically outermost now.
+		for i in range(current.size()):
+			var hub_info := current[i] as Dictionary
+			var connector := hub_info.get("connector") as RigidBody3D
+			for stop_value in axle_stop_ranges_v070:
+				var stop := stop_value as Dictionary
+				if stop.get("rod") != rod or stop.get("connector") != connector or int(stop.get("segment", -999)) != segment:
+					continue
+				stop["segment_index"] = i
+				if i == 0:
+					stop["lower"] = lower_boundary
+				if i == current.size() - 1:
+					stop["upper"] = upper_boundary
+				break
+		group["hubs"] = current
+		axle_order_guard_events_v073 += 1
+		any_changed = true
+	return any_changed
+
+
+# There is deliberately no pre-step hub-order intervention. Normal connector
+# collision gets the first and only chance to resolve ordinary hub contact.
+func _predict_axle_order_v073(_delta: float) -> void:
+	pass
+
+
+func _correct_axle_order_v073() -> bool:
+	return _handoff_axle_stop_ownership_v073()
 
 
 func _predict_axle_stops_v071(delta: float) -> void:
@@ -319,8 +322,13 @@ func _predict_axle_stops_v071(delta: float) -> void:
 
 
 func _correct_axle_stop_positions_v071() -> void:
+	# First enforce whichever hubs currently own the two O-Ring/rod-end edges.
 	super._correct_axle_stop_positions_v071()
-	_correct_axle_order_v073()
+	# If Jolt actually tunnelled hubs through each other, transfer ownership
+	# without touching body transforms or velocities, then immediately enforce
+	# the same proven stop once for the newly outer hub.
+	if _correct_axle_order_v073():
+		super._correct_axle_stop_positions_v071()
 
 
 func _prepare_stable_simulation_graph() -> void:

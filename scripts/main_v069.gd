@@ -113,8 +113,7 @@ func _restore_o_ring_followers_v068(restore_build_pose: bool = true) -> void:
 				ring.remove_collision_exception_with(rod)
 			if not bool(follower.get("rod_had_ring_exception", false)):
 				rod.remove_collision_exception_with(ring)
-			var saved_freeze_mode: int = int(follower.get("freeze_mode", RigidBody3D.FREEZE_MODE_STATIC))
-			ring.freeze_mode = saved_freeze_mode as RigidBody3D.FreezeMode
+			ring.set("freeze_mode", int(follower.get("freeze_mode", RigidBody3D.FREEZE_MODE_STATIC)))
 			ring.continuous_cd = bool(follower.get("continuous_cd", false))
 			ring.can_sleep = bool(follower.get("can_sleep", true))
 	super._restore_o_ring_followers_v068(restore_build_pose)

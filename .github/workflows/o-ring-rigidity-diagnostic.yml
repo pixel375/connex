@@ -1,0 +1,46 @@
+name: O-Ring Rigidity Interaction Diagnostic
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oring-rigidity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pair-rigidity:
+    name: pair at ${{ matrix.rigidity }}% rigidity
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        rigidity: [100, 92, 50, 20, 0]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Godot 4.6.3
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -fL --retry 3 -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/4.6.3-stable/Godot_v4.6.3-stable_linux.x86_64.zip"
+          mkdir -p /tmp/godot
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          GODOT_BIN="$(find /tmp/godot -maxdepth 1 -type f -name 'Godot*' | head -n 1)"
+          chmod +x "$GODOT_BIN"
+          sudo install -m 0755 "$GODOT_BIN" /usr/local/bin/godot
+
+      - name: Run strict pair diagnostic
+        shell: bash
+        env:
+          ORING_PAIR_RIGIDITY: ${{ matrix.rigidity }}
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/o_ring_pair_diagnostic_v074.gd 2>&1 | tee /tmp/pair.log
+          grep -F "ORING_PAIR_DIAG_CONFIG rigidity=${ORING_PAIR_RIGIDITY}.0" /tmp/pair.log
+          grep -F 'ORING_PAIR_DIAG_074_OK: no inversion/boundary event in 360 frames' /tmp/pair.log

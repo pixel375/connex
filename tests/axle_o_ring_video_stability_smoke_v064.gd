@@ -89,9 +89,6 @@ func _run() -> void:
 		_fail("Main is not using v0.5.14 runtime")
 		return
 
-	# Device-video topology: closed rectangular frame riding one vertical axle,
-	# with an O-Ring immediately below its axle hub. The axle/floor impact loads the
-	# hub directly onto the physical stop while the rectangular frame lands unevenly.
 	var axle_x := 44.0
 	var axle_z := 18.0
 	var axle := main.call("_make_rod", 4, Vector3(axle_x, 0.42, axle_z), Vector3(axle_x, 13.42, axle_z)) as RigidBody3D
@@ -137,14 +134,13 @@ func _run() -> void:
 	if int(main.get("o_ring_stop_pair_count_v069")) != 1:
 		_fail("video fixture did not keep exactly one physical O-Ring mount")
 		return
-	if ring.freeze or ring.collision_layer != 4 or (ring.collision_mask & 2) == 0:
-		_fail("video-fixture O-Ring is not an active connector-visible collider")
+	if ring.freeze or ring.collision_layer != 2 or ring.collision_mask != 3:
+		_fail("video O-Ring no longer follows the v0.3.8 construction collision policy; layer=%d mask=%d" % [ring.collision_layer, ring.collision_mask])
 		return
 	if not ring.continuous_cd:
 		_fail("video-fixture O-Ring CCD was not enabled")
 		return
 
-	# Ordinary AXLE semantics are untouched: free longitudinal slide and free spin.
 	if axle_joint.node_a.is_empty() or axle_joint.node_b.is_empty():
 		_fail("normal AXLE joint was detached")
 		return
@@ -215,8 +211,8 @@ func _run() -> void:
 	if axle_joint.node_a.is_empty() or axle_joint.node_b.is_empty() or bool(axle_joint.get("linear_limit_y/enabled")):
 		_fail("normal free AXLE did not survive return to BUILD")
 		return
-	if not ring.freeze or ring.collision_layer != 4:
-		_fail("physical O-Ring did not return to editable BUILD state")
+	if not ring.freeze or ring.collision_layer != 2 or ring.collision_mask != 3:
+		_fail("physical O-Ring did not return to editable BUILD state with construction collision policy")
 		return
 
 	print("AXLE_ORING_VIDEO_064_SMOKE_OK: physical rod-mounted O-Ring blocks loaded axle hub and closed frame settles; min_clearance=%.3f vmax=%.2f wmax=%.2f gap=%.3f" % [min_stop_clearance, max_linear, max_angular, max_gap])

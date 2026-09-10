@@ -49,6 +49,14 @@ func _along(main: Node, body: Node3D, rod: RigidBody3D) -> float:
 	return (body.global_position - rod.global_position).dot(axis)
 
 
+func _replacement_for(main: Node, original: Generic6DOFJoint3D) -> Generic6DOFJoint3D:
+	for value in (main.get("o_ring_axle_replacements_v069") as Array):
+		var state := value as Dictionary
+		if state.get("original") == original:
+			return state.get("replacement") as Generic6DOFJoint3D
+	return null
+
+
 func _run() -> void:
 	var packed := load("res://Main.tscn") as PackedScene
 	if packed == null:
@@ -97,7 +105,10 @@ func _run() -> void:
 		_fail("v0.5.14 recreated a moving O-Ring proxy body")
 		return
 	if int(main.get("o_ring_stop_pair_count_v069")) < 4:
-		_fail("native O-Ring/axle stop relations were not configured")
+		_fail("bounded O-Ring/axle stop relations were not configured")
+		return
+	if int((main.get("o_ring_axle_replacements_v069") as Array).size()) != 2:
+		_fail("expected exactly two bounded simulation axle replacements")
 		return
 
 	for ring in [ring_low, ring_high]:
@@ -105,19 +116,30 @@ func _run() -> void:
 			_fail("visible O-Ring follower was left active in collision physics")
 			return
 
-	# Native hard limits arm 0.27 before the physical 0.43 clearance so measured
-	# Jolt impact slop cannot produce visible crossing. For this fixture:
-	# hub A starts at -2 with rings -3/+6 => about [-0.30, +7.30] travel.
-	# hub B starts at +2 with rings -3/+6 => about [-4.30, +3.30] travel.
-	for axle_joint in [axle_joint_a, axle_joint_b]:
-		if not bool(axle_joint.get("linear_limit_y/enabled")):
-			_fail("O-Ring implementation did not bound the axle joint Y slide")
-			return
-	if absf(float(axle_joint_a.get("linear_limit_y/lower_distance")) - (-0.30)) > 0.08 or absf(float(axle_joint_a.get("linear_limit_y/upper_distance")) - 7.30) > 0.08:
-		_fail("hub A guarded native axle limits are wrong: [%.3f, %.3f]" % [float(axle_joint_a.get("linear_limit_y/lower_distance")), float(axle_joint_a.get("linear_limit_y/upper_distance"))])
+	var bounded_a := _replacement_for(main, axle_joint_a)
+	var bounded_b := _replacement_for(main, axle_joint_b)
+	if not is_instance_valid(bounded_a) or not is_instance_valid(bounded_b):
+		_fail("could not resolve bounded axle replacement joints")
 		return
-	if absf(float(axle_joint_b.get("linear_limit_y/lower_distance")) - (-4.30)) > 0.08 or absf(float(axle_joint_b.get("linear_limit_y/upper_distance")) - 3.30) > 0.08:
-		_fail("hub B guarded native axle limits are wrong: [%.3f, %.3f]" % [float(axle_joint_b.get("linear_limit_y/lower_distance")), float(axle_joint_b.get("linear_limit_y/upper_distance"))])
+	if not axle_joint_a.node_a.is_empty() or not axle_joint_a.node_b.is_empty() or not axle_joint_b.node_a.is_empty() or not axle_joint_b.node_b.is_empty():
+		_fail("BUILD-time free axle joint remained live beside bounded replacement")
+		return
+
+	# Stopping must happen on one replacement of the axle's existing Y slide DOF.
+	# hub A starts at -2 with rings -3/+6 => about [-0.57, +7.57] travel.
+	# hub B starts at +2 with rings -3/+6 => about [-4.57, +3.57] travel.
+	for axle_joint in [bounded_a, bounded_b]:
+		if not bool(axle_joint.get("linear_limit_y/enabled")):
+			_fail("bounded axle replacement did not enable Y slide limits")
+			return
+		if bool(axle_joint.get("angular_limit_y/enabled")):
+			_fail("bounded axle replacement accidentally locked axle rotation")
+			return
+	if absf(float(bounded_a.get("linear_limit_y/lower_distance")) - (-0.57)) > 0.08 or absf(float(bounded_a.get("linear_limit_y/upper_distance")) - 7.57) > 0.08:
+		_fail("hub A bounded axle limits are wrong: [%.3f, %.3f]" % [float(bounded_a.get("linear_limit_y/lower_distance")), float(bounded_a.get("linear_limit_y/upper_distance"))])
+		return
+	if absf(float(bounded_b.get("linear_limit_y/lower_distance")) - (-4.57)) > 0.08 or absf(float(bounded_b.get("linear_limit_y/upper_distance")) - 3.57) > 0.08:
+		_fail("hub B bounded axle limits are wrong: [%.3f, %.3f]" % [float(bounded_b.get("linear_limit_y/lower_distance")), float(bounded_b.get("linear_limit_y/upper_distance"))])
 		return
 
 	for _i in range(72):
@@ -173,7 +195,22 @@ func _run() -> void:
 		_fail("ordinary mixed fixture needed the emergency stability guard (%d events)" % int(main.get("runaway_guard_events_v068")))
 		return
 
-	print("ORING_STABILITY_063_SMOKE_OK: guarded native axle limits block hubs at O-Rings without proxy bodies/weld runaway; clearances=[%.3f,%.3f] vmax=%.2f wmax=%.2f" % [min_a_clearance, min_b_clearance, max_linear, max_angular])
+	# BUILD must return to the original free axle joints, with no simulation joint
+	# left in the graph.
+	main.call("_toggle_simulation")
+	for _i in range(4):
+		await physics_frame
+	if not (main.get("o_ring_axle_replacements_v069") as Array).is_empty():
+		_fail("bounded axle replacement survived return to BUILD")
+		return
+	if axle_joint_a.node_a.is_empty() or axle_joint_a.node_b.is_empty() or axle_joint_b.node_a.is_empty() or axle_joint_b.node_b.is_empty():
+		_fail("original free axle joints were not restored for BUILD")
+		return
+	if bool(axle_joint_a.get("linear_limit_y/enabled")) or bool(axle_joint_b.get("linear_limit_y/enabled")):
+		_fail("BUILD axle Y slide did not return to free mode")
+		return
+
+	print("ORING_STABILITY_063_SMOKE_OK: one bounded axle constraint per hub blocks O-Rings without proxy bodies/weld runaway; clearances=[%.3f,%.3f] vmax=%.2f wmax=%.2f" % [min_a_clearance, min_b_clearance, max_linear, max_angular])
 	main.queue_free()
 	await process_frame
 	quit(0)

@@ -76,6 +76,26 @@ func _max_socket_gap(main: Node) -> float:
 	return max_gap
 
 
+func _assert_mount_constraint_state(mount: Generic6DOFJoint3D, enabled: bool, phase: String) -> bool:
+	if not is_instance_valid(mount):
+		_fail("video O-Ring mount missing during %s" % phase)
+		return false
+	if mount.node_a.is_empty() or mount.node_b.is_empty():
+		_fail("video O-Ring mount endpoints detached during %s" % phase)
+		return false
+	if not mount.exclude_nodes_from_collision:
+		_fail("video O-Ring mount stopped excluding host collision during %s" % phase)
+		return false
+	for axis_name in ["x", "y", "z"]:
+		if bool(mount.get("linear_limit_%s/enabled" % axis_name)) != enabled:
+			_fail("video O-Ring mount linear %s constraint state wrong during %s" % [axis_name, phase])
+			return false
+		if bool(mount.get("angular_limit_%s/enabled" % axis_name)) != enabled:
+			_fail("video O-Ring mount angular %s constraint state wrong during %s" % [axis_name, phase])
+			return false
+	return true
+
+
 func _run() -> void:
 	var packed := load("res://Main.tscn") as PackedScene
 	if packed == null:
@@ -147,11 +167,7 @@ func _run() -> void:
 	if ring.collision_layer != 2 or ring.collision_mask != 3:
 		_fail("video O-Ring lost construction collision policy; layer=%d mask=%d" % [ring.collision_layer, ring.collision_mask])
 		return
-	if not ring.get_collision_exceptions().has(axle):
-		_fail("video O-Ring does not exclude its host rod")
-		return
-	if not ring_mount.node_a.is_empty() or not ring_mount.node_b.is_empty():
-		_fail("video O-Ring BUILD weld remained active during follower simulation")
+	if not _assert_mount_constraint_state(ring_mount, false, "SIMULATE"):
 		return
 
 	if axle_joint.node_a.is_empty() or axle_joint.node_b.is_empty():
@@ -216,8 +232,7 @@ func _run() -> void:
 	if axle_joint.node_a.is_empty() or axle_joint.node_b.is_empty() or bool(axle_joint.get("linear_limit_y/enabled")):
 		_fail("normal free AXLE did not survive return to BUILD")
 		return
-	if ring_mount.node_a.is_empty() or ring_mount.node_b.is_empty():
-		_fail("O-Ring BUILD weld did not restore")
+	if not _assert_mount_constraint_state(ring_mount, true, "BUILD"):
 		return
 	if not (main.get("o_ring_followers_v068") as Array).is_empty():
 		_fail("O-Ring follower state leaked into BUILD")
@@ -225,11 +240,8 @@ func _run() -> void:
 	if not ring.freeze or ring.get_parent() != ring_parent_before or ring.collision_layer != 2 or ring.collision_mask != 3:
 		_fail("physical O-Ring did not return to editable BUILD state")
 		return
-	if ring.get_collision_exceptions().has(axle):
-		_fail("temporary host collision exception leaked into BUILD")
-		return
 
-	print("AXLE_ORING_VIDEO_064_SMOKE_OK: exact collidable world-space O-Ring follower blocks loaded axle hub and closed frame settles; min_clearance=%.3f max_drift=%.4f vmax=%.2f wmax=%.2f gap=%.3f" % [min_stop_clearance, max_ring_drift, max_linear, max_angular, max_gap])
+	print("AXLE_ORING_VIDEO_064_SMOKE_OK: exact collidable world-space O-Ring blocks loaded axle hub while mount supplies collision exclusion only; min_clearance=%.3f max_drift=%.4f vmax=%.2f wmax=%.2f gap=%.3f" % [min_stop_clearance, max_ring_drift, max_linear, max_angular, max_gap])
 	main.queue_free()
 	await process_frame
 	quit(0)

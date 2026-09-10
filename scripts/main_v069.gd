@@ -3,11 +3,11 @@ extends "res://scripts/main_v068.gd"
 const VERSION_069 := "0.5.14"
 
 # v0.5.14 keeps the normal AXLE joint completely unchanged. During SIMULATE an
-# O-Ring becomes an exact rod-relative kinematic collider: the editable BUILD
-# weld is detached, the real ring remains collidable, and its world transform is
-# synchronized from the host rod's saved local transform every physics tick.
-# It is deliberately NOT reparented under the RigidBody3D host because nested
-# physics bodies are unreliable under Godot 4.6.3/Jolt.
+# O-Ring becomes an exact rod-relative kinematic collider: its real body remains
+# collidable, its world transform is synchronized from the host rod every physics
+# tick, and the existing mount joint keeps only host/self collision exclusion.
+# All six mount constraints are temporarily disabled so the tiny O-Ring is not a
+# separately solved weld and cannot stretch or inject solver energy.
 var o_ring_stop_pair_count_v069: int = 0
 var o_ring_axle_replacements_v069: Array = []
 var o_ring_stop_proxies_v069: Array = []
@@ -33,6 +33,14 @@ func _add_o_ring_proxy_shapes_v068(_ring: RigidBody3D, _rod: RigidBody3D) -> int
 	return 0
 
 
+func _set_o_ring_mount_constraints_v069(joint: Generic6DOFJoint3D, enabled_flags: Dictionary) -> void:
+	if not is_instance_valid(joint):
+		return
+	for axis_name in ["x", "y", "z"]:
+		joint.set("linear_limit_%s/enabled" % axis_name, bool(enabled_flags.get("linear_%s" % axis_name, false)))
+		joint.set("angular_limit_%s/enabled" % axis_name, bool(enabled_flags.get("angular_%s" % axis_name, false)))
+
+
 func _prepare_o_ring_followers_v068() -> int:
 	_restore_o_ring_followers_v068(false)
 	o_ring_proxy_shapes_v068.clear()
@@ -45,17 +53,17 @@ func _prepare_o_ring_followers_v068() -> int:
 		var record := record_value as Dictionary
 		if str(record.get("kind", "")) != "o_ring":
 			continue
-		var joint := record.get("joint") as Joint3D
+		var joint := record.get("joint") as Generic6DOFJoint3D
 		var ring := record.get("ring") as RigidBody3D
 		var rod := record.get("rod") as RigidBody3D
 		if not is_instance_valid(joint) or not is_instance_valid(ring) or not is_instance_valid(rod):
 			continue
 
 		var local_transform: Transform3D = rod.global_transform.affine_inverse() * ring.global_transform
-		var original_parent := ring.get_parent()
-		var original_index := ring.get_index()
-		var ring_had_host_exception: bool = ring.get_collision_exceptions().has(rod)
-		var rod_had_ring_exception: bool = rod.get_collision_exceptions().has(ring)
+		var saved_flags := {}
+		for axis_name in ["x", "y", "z"]:
+			saved_flags["linear_%s" % axis_name] = bool(joint.get("linear_limit_%s/enabled" % axis_name))
+			saved_flags["angular_%s" % axis_name] = bool(joint.get("angular_limit_%s/enabled" % axis_name))
 		o_ring_followers_v068.append({
 			"ring": ring,
 			"rod": rod,
@@ -66,23 +74,16 @@ func _prepare_o_ring_followers_v068() -> int:
 			"continuous_cd": ring.continuous_cd,
 			"freeze_mode": ring.freeze_mode,
 			"can_sleep": ring.can_sleep,
-			"original_parent": original_parent,
-			"original_index": original_index,
-			"ring_had_host_exception": ring_had_host_exception,
-			"rod_had_ring_exception": rod_had_ring_exception,
+			"original_parent": ring.get_parent(),
+			"original_index": ring.get_index(),
+			"mount_enabled_flags_v069": saved_flags,
 		})
 
-		# The BUILD weld is no longer needed in SIMULATE because the ring follows
-		# the rod transform exactly. Removing it also removes the source of the
-		# measured weld stretch under repeated stopper impacts.
-		_disable_o_ring_joint_v068(joint)
-
-		# Preserve normal construction collision for every other body, but never
-		# collide the O-Ring with the rod it is mounted around.
-		if not ring_had_host_exception:
-			ring.add_collision_exception_with(rod)
-		if not rod_had_ring_exception:
-			rod.add_collision_exception_with(ring)
+		# Keep node_a/node_b and exclude_nodes_from_collision intact, but make this
+		# a zero-constraint relationship for SIMULATE. The kinematic follower owns
+		# the ring transform; the joint contributes no positional/angular force.
+		_set_o_ring_mount_constraints_v069(joint, {})
+		joint.exclude_nodes_from_collision = true
 
 		ring.linear_velocity = Vector3.ZERO
 		ring.angular_velocity = Vector3.ZERO
@@ -118,17 +119,15 @@ func _sync_o_ring_followers_v068() -> void:
 
 
 func _restore_o_ring_followers_v068(restore_build_pose: bool = true) -> void:
-	# Remove only the temporary host/self exceptions added by v0.5.14. The base
-	# restore then restores the BUILD weld, collision policy and editable pose.
+	# Restore the original fixed-mount limit flags before the base restore returns
+	# the body to its editable BUILD pose/state.
 	for follower_value in o_ring_followers_v068:
 		var follower := follower_value as Dictionary
 		var ring := follower.get("ring") as RigidBody3D
-		var rod := follower.get("rod") as RigidBody3D
-		if is_instance_valid(ring) and is_instance_valid(rod):
-			if not bool(follower.get("ring_had_host_exception", false)):
-				ring.remove_collision_exception_with(rod)
-			if not bool(follower.get("rod_had_ring_exception", false)):
-				rod.remove_collision_exception_with(ring)
+		var joint := follower.get("joint") as Generic6DOFJoint3D
+		if is_instance_valid(joint):
+			_set_o_ring_mount_constraints_v069(joint, follower.get("mount_enabled_flags_v069", {}) as Dictionary)
+		if is_instance_valid(ring):
 			ring.set("freeze_mode", int(follower.get("freeze_mode", RigidBody3D.FREEZE_MODE_STATIC)))
 			ring.continuous_cd = bool(follower.get("continuous_cd", false))
 			ring.can_sleep = bool(follower.get("can_sleep", true))
@@ -153,7 +152,7 @@ func _update_help_text_v030() -> void:
 		return
 	var label: Label = _find_label_v030(help_panel)
 	if label != null:
-		label.text += "\n\nv0.5.14 O-RING STOPPER: the real O-Ring collider is locked exactly to its host rod during SIMULATE. Its BUILD weld is temporarily detached and the ring becomes a frozen kinematic collider whose world transform is synchronized from the rod every physics tick. This avoids both tiny rigid-body weld stretch and unreliable nested RigidBody3D parenting in Jolt. The ring keeps normal construction collision against axle connectors and other pieces, while host-rod self-collision is excluded. The normal AXLE joint remains untouched and keeps free Y slide plus free axle rotation until physical contact. No rod-owned proxy collider, moving proxy body, replacement AXLE joint, artificial travel limit, enlarged O-Ring collider, or O-Ring-specific CCD is used. BUILD/Restore returns the original editable ring and weld."
+		label.text += "\n\nv0.5.14 O-RING STOPPER: the real O-Ring collider is locked exactly to its host rod during SIMULATE as a frozen kinematic body synchronized in world space every physics tick. Its existing mount remains connected only to exclude O-Ring-vs-host-rod self collision; all six mount constraints are temporarily disabled, so the mount cannot stretch or inject solver force. The ring keeps normal construction collision against axle connectors and other pieces. The normal AXLE joint remains untouched and keeps free Y slide plus free axle rotation until physical contact. No rod-owned proxy collider, moving proxy body, replacement AXLE joint, artificial travel limit, enlarged O-Ring collider, nested physics-body parenting, or O-Ring-specific CCD is used. BUILD/Restore re-enables the original O-Ring mount constraints and editable state."
 
 
 func _on_update_request_completed_v021(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:

@@ -64,16 +64,69 @@ func _apply_structure_flex_all_v072() -> int:
 			continue
 		var is_cycle: bool = bool(joint.get_meta("sim_soft_socket_cycle_v064", false))
 		var applied_flex: float = cycle_relief if high_end and is_cycle else global_flex
-		for axis_name in ["x", "y", "z"]:
-			joint.set("angular_limit_%s/enabled" % axis_name, true)
-			joint.set("angular_limit_%s/lower_angle" % axis_name, -applied_flex)
-			joint.set("angular_limit_%s/upper_angle" % axis_name, applied_flex)
+		# v0.5.15 was stable because ordinary fixed joints were never rewritten at
+		# the default high-rigidity setting. Jolt can materially change behavior
+		# when live 6DOF limits are written even when the numeric value remains 0.
+		# Preserve that exact path. We only touch an ordinary high-end joint when
+		# this helper previously made it flexible and must now restore it to fixed.
+		var prior_flex: float = float(joint.get_meta("sim_structure_flex_rad_v066", 0.0))
+		var must_write: bool = not high_end or is_cycle or absf(prior_flex) > 0.000001
+		if must_write:
+			for axis_name in ["x", "y", "z"]:
+				joint.set("angular_limit_%s/enabled" % axis_name, true)
+				joint.set("angular_limit_%s/lower_angle" % axis_name, -applied_flex)
+				joint.set("angular_limit_%s/upper_angle" % axis_name, applied_flex)
 		joint.set_meta("sim_rigidity_all_v072", true)
 		joint.set_meta("sim_structure_rigidity_v066", physics_structure_rigidity_v066)
 		joint.set_meta("sim_structure_flex_rad_v066", applied_flex)
 		joint.set_meta("sim_cycle_relief_v073", high_end and is_cycle)
 		count += 1
 	return count
+
+
+# -----------------------------------------------------------------------------
+# v0.5.15-compatible stop component traversal
+# -----------------------------------------------------------------------------
+
+func _stop_component_v071(stop: Dictionary) -> Array:
+	var connector := stop.get("connector") as RigidBody3D
+	var host_rod := stop.get("rod") as RigidBody3D
+	if not is_instance_valid(connector):
+		return []
+	_rebuild_connection_graph_v020(false)
+	var excluded_uid: int = int(stop.get("uid", -1))
+	var legacy_component: Array = _fixed_component_v020(connector, excluded_uid)
+	if legacy_component.is_empty():
+		legacy_component = [connector]
+	# Ordinary axle assemblies use exactly the proven v0.5.15 component path.
+	# Only fall back to host-excluding traversal when another fixed route really
+	# loops back to the host axle, the complex case this v0.5.16 safeguard exists
+	# to handle.
+	if not is_instance_valid(host_rod) or not (host_rod in legacy_component):
+		return legacy_component
+
+	var result: Array = []
+	var queue: Array = [connector]
+	var seen: Dictionary = {connector.get_instance_id(): true}
+	while not queue.is_empty():
+		var current := queue.pop_front() as RigidBody3D
+		if not is_instance_valid(current) or current == host_rod:
+			continue
+		result.append(current)
+		for record_value in connections_v020:
+			var record := record_value as Dictionary
+			if int(record.get("uid", -1)) == excluded_uid or str(record.get("kind", "")) not in ["socket", "cross", "o_ring"]:
+				continue
+			if record.get("a") != current and record.get("b") != current:
+				continue
+			var other := _other_body_v020(record, current) as RigidBody3D
+			if not is_instance_valid(other) or other == host_rod or seen.has(other.get_instance_id()):
+				continue
+			seen[other.get_instance_id()] = true
+			queue.append(other)
+	if result.is_empty():
+		result = [connector]
+	return result
 
 
 # -----------------------------------------------------------------------------

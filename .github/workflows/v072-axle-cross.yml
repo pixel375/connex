@@ -1,0 +1,77 @@
+name: v0.5.17 AXLE CROSS Stop Validation
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/main_v072.gd'
+      - 'tests/axle_cross_stop_roundtrip_smoke_v072.gd'
+      - '.github/workflows/v072-axle-cross.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  axle-cross-roundtrip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Godot 4.6.3
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -fL --retry 3 -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/4.6.3-stable/Godot_v4.6.3-stable_linux.x86_64.zip"
+          mkdir -p /tmp/godot
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          GODOT_BIN="$(find /tmp/godot -maxdepth 1 -type f -name 'Godot*' | head -n 1)"
+          chmod +x "$GODOT_BIN"
+          sudo install -m 0755 "$GODOT_BIN" /usr/local/bin/godot
+          godot --version
+
+      - name: Activate candidate runtime for tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i 's/main_v071.gd/main_v072.gd/g' Main.tscn
+          sed -Ei 's/main_v071\.gd/main_v072.gd/g; s/main_v070\.gd/main_v072.gd/g' \
+            tests/o_ring_mixed_stability_smoke_v063.gd \
+            tests/axle_o_ring_video_stability_smoke_v064.gd || true
+          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v072.gd")/g' \
+            tests/rigidity_live_axle_smoke_v062.gd || true
+
+      - name: Parse candidate runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --editor --quit 2>&1 | tee /tmp/parse.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|Failed to load script" /tmp/parse.log; then exit 1; fi
+
+      - name: Run inverse AXLE wake regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/rigidity_live_axle_smoke_v062.gd 2>&1 | tee /tmp/axle.log
+          grep -F RIGIDITY_AXLE_062_SMOKE_OK /tmp/axle.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|RIGIDITY_AXLE_062_SMOKE_FAIL" /tmp/axle.log; then exit 1; fi
+
+      - name: Run O-Ring regressions on candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/o_ring_mixed_stability_smoke_v063.gd 2>&1 | tee /tmp/oring1.log
+          grep -F ORING_STABILITY_063_SMOKE_OK /tmp/oring1.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|ORING_STABILITY_063_SMOKE_FAIL" /tmp/oring1.log; then exit 1; fi
+          godot --headless --path . --script res://tests/axle_o_ring_video_stability_smoke_v064.gd 2>&1 | tee /tmp/oring2.log
+          grep -F AXLE_ORING_VIDEO_064_SMOKE_OK /tmp/oring2.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|AXLE_ORING_VIDEO_064_SMOKE_FAIL" /tmp/oring2.log; then exit 1; fi
+
+      - name: Run four-post CROSS-stop save-load regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/axle_cross_stop_roundtrip_smoke_v072.gd 2>&1 | tee /tmp/roundtrip.log
+          grep -F AXLE_CROSS_ROUNDTRIP_072_SMOKE_OK /tmp/roundtrip.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|AXLE_CROSS_ROUNDTRIP_072_SMOKE_FAIL" /tmp/roundtrip.log; then exit 1; fi

@@ -52,7 +52,7 @@ func _run() -> void:
 	await process_frame
 
 	if not str(main.get_script().resource_path).ends_with("main_v066.gd"):
-		_fail("Main is not using v0.5.11 runtime")
+		_fail("Main is not using expected runtime")
 		return
 
 	# Closed flat frame: this is the exact class of construction that used to
@@ -95,11 +95,12 @@ func _run() -> void:
 		_fail("axle fixture did not create a rod")
 		return
 
-	# v0.5.9 broke exact redundant welds by making cycle-closing SOCKETs angularly
-	# free. v0.5.11 keeps that solver relief but adds a small non-zero flex limit.
+	# The retained cycle marker must still exist and every real SOCKET must remain
+	# solver-active. Current v0.5.16 intentionally keeps the shipping 92% setting
+	# exactly rigid; lower Structure Rigidity values provide the bounded flex.
 	main.call("_prepare_stable_simulation_graph")
 	if int(main.get("restored_socket_loop_constraints_v063")) < 1:
-		_fail("fixture did not exercise v0.5.8 restored socket-loop path")
+		_fail("fixture did not exercise restored socket-loop path")
 		return
 	if int(main.get("softened_socket_loop_count_v064")) < 1:
 		_fail("closed frame did not produce a stabilized socket cycle edge")
@@ -113,11 +114,11 @@ func _run() -> void:
 			softened_found = true
 			var socket_joint := joint as Generic6DOFJoint3D
 			if not bool(socket_joint.get("angular_limit_x/enabled")):
-				_fail("v0.5.11 left a closed-loop SOCKET as a completely free angular hinge")
+				_fail("closed-loop SOCKET became a completely free angular hinge")
 				return
 			var upper := float(socket_joint.get("angular_limit_x/upper_angle"))
-			if upper <= 0.0 or upper > deg_to_rad(2.0):
-				_fail("v0.5.11 default cycle flex is outside the intended stable rigidity range: %.3f deg" % rad_to_deg(upper))
+			if upper < -0.000001 or upper > deg_to_rad(2.0):
+				_fail("default cycle angular limit is outside the intended stable range: %.3f deg" % rad_to_deg(upper))
 				return
 		if str(joint.get_meta("connection_kind_v020", "")) == "socket" and bool(joint.get_meta("sim_disabled", false)):
 			_fail("a real SOCKET was physically removed instead of stabilized")
@@ -162,7 +163,7 @@ func _run() -> void:
 		_fail("runaway angular velocity indicates solver explosion: %.2f" % max_angular)
 		return
 
-	print("PHYSICS_059_SMOKE_OK: v0.5.11 flex-limited closed loop + axle stable; gap=%.3f radial=%.3f vmax=%.2f wmax=%.2f" % [max_socket_gap, max_axle_radial, max_linear, max_angular])
+	print("PHYSICS_059_SMOKE_OK: exact-rigid default closed loop + axle stable; gap=%.3f radial=%.3f vmax=%.2f wmax=%.2f" % [max_socket_gap, max_axle_radial, max_linear, max_angular])
 	main.queue_free()
 	await process_frame
 	quit(0)

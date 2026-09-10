@@ -72,9 +72,6 @@ func _run() -> void:
 		_fail("Main is not using v0.5.14 runtime")
 		return
 
-	# One long axle with two independently sliding hubs, asymmetric fixed spokes,
-	# and physical O-Ring stops below/above. This intentionally impacts the floor
-	# unevenly and proves the old simple ring-on-rod behavior under load.
 	var axle := main.call("_make_rod", 4, Vector3(0, 13, 0), Vector3(0, 29, 0)) as RigidBody3D
 	var hub_a := main.call("_make_connector", 6, Transform3D(Basis.IDENTITY, Vector3(0, 19, 0))) as RigidBody3D
 	var hub_b := main.call("_make_connector", 6, Transform3D(Basis.IDENTITY, Vector3(0, 23, 0))) as RigidBody3D
@@ -121,14 +118,13 @@ func _run() -> void:
 		if ring.freeze:
 			_fail("physical O-Ring remained frozen while its host rod was released")
 			return
-		if ring.collision_layer != 4 or (ring.collision_mask & 2) == 0:
-			_fail("physical O-Ring collision was disabled or cannot see connector bodies")
+		if ring.collision_layer != 2 or ring.collision_mask != 3:
+			_fail("physical O-Ring no longer follows the v0.3.8 construction collision policy; layer=%d mask=%d" % [ring.collision_layer, ring.collision_mask])
 			return
 		if not ring.continuous_cd:
 			_fail("physical O-Ring CCD was not enabled for simulation")
 			return
 
-	# The normal AXLE joint must remain live and retain free slide/free rotation.
 	for axle_joint in [axle_joint_a, axle_joint_b]:
 		if axle_joint.node_a.is_empty() or axle_joint.node_b.is_empty():
 			_fail("normal AXLE joint was detached")
@@ -177,8 +173,6 @@ func _run() -> void:
 			max_linear = maxf(max_linear, body.linear_velocity.length())
 			max_angular = maxf(max_angular, body.angular_velocity.length())
 
-		# The fixed mount may have tiny solver compliance under impact, but the ring
-		# must remain physically attached to the rod rather than becoming an anchor.
 		var low_expected: Transform3D = axle.global_transform * low_local_before
 		var high_expected: Transform3D = axle.global_transform * high_local_before
 		if ring_low.global_position.distance_to(low_expected.origin) > 0.10 or ring_high.global_position.distance_to(high_expected.origin) > 0.10:
@@ -209,7 +203,6 @@ func _run() -> void:
 		_fail("ordinary mixed fixture needed the emergency stability guard (%d events)" % int(main.get("runaway_guard_events_v068")))
 		return
 
-	# BUILD must keep the ordinary free AXLE and editable physical O-Rings.
 	main.call("_toggle_simulation")
 	for _i in range(4):
 		await physics_frame
@@ -220,8 +213,8 @@ func _run() -> void:
 		_fail("BUILD axle Y slide is not free")
 		return
 	for ring in [ring_low, ring_high]:
-		if not ring.freeze or ring.collision_layer != 4:
-			_fail("O-Ring did not return to editable BUILD state")
+		if not ring.freeze or ring.collision_layer != 2 or ring.collision_mask != 3:
+			_fail("O-Ring did not return to editable BUILD state with construction collision policy")
 			return
 
 	print("ORING_STABILITY_063_SMOKE_OK: physical O-Rings stay fixed to falling rod and stop free-sliding axle hubs by contact; clearances=[%.3f,%.3f] vmax=%.2f wmax=%.2f" % [min_a_clearance, min_b_clearance, max_linear, max_angular])

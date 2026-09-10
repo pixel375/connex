@@ -16,16 +16,16 @@ concurrency:
 env:
   GODOT_VERSION: 4.6.3
   GODOT_TAG: 4.6.3-stable
-  APP_VERSION: 0.5.15
-  APP_VERSION_CODE: 39
-  APK_NAME: Connex-v0.5.15.apk
-  ARTIFACT_NAME: Connex-Android-v0.5.15
+  APP_VERSION: 0.5.16
+  APP_VERSION_CODE: 40
+  APK_NAME: Connex-v0.5.16.apk
+  ARTIFACT_NAME: Connex-Android-v0.5.16
   EXPECTED_RELEASE_CERT_SHA256: BF:CD:2B:59:70:91:E4:AA:FE:4F:27:93:FD:14:A7:9A:2A:D4:94:0D:D1:06:9D:18:74:9C:E7:A9:99:50:D4:22
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 48
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -34,13 +34,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -F 'res://scripts/main_v071.gd' Main.tscn
-          grep -F 'const VERSION_071 := "0.5.15"' scripts/main_v071.gd
+          grep -F 'res://scripts/main_v072.gd' Main.tscn
+          grep -F 'const VERSION_072 := "0.5.16"' scripts/main_v072.gd
           grep -F 'boot_splash/show_image=false' project.godot
           grep -F '3d/physics_engine="JoltPhysics3D"' project.godot
-          grep -F 'export_path="build/Connex-v0.5.15.apk"' export_presets.cfg
-          grep -F 'version/code=39' export_presets.cfg
-          grep -F 'version/name="0.5.15"' export_presets.cfg
+          grep -F 'export_path="build/Connex-v0.5.16.apk"' export_presets.cfg
+          grep -F 'version/code=40' export_presets.cfg
+          grep -F 'version/name="0.5.16"' export_presets.cfg
           grep -F 'package/unique_name="com.pixel375.connex"' export_presets.cfg
           grep -F "\`$EXPECTED_RELEASE_CERT_SHA256\`" SIGNING.md
 
@@ -133,10 +133,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed -Ei 's/main_v[0-9]+\.gd/main_v071.gd/g' \
+          sed -Ei 's/main_v[0-9]+\.gd/main_v072.gd/g' \
             tests/editor_chunk2_smoke_v050.gd \
             tests/editor_correctness_smoke_v051.gd || true
-          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v071.gd")/g' \
+          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v072.gd")/g' \
             tests/editor_reliability_smoke_v052.gd \
             tests/editor_touch_attach_smoke_v053.gd \
             tests/editor_autoattach_selection_smoke_v054.gd \
@@ -149,7 +149,7 @@ jobs:
             tests/strict_autoconnect_no_warp_smoke_v510.gd \
             tests/structure_rigidity_smoke_v061.gd \
             tests/rigidity_live_axle_smoke_v062.gd || true
-          sed -Ei 's/main_v070\.gd/main_v071.gd/g' \
+          sed -Ei 's/main_v(069|070|071)\.gd/main_v072.gd/g' \
             tests/o_ring_mixed_stability_smoke_v063.gd \
             tests/axle_o_ring_video_stability_smoke_v064.gd \
             tests/editor_socket_workflows_smoke_v070.gd || true
@@ -163,18 +163,15 @@ jobs:
           godot --headless --path . --quit-after 2 2>&1 | tee /tmp/godot-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|Failed to load script" /tmp/godot-smoke.log; then exit 1; fi
 
-      - name: Run complete regression suite through v0.5.15
+      - name: Run complete regression suite through v0.5.16
         shell: bash
         run: |
           set -euo pipefail
           run_smoke() {
-            local script="$1"
-            local marker="$2"
-            local fail_pattern="$3"
-            local slug="$4"
+            local script="$1" marker="$2" fail="$3" slug="$4"
             godot --headless --path . --script "res://tests/${script}" 2>&1 | tee "/tmp/${slug}.log"
             grep -F "$marker" "/tmp/${slug}.log"
-            if grep -Eq "SCRIPT ERROR|Parse Error|${fail_pattern}" "/tmp/${slug}.log"; then exit 1; fi
+            if grep -Eq "SCRIPT ERROR|Parse Error|${fail}" "/tmp/${slug}.log"; then exit 1; fi
           }
           run_smoke audit_smoke_v038.gd AUDIT_SMOKE_OK AUDIT_SMOKE_FAIL audit
           run_smoke selection_smoke_v039.gd SELECTION_SMOKE_OK SELECTION_SMOKE_FAIL selection
@@ -195,9 +192,10 @@ jobs:
           run_smoke strict_autoconnect_no_warp_smoke_v510.gd STRICT_510_SMOKE_OK STRICT_510_SMOKE_FAIL strict-510
           run_smoke structure_rigidity_smoke_v061.gd RIGIDITY_061_SMOKE_OK RIGIDITY_061_SMOKE_FAIL rigidity-061
           run_smoke rigidity_live_axle_smoke_v062.gd RIGIDITY_AXLE_062_SMOKE_OK RIGIDITY_AXLE_062_SMOKE_FAIL rigidity-axle-062
-          run_smoke o_ring_mixed_stability_smoke_v063.gd ORING_STABILITY_063_SMOKE_OK ORING_STABILITY_063_SMOKE_FAIL oring-stability-063
-          run_smoke axle_o_ring_video_stability_smoke_v064.gd AXLE_ORING_VIDEO_064_SMOKE_OK AXLE_ORING_VIDEO_064_SMOKE_FAIL axle-oring-video-064
-          run_smoke editor_socket_workflows_smoke_v070.gd EDITOR_SOCKET_070_SMOKE_OK EDITOR_SOCKET_070_SMOKE_FAIL editor-socket-070
+          run_smoke o_ring_mixed_stability_smoke_v063.gd ORING_STABILITY_063_SMOKE_OK ORING_STABILITY_063_SMOKE_FAIL oring-063
+          run_smoke axle_o_ring_video_stability_smoke_v064.gd AXLE_ORING_VIDEO_064_SMOKE_OK AXLE_ORING_VIDEO_064_SMOKE_FAIL oring-video-064
+          run_smoke editor_socket_workflows_smoke_v070.gd EDITOR_SOCKET_070_SMOKE_OK EDITOR_SOCKET_070_SMOKE_FAIL socket-070
+          run_smoke followup_regression_smoke_v072.gd FOLLOWUP_072_SMOKE_OK FOLLOWUP_072_SMOKE_FAIL followup-072
 
       - name: Export Android APK
         shell: bash
@@ -212,7 +210,6 @@ jobs:
           test -s "build/${APK_NAME}"
           sha256sum "build/${APK_NAME}" > "build/${APK_NAME}.sha256"
           APKSIGNER="$ANDROID_HOME/build-tools/35.0.1/apksigner"
-          test -x "$APKSIGNER"
           "$APKSIGNER" verify --verbose --print-certs "build/${APK_NAME}" | tee "build/${APK_NAME}.signing.txt"
           if [[ "${{ github.event_name }}" == "push" && "${{ contains(github.event.head_commit.message, '[release]') }}" == "true" ]]; then
             grep -F "Signer #1 certificate SHA-256 digest: $(echo "$EXPECTED_RELEASE_CERT_SHA256" | tr -d ':' | tr '[:upper:]' '[:lower:]')" "build/${APK_NAME}.signing.txt"
@@ -245,11 +242,11 @@ jobs:
           name: ${{ env.ARTIFACT_NAME }}
           path: build
 
-      - name: Publish GitHub Release v0.5.15
+      - name: Publish GitHub Release v0.5.16
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.5.15
-          name: Connex Lab v0.5.15
+          tag_name: v0.5.16
+          name: Connex Lab v0.5.16
           body_path: RELEASE_NOTES.md
           make_latest: true
           files: |

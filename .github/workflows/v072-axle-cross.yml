@@ -78,17 +78,29 @@ jobs:
           set -o pipefail
           godot --headless --path . --script res://tests/axle_cross_stop_roundtrip_smoke_v072.gd 2>&1 | tee /tmp/roundtrip.log
 
-      - name: DIAG phase-through collision failure
+      - name: DIAG fresh phase-through collision failure
         if: always() && steps.roundtrip.outcome == 'failure'
         shell: bash
         run: |
-          if grep -Fq 'passed through Gray 1-way CROSS stop' /tmp/roundtrip.log; then exit 1; fi
+          if grep -Fq 'fresh build: AXLE hub' /tmp/roundtrip.log && grep -Fq 'passed through Gray 1-way CROSS stop' /tmp/roundtrip.log; then exit 1; fi
 
-      - name: DIAG stuck AXLE failure
+      - name: DIAG restored phase-through collision failure
         if: always() && steps.roundtrip.outcome == 'failure'
         shell: bash
         run: |
-          if grep -Fq 'remained stuck instead of sliding' /tmp/roundtrip.log; then exit 1; fi
+          if grep -Fq 'after save/load: AXLE hub' /tmp/roundtrip.log && grep -Fq 'passed through Gray 1-way CROSS stop' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG fresh stuck AXLE failure
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'fresh build: AXLE hub' /tmp/roundtrip.log && grep -Fq 'remained stuck instead of sliding' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG restored stuck AXLE failure
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'after save/load: AXLE hub' /tmp/roundtrip.log && grep -Fq 'remained stuck instead of sliding' /tmp/roundtrip.log; then exit 1; fi
 
       - name: DIAG save bundle capture or restore failed
         if: always() && steps.roundtrip.outcome == 'failure'

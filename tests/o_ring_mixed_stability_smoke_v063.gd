@@ -49,6 +49,26 @@ func _along(main: Node, body: Node3D, rod: RigidBody3D) -> float:
 	return (body.global_position - rod.global_position).dot(axis)
 
 
+func _assert_mount_constraint_state(mount: Generic6DOFJoint3D, enabled: bool, phase: String) -> bool:
+	if not is_instance_valid(mount):
+		_fail("O-Ring mount missing during %s" % phase)
+		return false
+	if mount.node_a.is_empty() or mount.node_b.is_empty():
+		_fail("O-Ring mount endpoints detached during %s" % phase)
+		return false
+	if not mount.exclude_nodes_from_collision:
+		_fail("O-Ring mount stopped excluding host collision during %s" % phase)
+		return false
+	for axis_name in ["x", "y", "z"]:
+		if bool(mount.get("linear_limit_%s/enabled" % axis_name)) != enabled:
+			_fail("O-Ring mount linear %s constraint state wrong during %s" % [axis_name, phase])
+			return false
+		if bool(mount.get("angular_limit_%s/enabled" % axis_name)) != enabled:
+			_fail("O-Ring mount angular %s constraint state wrong during %s" % [axis_name, phase])
+			return false
+	return true
+
+
 func _run() -> void:
 	var packed := load("res://Main.tscn") as PackedScene
 	if packed == null:
@@ -124,17 +144,12 @@ func _run() -> void:
 		if ring.collision_layer != 2 or ring.collision_mask != 3:
 			_fail("O-Ring lost the construction collision policy; layer=%d mask=%d" % [ring.collision_layer, ring.collision_mask])
 			return
-		if not ring.get_collision_exceptions().has(axle):
-			_fail("O-Ring does not exclude collision with its own host rod")
-			return
 	if ring_low.get_parent() != low_parent_before or ring_high.get_parent() != high_parent_before:
 		_fail("O-Ring parent changed during world-space follower setup")
 		return
 
-	for mount in [mount_low, mount_high]:
-		if not mount.node_a.is_empty() or not mount.node_b.is_empty():
-			_fail("BUILD O-Ring weld remained solver-active during rod-relative simulation")
-			return
+	if not _assert_mount_constraint_state(mount_low, false, "SIMULATE") or not _assert_mount_constraint_state(mount_high, false, "SIMULATE"):
+		return
 
 	for axle_joint in [axle_joint_a, axle_joint_b]:
 		if axle_joint.node_a.is_empty() or axle_joint.node_b.is_empty():
@@ -215,8 +230,7 @@ func _run() -> void:
 	if bool(axle_joint_a.get("linear_limit_y/enabled")) or bool(axle_joint_b.get("linear_limit_y/enabled")):
 		_fail("BUILD axle Y slide is not free")
 		return
-	if mount_low.node_a.is_empty() or mount_low.node_b.is_empty() or mount_high.node_a.is_empty() or mount_high.node_b.is_empty():
-		_fail("O-Ring BUILD welds were not restored")
+	if not _assert_mount_constraint_state(mount_low, true, "BUILD") or not _assert_mount_constraint_state(mount_high, true, "BUILD"):
 		return
 	if not (main.get("o_ring_followers_v068") as Array).is_empty():
 		_fail("O-Ring follower state leaked into BUILD")
@@ -228,11 +242,8 @@ func _run() -> void:
 		if not ring.freeze or ring.collision_layer != 2 or ring.collision_mask != 3:
 			_fail("O-Ring did not return to editable BUILD state")
 			return
-		if ring.get_collision_exceptions().has(axle):
-			_fail("temporary host collision exception leaked into BUILD")
-			return
 
-	print("ORING_STABILITY_063_SMOKE_OK: exact collidable world-space O-Ring followers stop free AXLE hubs without weld flex; clearances=[%.3f,%.3f] max_drift=%.4f vmax=%.2f wmax=%.2f" % [min_a_clearance, min_b_clearance, max_ring_drift, max_linear, max_angular])
+	print("ORING_STABILITY_063_SMOKE_OK: exact collidable world-space O-Rings stop free AXLE hubs while mount supplies collision exclusion only; clearances=[%.3f,%.3f] max_drift=%.4f vmax=%.2f wmax=%.2f" % [min_a_clearance, min_b_clearance, max_ring_drift, max_linear, max_angular])
 	main.queue_free()
 	await process_frame
 	quit(0)

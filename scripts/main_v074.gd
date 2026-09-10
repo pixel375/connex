@@ -38,9 +38,6 @@ func _legacy_axle_geometry_score_v074(connector: RigidBody3D, rod: RigidBody3D) 
 	var half_len: float = float(rod.get_meta("visual_length", 0.0)) * 0.5
 	if half_len <= 0.0 or absf(along) > half_len + LEGACY_AXLE_END_MARGIN_V074:
 		return INF
-	# AXLE placement puts the connector hub center directly on the shaft and aligns
-	# the connector local Y / hub axis with the rod. SOCKET rods live in the
-	# connector plane; CROSS mounts offset the connector center by CONNECTOR_D.
 	return radial * 12.0 + (1.0 - alignment) * 5.0
 
 
@@ -68,18 +65,12 @@ func _remove_joint_node_v074(joint: Joint3D) -> void:
 
 
 func _legacy_connector_has_rigid_context_v074(connector: RigidBody3D, candidate_rod: RigidBody3D) -> bool:
-	# A corrupted AXLE commonly comes back as a direct false fixed/socket twin.
-	# If that twin is absent, require the hub to belong to another rigid branch so
-	# an unrelated free connector that happens to overlap a rod is not guessed.
 	if not _direct_non_axle_joints_v074(connector, candidate_rod).is_empty():
 		return true
 	return _fixed_component_for_axle_v072(connector).size() > 1
 
 
 func _recover_legacy_axles_from_geometry_v074(snapshot: Dictionary) -> int:
-	# v0.5.17+ snapshots have an explicit stable-UID AXLE table. Never infer from
-	# geometry for those; this path exists only for v0.5.16-and-earlier saves where
-	# AXLE identity may already have been lost or mislabeled as SOCKET/FIXED.
 	if snapshot.has("v072_axles"):
 		return 0
 
@@ -151,9 +142,10 @@ func _restore_state(snapshot: Dictionary) -> void:
 	super._restore_state(snapshot)
 	legacy_axle_geometry_repairs_v074 = _recover_legacy_axles_from_geometry_v074(snapshot)
 	if legacy_axle_geometry_repairs_v074 > 0:
-		# Re-run the normal v0.5.17 cleanup now that the recovered AXLE identities are
-		# authoritative, then normalize the final graph and occupancy from live joints.
-		_remove_false_fixed_axle_duplicates_v073()
+		# The legacy repair already removes the direct false fixed/socket joint before
+		# creating the replacement AXLE. Do not run the v0.5.17 duplicate sweeper a
+		# second time here; it was written for a different restore ordering and can
+		# erase a newly recovered record. Normalize only the live repaired graph.
 		_canonicalize_all_axles_v072()
 		_refresh_joint_frames_v020()
 		_rebuild_connection_graph_v020()

@@ -58,20 +58,6 @@ func _add_o_ring(main: Node, rod: RigidBody3D, along: float) -> Dictionary:
 	return {"ring": ring, "joint": joint}
 
 
-func _largest_cylinder_height(body: RigidBody3D) -> float:
-	var best_radius := -1.0
-	var best_height := -1.0
-	for child_value in body.get_children():
-		var collider := child_value as CollisionShape3D
-		if collider == null or not (collider.shape is CylinderShape3D):
-			continue
-		var cylinder := collider.shape as CylinderShape3D
-		if cylinder.radius > best_radius:
-			best_radius = cylinder.radius
-			best_height = cylinder.height
-	return best_height
-
-
 func _run() -> void:
 	var packed := load("res://Main.tscn") as PackedScene
 	if packed == null:
@@ -84,15 +70,18 @@ func _run() -> void:
 		_fail("Main is not using final v0.5.16 runtime")
 		return
 
-	# O-Ring selection + final collisionless follower / stronger hub-stack model.
+	# O-Ring selection + scoped high-resolution multi-hub protection.
+	var initial_ticks := Engine.physics_ticks_per_second
 	var axle := main.call("_make_rod", 5, Vector3(0, 2, 0), Vector3(0, 21.2, 0)) as RigidBody3D
 	var axis := (main.call("_rod_axis_v020", axle) as Vector3).normalized()
 	var axle_basis := main.call("_basis_for_axle_v020", axis) as Basis
-	var hub := main.call("_make_connector", 6, Transform3D(axle_basis, Vector3(0, 12, 0))) as RigidBody3D
-	var original_hub_height := _largest_cylinder_height(hub)
-	var axle_joint := main.call("_make_axle_joint", hub, axle) as Generic6DOFJoint3D
-	main.call("_tag_connection_v020", axle_joint, "axle", hub, axle, -1, 0, 0.0, null, false)
-	hub.set_meta("axle_occupied", true)
+	var hub_a := main.call("_make_connector", 6, Transform3D(axle_basis, Vector3(0, 11, 0))) as RigidBody3D
+	var hub_b := main.call("_make_connector", 6, Transform3D(axle_basis, Vector3(0, 13, 0))) as RigidBody3D
+	for hub_value in [hub_a, hub_b]:
+		var hub := hub_value as RigidBody3D
+		var axle_joint := main.call("_make_axle_joint", hub, axle) as Generic6DOFJoint3D
+		main.call("_tag_connection_v020", axle_joint, "axle", hub, axle, -1, 0, 0.0, null, false)
+		hub.set_meta("axle_occupied", true)
 	var ring_info := _add_o_ring(main, axle, -2.0)
 	var ring := ring_info.get("ring") as RigidBody3D
 	main.call("_rebuild_connection_graph_v020")
@@ -106,35 +95,37 @@ func _run() -> void:
 		return
 
 	main.call("_toggle_simulation")
-	for _i in range(8):
+	for _i in range(16):
 		await physics_frame
 	if ring.collision_layer != 0 or ring.collision_mask != 0:
 		_fail("O-Ring must remain a collisionless exact rod-local follower in SIMULATE")
 		return
-	if not (main.get("o_ring_sim_colliders_v074") as Array).is_empty():
-		_fail("abandoned O-Ring collision collars still exist")
+	if not (main.get("o_ring_sim_colliders_v074") as Array).is_empty() or not (main.get("o_ring_axle_stop_joints_v074") as Array).is_empty():
+		_fail("abandoned O-Ring collider/extra-joint experiments still exist")
 		return
-	if not (main.get("o_ring_axle_stop_joints_v074") as Array).is_empty():
-		_fail("abandoned extra AXLE stop joints still exist")
+	if not (main.get("axle_stack_shape_state_v074") as Array).is_empty():
+		_fail("AXLE collision geometry was modified instead of using predictive rank protection")
 		return
-	if bool(axle_joint.get("linear_limit_y/enabled")) or bool(axle_joint.get("angular_limit_y/enabled")):
-		_fail("normal AXLE slide/rotation was modified by O-Ring protection")
+	if int(main.get("axle_ranked_stop_count_v074")) < 2:
+		_fail("multi-hub O-Ring segment did not create predictive rank protection")
 		return
-	if (main.get("axle_stack_shape_state_v074") as Array).size() != 1:
-		_fail("AXLE hub on an O-Ring rod did not receive temporary stack-collision protection")
+	if not bool(main.get("o_ring_precision_ticks_active_v074")) or Engine.physics_ticks_per_second < 120:
+		_fail("multi-hub O-Ring simulation did not enable scoped 120 Hz physics")
 		return
-	if _largest_cylinder_height(hub) < 0.719:
-		_fail("AXLE hub temporary stack collision height was not expanded")
-		return
+	for record_value in (main.get("connections_v020") as Array):
+		var record := record_value as Dictionary
+		if str(record.get("kind", "")) != "axle":
+			continue
+		var joint := record.get("joint") as Generic6DOFJoint3D
+		if is_instance_valid(joint) and (bool(joint.get("linear_limit_y/enabled")) or bool(joint.get("angular_limit_y/enabled"))):
+			_fail("normal AXLE slide/rotation was modified by O-Ring protection")
+			return
 
 	main.call("_toggle_simulation")
 	for _i in range(4):
 		await physics_frame
-	if not (main.get("axle_stack_shape_state_v074") as Array).is_empty():
-		_fail("temporary AXLE stack shape leaked into BUILD")
-		return
-	if absf(_largest_cylinder_height(hub) - original_hub_height) > 0.0001:
-		_fail("AXLE hub collision shape was not restored in BUILD")
+	if Engine.physics_ticks_per_second != initial_ticks or bool(main.get("o_ring_precision_ticks_active_v074")):
+		_fail("BUILD did not restore the original physics tick rate")
 		return
 	if ring.collision_layer != 2 or ring.collision_mask != 3:
 		_fail("O-Ring BUILD collision policy was not restored")
@@ -220,7 +211,7 @@ func _run() -> void:
 			_fail("multi-rod re-seat moved an anchored rod/remote structure")
 			return
 
-	print("FOLLOWUP_074_SMOKE_OK: O-Ring touch + collisionless durable axle stacking + side-middle CROSS + reconnect auto-resnap + anchored multi-rod re-seat")
+	print("FOLLOWUP_074_SMOKE_OK: O-Ring touch + scoped high-resolution predictive ranks + side-middle CROSS + reconnect auto-resnap + anchored multi-rod re-seat")
 	main.queue_free()
 	await process_frame
 	quit(0)

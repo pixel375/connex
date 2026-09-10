@@ -1,7 +1,7 @@
 extends "res://scripts/main_v068.gd"
 
 const VERSION_069 := "0.5.14"
-const O_RING_STOP_COLLIDER_HEIGHT_V069 := 0.40
+const O_RING_STOP_COLLIDER_HEIGHT_V069 := 0.48
 
 # v0.5.14 keeps the normal AXLE joint completely unchanged. During SIMULATE an
 # O-Ring becomes an exact rod-relative kinematic collider: its real body remains

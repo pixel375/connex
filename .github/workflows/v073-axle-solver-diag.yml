@@ -1,0 +1,49 @@
+name: v0.5.17 AXLE Solver Diagnostics
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/main_v072.gd'
+      - 'scripts/main_v073.gd'
+      - 'tests/axle_cross_stop_roundtrip_smoke_v072.gd'
+      - 'tests/axle_cross_stop_solver_diag_v073.gd'
+      - '.github/workflows/v073-axle-solver-diag.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  solver-diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Install Godot 4.6.3
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -fL --retry 3 -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/4.6.3-stable/Godot_v4.6.3-stable_linux.x86_64.zip"
+          mkdir -p /tmp/godot
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          GODOT_BIN="$(find /tmp/godot -maxdepth 1 -type f -name 'Godot*' | head -n 1)"
+          chmod +x "$GODOT_BIN"
+          sudo install -m 0755 "$GODOT_BIN" /usr/local/bin/godot
+      - name: Activate v0.5.17 candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i 's/main_v071.gd/main_v073.gd/g; s/main_v072.gd/main_v073.gd/g' Main.tscn
+          sed -Ei 's/main_v072\.gd/main_v073.gd/g' tests/axle_cross_stop_roundtrip_smoke_v072.gd
+      - name: Parse
+        shell: bash
+        run: |
+          set -o pipefail
+          godot --headless --path . --editor --quit 2>&1 | tee /tmp/parse.log
+          ! grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script' /tmp/parse.log
+      - name: Diagnose fresh vs restored solver graph
+        shell: bash
+        run: |
+          set -o pipefail
+          godot --headless --path . --script res://tests/axle_cross_stop_solver_diag_v073.gd 2>&1 | tee /tmp/solver.log

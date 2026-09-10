@@ -52,8 +52,10 @@ func _run() -> void:
 		return
 
 	# ------------------------------------------------------------------
-	# O-Ring durability: three hubs share one segment. Every hub must get
-	# finite ranked boundaries, not only the outer two as in v0.5.15.
+	# O-Ring durability: three hubs share one segment. Every hub is tracked,
+	# but only the currently outer hubs own the physical segment boundaries.
+	# Ownership is refreshed continuously so a hub that slips past another hub
+	# cannot inherit the wrong side of an O-Ring.
 	# ------------------------------------------------------------------
 	var main := packed.instantiate()
 	root.add_child(main)
@@ -95,17 +97,26 @@ func _run() -> void:
 		if stop.get("rod") == axle and stop.get("connector") in hubs:
 			hub_stops.append(stop)
 	if hub_stops.size() != 3:
-		_fail("multi-hub axle did not produce three stop records")
+		_fail("multi-hub axle did not produce three tracked stop records")
 		return
+	var lower_owners := 0
+	var upper_owners := 0
 	for stop_value in hub_stops:
 		var stop := stop_value as Dictionary
-		if float(stop.get("lower", -INF)) <= -INF or float(stop.get("upper", INF)) >= INF:
-			_fail("an interior axle hub still has an unbounded O-Ring/rod-end side")
+		if not bool(stop.get("dynamic_owner_v073", false)):
+			_fail("O-Ring stop record is not using live boundary ownership")
 			return
+		if float(stop.get("lower", -INF)) > -INF:
+			lower_owners += 1
+		if float(stop.get("upper", INF)) < INF:
+			upper_owners += 1
 		var component := main.call("_stop_component_v071", stop) as Array
 		if axle in component:
 			_fail("connector-side O-Ring correction component illegally contains its host axle rod")
 			return
+	if lower_owners != 1 or upper_owners != 1:
+		_fail("three-hub segment should have exactly one live owner per boundary; lower=%d upper=%d" % [lower_owners, upper_owners])
+		return
 
 	for hub_value in hubs:
 		var hub := hub_value as RigidBody3D
@@ -122,6 +133,9 @@ func _run() -> void:
 			if along < current_ring_along + 0.31:
 				_fail("an axle hub crossed the O-Ring in the three-hub fixture: gap=%.3f" % (along - current_ring_along))
 				return
+	if int(main.get("axle_stop_ownership_refreshes_v073")) < 100:
+		_fail("O-Ring boundary ownership was not refreshed throughout simulation")
+		return
 
 	main.call("_toggle_simulation")
 	for _wait in range(4):
@@ -220,7 +234,7 @@ func _run() -> void:
 		_fail("second rod did not remap from socket 90 to socket 45")
 		return
 
-	print("FOLLOWUP_072_SMOKE_OK: 3-hub O-Ring stops + large ring touch target + reconnect auto-resnap + fixed-rod multi-socket re-seat")
+	print("FOLLOWUP_072_SMOKE_OK: live multi-hub O-Ring ownership + large ring touch target + reconnect auto-resnap + fixed-rod multi-socket re-seat")
 	main.queue_free()
 	await process_frame
 	quit(0)

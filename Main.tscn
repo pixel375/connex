@@ -1,8 +1,9 @@
 [gd_scene load_steps=3 format=3]
 
+; v0.5.17 deterministic AXLE/CROSS stop and save-load runtime: res://scripts/main_v073.gd
 ; v0.5.16 simplified physical O-Ring runtime: res://scripts/main_v071.gd
 ; v0.5.14 O-Ring lineage marker: res://scripts/main_v069.gd
-[ext_resource type="Script" path="res://scripts/main_v071.gd" id="1_main"]
+[ext_resource type="Script" path="res://scripts/main_v073.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/physics_slider_fix_v052.gd" id="2_physics_fix"]
 
 [node name="Main" type="Node3D"]

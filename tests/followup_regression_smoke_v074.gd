@@ -70,7 +70,7 @@ func _run() -> void:
 		_fail("Main is not using final v0.5.16 runtime")
 		return
 
-	# O-Ring selection + scoped high-resolution multi-hub protection.
+	# O-Ring selection + velocity-only adjacent-hub anti-tunnelling guard.
 	var initial_ticks := Engine.physics_ticks_per_second
 	var axle := main.call("_make_rod", 5, Vector3(0, 2, 0), Vector3(0, 21.2, 0)) as RigidBody3D
 	var axis := (main.call("_rod_axis_v020", axle) as Vector3).normalized()
@@ -104,13 +104,13 @@ func _run() -> void:
 		_fail("abandoned O-Ring collider/extra-joint experiments still exist")
 		return
 	if not (main.get("axle_stack_shape_state_v074") as Array).is_empty():
-		_fail("AXLE collision geometry was modified instead of using predictive rank protection")
+		_fail("AXLE collision geometry was modified by O-Ring protection")
 		return
 	if int(main.get("axle_ranked_stop_count_v074")) < 2:
-		_fail("multi-hub O-Ring segment did not create predictive rank protection")
+		_fail("multi-hub O-Ring segment was not registered for adjacent-hub protection")
 		return
-	if not bool(main.get("o_ring_precision_ticks_active_v074")) or Engine.physics_ticks_per_second < 120:
-		_fail("multi-hub O-Ring simulation did not enable scoped 120 Hz physics")
+	if bool(main.get("o_ring_precision_ticks_active_v074")) or Engine.physics_ticks_per_second != initial_ticks:
+		_fail("v0.5.16 unexpectedly changed the project physics tick rate")
 		return
 	for record_value in (main.get("connections_v020") as Array):
 		var record := record_value as Dictionary
@@ -121,11 +121,55 @@ func _run() -> void:
 			_fail("normal AXLE slide/rotation was modified by O-Ring protection")
 			return
 
+	# Probe the pair guard directly. Place the two otherwise-free hubs 0.61 apart,
+	# make them close fast enough to overlap next 60 Hz step, and verify that the
+	# predictor changes velocity only while conserving total axial momentum.
+	var probe_axis := (main.call("_rod_axis_v020", axle) as Vector3).normalized()
+	var hub_a_saved := hub_a.global_transform
+	var hub_b_saved := hub_b.global_transform
+	var hub_a_probe := hub_a.global_transform
+	var hub_b_probe := hub_b.global_transform
+	hub_a_probe.origin = axle.global_position + probe_axis * -0.305
+	hub_b_probe.origin = axle.global_position + probe_axis * 0.305
+	hub_a.global_transform = hub_a_probe
+	hub_b.global_transform = hub_b_probe
+	hub_a.linear_velocity = probe_axis * 1.0
+	hub_b.linear_velocity = probe_axis * -1.0
+	hub_a.angular_velocity = Vector3.ZERO
+	hub_b.angular_velocity = Vector3.ZERO
+	var pos_a_before := hub_a.global_position
+	var pos_b_before := hub_b.global_position
+	var momentum_before: float = hub_a.mass * hub_a.linear_velocity.dot(probe_axis) + hub_b.mass * hub_b.linear_velocity.dot(probe_axis)
+	var relative_before: float = (hub_b.linear_velocity - hub_a.linear_velocity).dot(probe_axis)
+	var guard_before: int = int(main.get("axle_pair_guard_events_v074"))
+	main.call("_predict_axle_order_v073", 1.0 / 60.0)
+	var relative_after: float = (hub_b.linear_velocity - hub_a.linear_velocity).dot(probe_axis)
+	var momentum_after: float = hub_a.mass * hub_a.linear_velocity.dot(probe_axis) + hub_b.mass * hub_b.linear_velocity.dot(probe_axis)
+	if int(main.get("axle_pair_guard_events_v074")) <= guard_before:
+		_fail("adjacent-hub predictor did not activate for an imminent tunnel")
+		return
+	if hub_a.global_position.distance_to(pos_a_before) > 0.000001 or hub_b.global_position.distance_to(pos_b_before) > 0.000001:
+		_fail("adjacent-hub predictor moved a body instead of remaining velocity-only")
+		return
+	if relative_after <= relative_before or relative_after < -0.61:
+		_fail("adjacent-hub predictor did not remove enough closing relative speed")
+		return
+	if absf(momentum_after - momentum_before) > 0.0001:
+		_fail("adjacent-hub predictor did not conserve axial pair momentum")
+		return
+
+	# Restore the probe immediately without advancing physics; this was a pure
+	# deterministic unit check of the pre-step guard.
+	hub_a.global_transform = hub_a_saved
+	hub_b.global_transform = hub_b_saved
+	hub_a.linear_velocity = Vector3.ZERO
+	hub_b.linear_velocity = Vector3.ZERO
+
 	main.call("_toggle_simulation")
 	for _i in range(4):
 		await physics_frame
 	if Engine.physics_ticks_per_second != initial_ticks or bool(main.get("o_ring_precision_ticks_active_v074")):
-		_fail("BUILD did not restore the original physics tick rate")
+		_fail("BUILD changed the original physics tick rate")
 		return
 	if ring.collision_layer != 2 or ring.collision_mask != 3:
 		_fail("O-Ring BUILD collision policy was not restored")
@@ -211,7 +255,7 @@ func _run() -> void:
 			_fail("multi-rod re-seat moved an anchored rod/remote structure")
 			return
 
-	print("FOLLOWUP_074_SMOKE_OK: O-Ring touch + scoped high-resolution predictive ranks + side-middle CROSS + reconnect auto-resnap + anchored multi-rod re-seat")
+	print("FOLLOWUP_074_SMOKE_OK: O-Ring touch + 60 Hz momentum-conserving adjacent-hub guard + side-middle CROSS + reconnect auto-resnap + anchored multi-rod re-seat")
 	main.queue_free()
 	await process_frame
 	quit(0)

@@ -52,10 +52,9 @@ func _run() -> void:
 		return
 
 	# ------------------------------------------------------------------
-	# O-Ring durability: three hubs share one segment. Every hub is tracked,
-	# but only the currently outer hubs own the physical segment boundaries.
-	# Ownership is refreshed continuously so a hub that slips past another hub
-	# cannot inherit the wrong side of an O-Ring.
+	# O-Ring durability: three hubs share one segment. The nearest hubs own the
+	# actual ring/rod-end boundaries, while a topology guard prevents an interior
+	# hub from tunnelling through its neighbor and thereby bypassing the O-Ring.
 	# ------------------------------------------------------------------
 	var main := packed.instantiate()
 	root.add_child(main)
@@ -99,13 +98,13 @@ func _run() -> void:
 	if hub_stops.size() != 3:
 		_fail("multi-hub axle did not produce three tracked stop records")
 		return
+	if (main.get("axle_order_groups_v073") as Array).is_empty():
+		_fail("multi-hub segment did not create an axle order guard")
+		return
 	var lower_owners := 0
 	var upper_owners := 0
 	for stop_value in hub_stops:
 		var stop := stop_value as Dictionary
-		if not bool(stop.get("dynamic_owner_v073", false)):
-			_fail("O-Ring stop record is not using live boundary ownership")
-			return
 		if float(stop.get("lower", -INF)) > -INF:
 			lower_owners += 1
 		if float(stop.get("upper", INF)) < INF:
@@ -115,7 +114,28 @@ func _run() -> void:
 			_fail("connector-side O-Ring correction component illegally contains its host axle rod")
 			return
 	if lower_owners != 1 or upper_owners != 1:
-		_fail("three-hub segment should have exactly one live owner per boundary; lower=%d upper=%d" % [lower_owners, upper_owners])
+		_fail("three-hub segment should have exactly one physical owner per boundary; lower=%d upper=%d" % [lower_owners, upper_owners])
+		return
+
+	# Emulate a missed/tunnelled hub-vs-hub collision directly. The middle hub is
+	# placed just below the lower hub while remaining above the O-Ring. Post-step
+	# correction must restore its original order instead of letting it become a
+	# non-owner below the stop owner.
+	var lower_hub := hubs[0] as RigidBody3D
+	var middle_hub := hubs[1] as RigidBody3D
+	var current_axis := (main.call("_rod_axis_v020", axle) as Vector3).normalized()
+	var lower_along_before: float = (lower_hub.global_position - axle.global_position).dot(current_axis)
+	var middle_tf := middle_hub.global_transform
+	middle_tf.origin = axle.global_position + current_axis * (lower_along_before - 0.18)
+	middle_hub.global_transform = middle_tf
+	main.call("_correct_axle_stop_positions_v071")
+	var lower_after: float = (lower_hub.global_position - axle.global_position).dot(current_axis)
+	var middle_after: float = (middle_hub.global_position - axle.global_position).dot(current_axis)
+	if middle_after <= lower_after:
+		_fail("hub-order guard did not restore an interior hub after simulated tunnelling")
+		return
+	if int(main.get("axle_order_guard_events_v073")) < 1:
+		_fail("hub-order tunnelling correction did not register")
 		return
 
 	for hub_value in hubs:
@@ -127,22 +147,19 @@ func _run() -> void:
 		main.call("_sync_o_ring_followers_v068")
 		for hub_value in hubs:
 			var hub := hub_value as RigidBody3D
-			var along: float = (hub.global_position - axle.global_position).dot((main.call("_rod_axis_v020", axle) as Vector3).normalized())
-			var current_ring_along: float = (ring.global_position - axle.global_position).dot((main.call("_rod_axis_v020", axle) as Vector3).normalized())
+			var axis_now := (main.call("_rod_axis_v020", axle) as Vector3).normalized()
+			var along: float = (hub.global_position - axle.global_position).dot(axis_now)
+			var current_ring_along: float = (ring.global_position - axle.global_position).dot(axis_now)
 			min_ring_gap = minf(min_ring_gap, along - current_ring_along)
 			if along < current_ring_along + 0.31:
 				_fail("an axle hub crossed the O-Ring in the three-hub fixture: gap=%.3f" % (along - current_ring_along))
 				return
-	if int(main.get("axle_stop_ownership_refreshes_v073")) < 100:
-		_fail("O-Ring boundary ownership was not refreshed throughout simulation")
-		return
 
 	main.call("_toggle_simulation")
 	for _wait in range(4):
 		await physics_frame
 
-	# Larger screen-space O-Ring touch target: a tap substantially outside its
-	# tiny physical collider still chooses the ring for MOVE/selection.
+	# Larger screen-space O-Ring touch target.
 	var camera := main.get("camera") as Camera3D
 	camera.global_position = ring.global_position + Vector3(6.0, 4.0, 7.0)
 	camera.look_at(ring.global_position, Vector3.UP)
@@ -156,8 +173,8 @@ func _run() -> void:
 	await process_frame
 
 	# ------------------------------------------------------------------
-	# Explicit reconnect of one socket should re-enable and auto-snap a
-	# second still-aligned rod from the same Disconnect operation.
+	# Explicit reconnect of one socket re-enables another aligned rod from the
+	# same Disconnect operation.
 	# ------------------------------------------------------------------
 	main = packed.instantiate()
 	root.add_child(main)
@@ -186,8 +203,8 @@ func _run() -> void:
 		return
 
 	# ------------------------------------------------------------------
-	# Multi-rod re-seat: rotate only the connector and permute its socket
-	# assignments while both rods and their far-end structures stay fixed.
+	# Multi-rod re-seat: rotate only the connector and permute socket assignments
+	# while rods and their far-end structures stay fixed.
 	# ------------------------------------------------------------------
 	var center_connector := main.call("_make_connector", 4, Transform3D(Basis.IDENTITY, Vector3(70, 10, 36))) as RigidBody3D
 	var rod_a := _add_socket_rod(main, center_connector, 45)
@@ -234,7 +251,7 @@ func _run() -> void:
 		_fail("second rod did not remap from socket 90 to socket 45")
 		return
 
-	print("FOLLOWUP_072_SMOKE_OK: live multi-hub O-Ring ownership + large ring touch target + reconnect auto-resnap + fixed-rod multi-socket re-seat")
+	print("FOLLOWUP_072_SMOKE_OK: multi-hub O-Ring tunnelling guard + large ring touch target + reconnect auto-resnap + fixed-rod multi-socket re-seat")
 	main.queue_free()
 	await process_frame
 	quit(0)

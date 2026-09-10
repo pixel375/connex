@@ -1,6 +1,7 @@
 extends "res://scripts/main_v068.gd"
 
 const VERSION_069 := "0.5.14"
+const O_RING_STOP_COLLIDER_HEIGHT_V069 := 0.40
 
 # v0.5.14 keeps the normal AXLE joint completely unchanged. During SIMULATE an
 # O-Ring becomes an exact rod-relative kinematic collider: its real body remains
@@ -24,6 +25,21 @@ func _ready() -> void:
 func _status(text: String) -> void:
 	if status_label != null:
 		status_label.text = "Connex Lab v%s  •  %s" % [VERSION_069, text]
+
+
+# The visible O-Ring remains unchanged. Its thin 0.26-unit collision cylinder is
+# given a small axial guard thickness so Jolt's transient penetration under a
+# loaded kinematic stop cannot carry the axle hub through the visible ring. This
+# is local to O-Rings and does not change connector, rod or global solver physics.
+func _make_o_ring_body(transform: Transform3D) -> RigidBody3D:
+	var ring := super._make_o_ring_body(transform)
+	for child_value in ring.get_children():
+		var collision := child_value as CollisionShape3D
+		if collision == null or not (collision.shape is CylinderShape3D):
+			continue
+		var cylinder := collision.shape as CylinderShape3D
+		cylinder.height = O_RING_STOP_COLLIDER_HEIGHT_V069
+	return ring
 
 
 # Never copy O-Ring collision into the host rod. AXLE joints intentionally
@@ -152,7 +168,7 @@ func _update_help_text_v030() -> void:
 		return
 	var label: Label = _find_label_v030(help_panel)
 	if label != null:
-		label.text += "\n\nv0.5.14 O-RING STOPPER: the real O-Ring collider is locked exactly to its host rod during SIMULATE as a frozen kinematic body synchronized in world space every physics tick. Its existing mount remains connected only to exclude O-Ring-vs-host-rod self collision; all six mount constraints are temporarily disabled, so the mount cannot stretch or inject solver force. The ring keeps normal construction collision against axle connectors and other pieces. The normal AXLE joint remains untouched and keeps free Y slide plus free axle rotation until physical contact. No rod-owned proxy collider, moving proxy body, replacement AXLE joint, artificial travel limit, enlarged O-Ring collider, nested physics-body parenting, or O-Ring-specific CCD is used. BUILD/Restore re-enables the original O-Ring mount constraints and editable state."
+		label.text += "\n\nv0.5.14 O-RING STOPPER: the real O-Ring collider is locked exactly to its host rod during SIMULATE as a frozen kinematic body synchronized in world space every physics tick. Its existing mount remains connected only to exclude O-Ring-vs-host-rod self collision; all six mount constraints are temporarily disabled, so the mount cannot stretch or inject solver force. The ring keeps normal construction collision against axle connectors and other pieces. Its invisible stopper collider has a small axial guard thickness to absorb Jolt penetration under loaded impacts while the visible O-Ring remains unchanged. The normal AXLE joint remains untouched and keeps free Y slide plus free axle rotation until physical contact. No rod-owned proxy collider, moving proxy body, replacement AXLE joint, artificial travel limit, nested physics-body parenting, or O-Ring-specific CCD is used. BUILD/Restore re-enables the original O-Ring mount constraints and editable state."
 
 
 func _on_update_request_completed_v021(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:

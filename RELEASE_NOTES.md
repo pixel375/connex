@@ -1,26 +1,31 @@
-# Connex Lab v0.5.17
+# Connex Lab v0.5.18
 
-This release fixes the AXLE/CROSS-stop failure where a freshly built mechanism could pass through physical stops, while the same visible construction could become locked after saving and loading it again.
+This release follows real-device testing of an older build save and fixes a migration failure that v0.5.17 did not fully recover. It also adds the requested inverse CROSS workflow for putting a rod through a connector socket at the rod midpoint and sliding that rod in BUILD.
 
-### Deterministic AXLE physics
-AXLE joints are now normalized before simulation to the intended two free degrees of freedom: translation along the shaft and rotation around it. Both rigid islands participating in an authoritative AXLE mechanism remain awake while physics is running, and temporary solver bookkeeping no longer decides whether a real AXLE is allowed to move.
+### Repair already-corrupted legacy AXLE saves
+Some v0.5.16-and-earlier saves could lose the original AXLE identity before v0.5.17 ever saw them. In those files, an AXLE hub/shaft pair could already be stored or reconstructed as a fixed/socket relationship. That causes two visible symptoms: the AXLE does not slide in SIMULATE, and BUILD movement can be rejected with `a rod end would leave its exact socket` even though the rod is visibly passing through the connector hub as an AXLE.
 
-Physical collision is preserved across the two sides of an AXLE. Ordinary CROSS-mounted connectors and O-Ring Stops therefore remain real physical blockers for an AXLE-mounted connector instead of accidentally inheriting broad rigid-component collision exclusions. The direct hub-to-shaft collision exception is retained because the simplified hub collider is solid and the shaft passes through it by design.
+v0.5.18 adds a legacy-only recovery path for saves that do not yet contain the modern stable-UID AXLE table. It recognizes the unambiguous AXLE geometry — connector hub centered on the rod axis, connector hub axis aligned with the rod, and matching rigid/joint context — removes the false direct fixed/socket joint, recreates one canonical AXLE, and recalculates occupancy and connection metadata. Modern v0.5.17+ saves with explicit AXLE identity are never guessed from geometry.
 
-### Save/load AXLE reconstruction fix
-The save/load path now records AXLE identity explicitly and reconstructs AXLE relationships from stable piece IDs. It no longer relies on the older generic joint serializer to infer AXLE-vs-fixed behavior from a joint name.
+After a legacy save is healed, saving it again writes the recovered AXLE relationships into the explicit stable-UID AXLE table, so subsequent loads no longer depend on migration inference.
 
-A second restore bug was found and fixed: affected saves could reconstruct the same hub/shaft pair twice — once as the correct AXLE and again as a false fixed/socket connection. The stable-simulation preflight then saw both sides as one rigid component and disabled the real AXLE as redundant, producing the reported "does not move after reload" behavior. v0.5.17 removes those false fixed duplicates during restore and writes new saves with the correct joint type.
+### CROSS rods through connector sockets
+CROSS mode now works in both directions. The existing behavior of placing a connector crosswise onto a rod remains. In CREATE with CROSS selected, tapping a free connector socket now inserts the currently selected rod through that socket with the socket positioned at the rod midpoint.
 
-The restore repair also keeps compatibility with older v0.5.16-and-earlier saves by using saved AXLE records, surviving AXLE joints, and the existing hub/shaft geometry as recovery evidence when necessary.
+This is stored as a real CROSS connection to the exact clicked socket, not as a rod-end SOCKET connection. The connector socket is marked occupied and the rod is selected immediately after placement.
+
+### Slide CROSS rods in MOVE
+A rod that is mounted through one CROSS socket can now be repositioned along its own shaft in BUILD. In MOVE, the ordinary XYZ gizmo is replaced for that rod by one `SLIDE` axis aligned with the rod and drawn beside it for easier dragging. Movement uses the existing 0.5-unit snap, moves only the rod while the connector stays fixed, keeps the socket on the usable rod length, and updates the CROSS joint anchor/host offset as the rod moves.
+
+The connection remains an ordinary fixed CROSS joint during SIMULATE; the sliding behavior is an editing convenience, matching how the user positions a physical rod through a connector before running the simulation. Save/load preserves both the CROSS topology and the adjusted rod position.
 
 ### Regression coverage
-A dedicated four-post regression reproduces the reported construction: one rigid square frame on four AXLE hubs, four vertical shafts, and four ordinary Gray 1-way CROSS connectors used as physical stops. The same fixture is run once as a fresh build and again after the exact named-save/load round trip used by the app.
+The release gates now include a deliberately corrupted legacy-save regression that turns AXLE relationships into the same false fixed/socket state, verifies the bad exact-socket constraint is removed, verifies BUILD axle slide works again, and verifies the healed save persists explicit AXLE identity.
 
-The regression requires all four hubs to retain their AXLE free motion, slide under gravity, remain centered on their shafts, stay awake, collide with their CROSS stops, never pass through those stops, and produce the same result after save/load. The retained AXLE, O-Ring, closed-loop, rigidity, editor, and long-running physics regressions remain enabled as release gates.
+A second regression verifies CROSS + socket creates a midpoint rod, MOVE exposes the rod-axis slide gizmo beside it, dragging moves only the rod and updates the CROSS host offset, and the result survives save/load. The existing four-post AXLE/CROSS-stop regression is also retained, along with the prior O-Ring, closed-loop, rigidity, editor, and long-running physics tests.
 
 ### Android / update compatibility
-- Android versionCode: 41
-- Android versionName: `0.5.17`
+- Android versionCode: 42
+- Android versionName: `0.5.18`
 - package ID: `com.pixel375.connex`
 - permanent Connex signing certificate retained for in-place update compatibility.

@@ -9,18 +9,11 @@ var axle_ranked_stop_count_v074: int = 0
 # -----------------------------------------------------------------------------
 # Durable multi-hub O-Ring stops
 #
-# v0.5.15 became stable by stopping only the hub nearest each O-Ring/rod end.
-# That leaves one rare failure: Jolt can tunnel an interior AXLE hub through the
-# outer hub, after which the interior hub has no boundary and can reach the
-# O-Ring.
-#
-# Preserve the same deterministic rod-local stop solver, but give every hub in
-# the initial physical order a non-overlapping travel interval. Adjacent ranks
-# are separated by the connector thickness (0.62 units). Nothing is done every
-# frame between hubs: no hub-hub impulse, ownership swap, teleport, or new joint.
-# The normal v0.5.15 predictor/corrector simply sees a distinct lower/upper stop
-# for each rank. The outer hub still reaches the real O-Ring clearance; hubs
-# behind it can approach until they would physically contact the hub ahead.
+# v0.5.15's stable rule remains: only the physically outer hub is allowed to
+# receive a post-step transform correction at an O-Ring / rod end. Interior hubs
+# receive only predictive rod-local limits, offset by connector thickness, so a
+# missed Jolt hub collision cannot let them continue all the way through the
+# O-Ring. This avoids multiple post-step assembly translations in one frame.
 # -----------------------------------------------------------------------------
 
 func _rank_spacing_for_group_v074(group: Dictionary) -> float:
@@ -30,10 +23,6 @@ func _rank_spacing_for_group_v074(group: Dictionary) -> float:
 	var lower: float = float(group.get("lower", -INF))
 	var upper: float = float(group.get("upper", INF))
 	var spacing := AXLE_HUB_RANK_SPACING_V074
-
-	# Never make SIMULATE reposition a valid BUILD pose merely to create the rank
-	# limits. If a deliberately compact build starts with less than 0.62 spacing,
-	# shrink only this segment's rank spacing to fit its existing geometry.
 	if lower > -INF and upper < INF:
 		spacing = minf(spacing, maxf(0.0, (upper - lower) / float(hubs.size() - 1)))
 	for i in range(hubs.size()):
@@ -66,7 +55,6 @@ func _apply_ranked_axle_stops_v074() -> void:
 		var lower: float = float(group.get("lower", -INF))
 		var upper: float = float(group.get("upper", INF))
 		var spacing: float = _rank_spacing_for_group_v074(group)
-
 		for i in range(hubs.size()):
 			var hub_info := hubs[i] as Dictionary
 			var connector := hub_info.get("connector") as RigidBody3D
@@ -75,6 +63,8 @@ func _apply_ranked_axle_stops_v074() -> void:
 			var stop: Dictionary = _find_rank_stop_v074(rod, connector, segment)
 			if stop.is_empty():
 				continue
+			stop["original_lower_owner_v074"] = i == 0
+			stop["original_upper_owner_v074"] = i == hubs.size() - 1
 			if lower > -INF:
 				stop["lower"] = lower + spacing * float(i)
 			if upper < INF:
@@ -86,16 +76,38 @@ func _apply_ranked_axle_stops_v074() -> void:
 
 
 func _build_axle_stop_ranges_v070() -> void:
-	# main_v073 builds the stable v0.5.15 segment ownership plus the initial hub
-	# order metadata. Convert those ranges once, at simulation setup, into distinct
-	# non-overlapping rank intervals. Runtime stop enforcement remains v0.5.15.
 	super._build_axle_stop_ranges_v070()
 	_apply_ranked_axle_stops_v074()
 
 
-# Disable the abandoned dynamic ownership/order guards from main_v073. Initial
-# physical rank is fixed for this simulation, just as solid connectors cannot
-# pass through each other on a real axle.
+# Interior ranked limits are predictive only. Post-step position correction is
+# kept exclusively on the original lower/upper owners, preserving the exact
+# v0.5.15 correction topology that was stable in the mixed spoke fixture.
+func _correct_axle_stop_positions_v071() -> void:
+	if not simulating:
+		return
+	for value in axle_stop_ranges_v070:
+		var stop := value as Dictionary
+		var connector := stop.get("connector") as RigidBody3D
+		var rod := stop.get("rod") as RigidBody3D
+		if not is_instance_valid(connector) or not is_instance_valid(rod):
+			continue
+		var axis: Vector3 = _rod_axis_v020(rod).normalized()
+		var along: float = _rod_local_along_v070(connector, rod)
+		var lower: float = float(stop.get("lower", -INF))
+		var upper: float = float(stop.get("upper", INF))
+		if bool(stop.get("original_lower_owner_v074", true)) and lower > -INF and along < lower - AXLE_STOP_POSITION_EPS_V071:
+			_shift_stop_component_v071(stop, axis * (lower - along))
+			var lower_speed: float = _relative_axial_speed_v071(stop)
+			if lower_speed < 0.0:
+				_shift_component_velocity_v071(stop, axis * -lower_speed)
+		elif bool(stop.get("original_upper_owner_v074", true)) and upper < INF and along > upper + AXLE_STOP_POSITION_EPS_V071:
+			_shift_stop_component_v071(stop, axis * (upper - along))
+			var upper_speed: float = _relative_axial_speed_v071(stop)
+			if upper_speed > 0.0:
+				_shift_component_velocity_v071(stop, axis * -upper_speed)
+
+
 func _predict_axle_order_v073(_delta: float) -> void:
 	pass
 

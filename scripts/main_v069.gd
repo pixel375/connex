@@ -1,11 +1,13 @@
 extends "res://scripts/main_v068.gd"
 
 const VERSION_069 := "0.5.14"
-# The connector hub and O-Ring collision geometry need roughly this much
-# center-to-center separation along an axle. Instead of adding another physics
-# body, v0.5.14 applies this as a temporary bound on the axle joint's existing
-# free Y slide degree of freedom.
+# Physical connector/O-Ring center clearance. Jolt's Generic6DOF hard linear
+# limit can transiently overshoot by about 0.22 units during an asymmetric
+# ground impact, so arm the solver slightly early while continuing to validate
+# the true physical clearance separately in regression tests.
 const O_RING_AXLE_CLEARANCE_V069 := 0.43
+const O_RING_AXLE_SOLVER_MARGIN_V069 := 0.27
+const O_RING_AXLE_LIMIT_CLEARANCE_V069 := O_RING_AXLE_CLEARANCE_V069 + O_RING_AXLE_SOLVER_MARGIN_V069
 const O_RING_UNBOUNDED_TRAVEL_V069 := 1000.0
 
 var o_ring_stop_pair_count_v069: int = 0
@@ -107,14 +109,13 @@ func _configure_o_ring_stoppers_v069() -> int:
 			var ring_along := float(ring_along_value)
 			var delta := ring_along - hub_along
 			if delta < 0.0:
-				# Ring below the hub: the hub may move downward only until its center
-				# remains CLEARANCE above that ring.
-				lower_limit = maxf(lower_limit, delta + O_RING_AXLE_CLEARANCE_V069)
+				# Arm before contact by the measured Jolt solver margin. The test still
+				# measures actual hub/ring separation and rejects physical crossing.
+				lower_limit = maxf(lower_limit, delta + O_RING_AXLE_LIMIT_CLEARANCE_V069)
 				has_lower = true
 				configured_pairs += 1
 			elif delta > 0.0:
-				# Ring above the hub: mirror the same rule for upward travel.
-				upper_limit = minf(upper_limit, delta - O_RING_AXLE_CLEARANCE_V069)
+				upper_limit = minf(upper_limit, delta - O_RING_AXLE_LIMIT_CLEARANCE_V069)
 				has_upper = true
 				configured_pairs += 1
 			else:
@@ -188,7 +189,7 @@ func _update_help_text_v030() -> void:
 		return
 	var label: Label = _find_label_v030(help_panel)
 	if label != null:
-		label.text += "\n\nv0.5.14 O-RING STOPPER: the broken v0.5.13 host-rod collision proxy and the experimental moving proxy body are both removed. The visible O-Ring remains a collisionless follower of its axle during SIMULATE. Each connector already mounted as AXLE on that rod gets a temporary lower/upper bound on the same Generic6DOF Y slide it already uses, calculated from the nearest O-Ring positions and physical hub clearance. This blocks crossing without adding collision mass, a world-following collider, a second joint, frame correction, or another over-constrained solver loop. BUILD/Restore returns the axle joint to its original free-slide state."
+		label.text += "\n\nv0.5.14 O-RING STOPPER: the broken v0.5.13 host-rod collision proxy and the experimental moving proxy body are both removed. The visible O-Ring remains a collisionless follower of its axle during SIMULATE. Each connector already mounted as AXLE on that rod gets a temporary lower/upper bound on the same Generic6DOF Y slide it already uses, calculated from the nearest O-Ring positions and physical hub clearance. A small measured solver guard band arms the hard stop before contact so Jolt's transient impact slop cannot let the hub visibly cross the ring. No collision mass, world-following collider, second joint, frame correction, or over-constrained solver loop is added. BUILD/Restore returns the axle joint to its original free-slide state."
 
 
 func _on_update_request_completed_v021(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:

@@ -18,21 +18,23 @@ var o_ring_sim_colliders_v074: Array = []
 # -----------------------------------------------------------------------------
 # Durable multi-hub O-Ring simulation
 #
-# Keep the released v0.5.15 O-Ring stop behavior exactly: only the physically
-# outer AXLE hub at each O-Ring/rod-end boundary owns that stop, interior hubs
-# stack through ordinary connector collision, and O-Rings themselves are
-# collisionless exact rod-local followers. The normal AXLE joint remains free in
-# Y translation/rotation and is never replaced or limited.
+# Keep the released v0.5.15 physical behavior and the v0.5.16 v073 ownership
+# handoff intact:
 #
-# Larger builds exposed a temporal-resolution problem: at 60 Hz an interior hub
-# can occasionally tunnel through the outer hub in one Jolt integration step.
-# Earlier attempts to add rank limits, ownership swaps, extra constraints or
-# collision proxies either injected energy or still tunnelled. v0.5.16 instead
-# leaves the proven mechanics alone and raises physics resolution to 120 Hz ONLY
-# while a rod with an O-Ring has more than one AXLE hub in the same segment.
-# This halves per-step travel and gives existing CCD/contact + v0.5.15 prediction
-# a second opportunity to resolve the stack. Ordinary simulations stay at the
-# project-default tick rate and BUILD restores the previous rate exactly.
+# - O-Rings are collisionless exact rod-local followers;
+# - the normal AXLE joint remains free in axial slide and rotation;
+# - only the outermost hub in a segment owns each finite O-Ring/rod-end stop;
+# - ordinary hub-to-hub collision gets first chance to preserve stacking;
+# - if Jolt genuinely tunnels one hub through another, v073 changes ONLY stop
+#   ownership metadata/ranges to the hub that is physically outermost now;
+# - the handoff itself never changes a body transform or velocity; after the
+#   handoff, the same proven v0.5.15 stop correction is applied to the new owner.
+#
+# Larger multi-hub O-Ring builds also run at 120 Hz while SIMULATE is active.
+# This reduces one-step tunnelling distance without adding hidden joints,
+# collision proxies, enlarged shapes, interior rank floors or velocity clamps.
+# Ordinary simulations stay at the existing project tick rate, and BUILD restores
+# the exact prior value.
 # -----------------------------------------------------------------------------
 
 func _find_stop_v074(rod: RigidBody3D, connector: RigidBody3D, segment: int) -> Dictionary:
@@ -82,22 +84,12 @@ func _restore_precision_ticks_v074() -> void:
 
 
 func _build_axle_stop_ranges_v070() -> void:
-	# main_v073 builds the v0.5.15 outer-owner ranges plus segment metadata. Do
-	# not rewrite those ranges. Only decide whether this run needs finer temporal
-	# resolution for multi-hub O-Ring contact.
+	# v073 builds the stable outer-owner ranges and zero-motion ownership groups.
+	# Do not rewrite those ranges or disable the handoff. Only decide whether this
+	# run benefits from finer temporal resolution.
 	super._build_axle_stop_ranges_v070()
 	axle_ranked_stop_count_v074 = _count_complex_o_ring_hubs_v074()
 	_enable_precision_ticks_v074()
-
-
-# Disable all abandoned ownership/order interventions from main_v073. The
-# v0.5.15 predictor/corrector remains authoritative for the outer stop owners.
-func _predict_axle_order_v073(_delta: float) -> void:
-	pass
-
-
-func _correct_axle_order_v073() -> bool:
-	return false
 
 
 func _restore_o_ring_followers_v068(restore_build_pose: bool = true) -> void:

@@ -69,6 +69,15 @@ func _assert_mount_constraint_state(mount: Generic6DOFJoint3D, enabled: bool, ph
 	return true
 
 
+func _sync_follower_for_measurement(main: Node) -> void:
+	# SceneTree.physics_frame resumes before the ordinary idle _process pass.
+	# The real app runs that pass every rendered frame, where v0.5.13/v0.5.14
+	# synchronize O-Ring followers again. Invoke the same runtime method here so
+	# measurements see the post-step rod-relative pose instead of a one-tick-old
+	# transform. This does not alter the physical clearance requirement.
+	main.call("_sync_o_ring_followers_v068")
+
+
 func _run() -> void:
 	var packed := load("res://Main.tscn") as PackedScene
 	if packed == null:
@@ -110,6 +119,7 @@ func _run() -> void:
 	main.call("_toggle_simulation")
 	for _i in range(12):
 		await physics_frame
+	_sync_follower_for_measurement(main)
 
 	if not bool(main.get("simulating")):
 		_fail("simulation did not start")
@@ -164,6 +174,7 @@ func _run() -> void:
 
 	for _i in range(72):
 		await physics_frame
+	_sync_follower_for_measurement(main)
 	if ring_low.global_position.y > ring_low_start_y - 0.30 or ring_high.global_position.y > ring_high_start_y - 0.30:
 		_fail("O-Rings did not fall with their host rod")
 		return
@@ -176,6 +187,7 @@ func _run() -> void:
 	const EXPECTED_CLEARANCE := 0.43
 	for frame_index in range(420):
 		await physics_frame
+		_sync_follower_for_measurement(main)
 		for body_value in (main.get("bodies") as Array):
 			var body := body_value as RigidBody3D
 			if not is_instance_valid(body):

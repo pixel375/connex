@@ -1,14 +1,15 @@
 extends "res://scripts/main_v073.gd"
 
 const VERSION_074 := "0.5.16"
-const AXLE_HUB_PAIR_GUARD_SPACING_V074 := 0.60
+const AXLE_HUB_PAIR_MIN_SPACING_V074 := 0.60
 
 # Number of AXLE hubs participating in multi-hub segments on rods that contain
 # at least one O-Ring. Kept under the old debug name for test compatibility.
 var axle_ranked_stop_count_v074: int = 0
-var axle_pair_guard_events_v074: int = 0
+var axle_pair_stop_joints_v074: Array = []
 
 # Compatibility/debug surfaces for abandoned experiments. They stay inactive.
+var axle_pair_guard_events_v074: int = 0
 var o_ring_precision_ticks_active_v074: bool = false
 var saved_physics_ticks_v074: int = -1
 var axle_order_repair_events_v074: int = 0
@@ -20,27 +21,30 @@ var o_ring_sim_colliders_v074: Array = []
 # -----------------------------------------------------------------------------
 # Durable multi-hub O-Ring simulation
 #
-# Keep the released v0.5.15 O-Ring stop topology and the normal project physics
-# cadence:
+# The O-Ring stop itself remains the released v0.5.15 design:
 #
 # - O-Rings are collisionless exact rod-local followers;
-# - the normal AXLE joint remains free in axial slide and rotation;
-# - only the original outer hub owns each finite O-Ring / rod-end stop;
-# - ordinary connector collision remains the visible/physical stack behavior;
-# - physics stays at the project-default tick rate (60 Hz).
+# - the normal AXLE joint stays free in axial slide and axle rotation;
+# - the original outer hub owns the finite O-Ring / rod-end boundary;
+# - no O-Ring proxy, enlarged collider, rank floor, tick-rate change or scripted
+#   hub teleport is introduced.
 #
-# The actual failure in larger assemblies was rare hub-through-hub tunnelling.
-# Post-facto transform repairs and 120 Hz both proved destabilizing. v0.5.16
-# instead adds one narrow predictive contact rule between adjacent AXLE hubs on
-# an O-Ring-bearing rod. Only when their current relative axial velocity predicts
-# that they will enter the normal ~0.60 hub contact spacing during the NEXT step,
-# apply a one-dimensional perfectly-inelastic contact impulse along the rod axis.
+# Diagnostics showed the actual bypass is a solver-time hub-through-hub tunnel:
+# immediately before the bad step the two hubs can be separating rapidly, so a
+# pre-step velocity predictor cannot foresee the inversion. On the next Jolt
+# solve their relative velocity can reverse hard enough to exchange positions in
+# one step. Post-facto transform repairs proved unstable because the attached
+# fixed assemblies are already interpenetrating by then.
 #
-# The impulse is split between the two connector-side fixed components by inverse
-# mass, so total axial momentum is conserved while closing relative kinetic energy
-# can only decrease. No body transform, O-Ring coordinate, collision shape, joint
-# limit, or persistent rank boundary is changed. Once the pair is not closing,
-# the guard is completely dormant.
+# v0.5.16 therefore models the missing physical rule directly in Jolt. Adjacent
+# AXLE hubs that share an O-Ring-bearing rod get one temporary unilateral
+# separation Generic6DOF. Every angular DOF and X/Z translation is free; only
+# relative Y travel toward one another is limited so their center spacing cannot
+# shrink below the normal connector thickness (~0.60). Motion apart is unlimited.
+# Ordinary connector collision remains enabled, so normal contact/stacking still
+# happens physically; this joint is only a no-pass-through backstop inside the
+# solver. It connects hub to hub, never hub to rod, so it does not constrain the
+# axle's free slide/rotation or drag the host rod into stop correction.
 # -----------------------------------------------------------------------------
 
 func _find_stop_v074(rod: RigidBody3D, connector: RigidBody3D, segment: int) -> Dictionary:
@@ -74,83 +78,88 @@ func _count_complex_o_ring_hubs_v074() -> int:
 	return count
 
 
-func _build_axle_stop_ranges_v070() -> void:
-	# v073 builds the stable v0.5.15 outer-owner ranges and remembers BUILD order.
-	# Do not rewrite any stop boundary/ownership or change Engine tick rate here.
-	super._build_axle_stop_ranges_v070()
-	axle_ranked_stop_count_v074 = _count_complex_o_ring_hubs_v074()
+func _remove_axle_pair_stop_joints_v074() -> void:
+	for value in axle_pair_stop_joints_v074:
+		var joint := value as Generic6DOFJoint3D
+		if not is_instance_valid(joint):
+			continue
+		joint.node_a = NodePath()
+		joint.node_b = NodePath()
+		joint.queue_free()
+	axle_pair_stop_joints_v074.clear()
 
 
-func _guard_adjacent_axle_pair_v074(group: Dictionary, lower_info: Dictionary, upper_info: Dictionary, delta: float) -> bool:
-	var rod := group.get("rod") as RigidBody3D
-	var segment: int = int(group.get("segment", 0))
-	var lower := lower_info.get("connector") as RigidBody3D
-	var upper := upper_info.get("connector") as RigidBody3D
+func _make_axle_pair_stop_joint_v074(rod: RigidBody3D, lower: RigidBody3D, upper: RigidBody3D) -> Generic6DOFJoint3D:
 	if not is_instance_valid(rod) or not is_instance_valid(lower) or not is_instance_valid(upper):
-		return false
-
+		return null
 	var axis: Vector3 = _rod_axis_v020(rod).normalized()
 	var lower_along: float = _rod_local_along_v070(lower, rod)
 	var upper_along: float = _rod_local_along_v070(upper, rod)
-	var gap: float = upper_along - lower_along
-	if gap <= 0.0:
-		# Never hide a missed tunnel with post-facto position repair.
-		return false
+	var initial_gap: float = upper_along - lower_along
+	if initial_gap <= 0.0001:
+		return null
 
-	var relative_speed: float = (upper.linear_velocity - lower.linear_velocity).dot(axis)
-	if relative_speed >= 0.0:
-		return false
-	var predicted_gap: float = gap + relative_speed * delta
-	if predicted_gap >= AXLE_HUB_PAIR_GUARD_SPACING_V074:
-		return false
+	# The joint is created in the current satisfied configuration, so relative Y
+	# displacement starts at zero. Moving the upper hub toward the lower hub (or
+	# the lower hub toward the upper) decreases that relative Y coordinate. Allow
+	# exactly the current excess spacing before the lower unilateral limit engages.
+	var allowed_closing: float = maxf(0.0, initial_gap - AXLE_HUB_PAIR_MIN_SPACING_V074)
 
-	# Permit the most closing speed that lands exactly at the contact guard next
-	# step. If already inside that spacing, prevent further closing but do not
-	# separate or teleport the hubs.
-	var allowed_relative: float = minf(0.0, (AXLE_HUB_PAIR_GUARD_SPACING_V074 - gap) / delta)
-	var relative_change: float = allowed_relative - relative_speed
-	if relative_change <= 0.000001:
-		return false
+	var joint := Generic6DOFJoint3D.new()
+	joint.name = "AxleHubPairStop_%d" % axle_pair_stop_joints_v074.size()
+	joint.exclude_nodes_from_collision = false
+	for axis_name in ["x", "z"]:
+		joint.set("linear_limit_%s/enabled" % axis_name, false)
+	for axis_name in ["x", "y", "z"]:
+		joint.set("angular_limit_%s/enabled" % axis_name, false)
+	joint.set("linear_limit_y/enabled", true)
+	joint.set("linear_limit_y/lower_distance", -allowed_closing)
+	joint.set("linear_limit_y/upper_distance", 1000.0)
+	joint.set_meta("sim_axle_pair_stop_v074", true)
+	joint.set_meta("initial_gap_v074", initial_gap)
+	joint.set_meta("min_gap_v074", AXLE_HUB_PAIR_MIN_SPACING_V074)
+	joint.set_meta("host_rod_id_v074", rod.get_instance_id())
 
-	var lower_stop: Dictionary = _find_stop_v074(rod, lower, segment)
-	var upper_stop: Dictionary = _find_stop_v074(rod, upper, segment)
-	if lower_stop.is_empty() or upper_stop.is_empty():
-		return false
-	var lower_component: Array = _stop_component_v071(lower_stop)
-	var upper_component: Array = _stop_component_v071(upper_stop)
-	if lower_component.is_empty() or upper_component.is_empty() or _components_overlap_v070(lower_component, upper_component):
-		return false
-
-	var inv_lower: float = _component_inverse_mass_v070(lower_component)
-	var inv_upper: float = _component_inverse_mass_v070(upper_component)
-	var inv_sum: float = inv_lower + inv_upper
-	if inv_sum <= 0.000001:
-		return false
-
-	# 1-D inelastic contact impulse. The inverse-mass split makes the summed axial
-	# momentum change zero while increasing relative speed only toward zero.
-	var lower_delta_speed: float = -relative_change * inv_lower / inv_sum
-	var upper_delta_speed: float = relative_change * inv_upper / inv_sum
-	_shift_component_velocity_v071(lower_stop, axis * lower_delta_speed)
-	_shift_component_velocity_v071(upper_stop, axis * upper_delta_speed)
-	axle_pair_guard_events_v074 += 1
-	return true
+	add_child(joint)
+	var midpoint: Vector3 = (lower.global_position + upper.global_position) * 0.5
+	joint.global_transform = Transform3D(_basis_for_axle_v020(axis), midpoint)
+	joint.node_a = lower.get_path()
+	joint.node_b = upper.get_path()
+	axle_pair_stop_joints_v074.append(joint)
+	return joint
 
 
-func _predict_axle_order_v073(delta: float) -> void:
-	if not simulating or delta <= 0.000001:
-		return
+func _configure_axle_pair_stop_joints_v074() -> int:
+	_remove_axle_pair_stop_joints_v074()
+	var count := 0
 	for group_value in axle_order_groups_v073:
 		var group := group_value as Dictionary
+		var rod := group.get("rod") as RigidBody3D
 		var hubs: Array = group.get("hubs", []) as Array
-		if hubs.size() <= 1 or not _group_has_o_ring_v074(group):
+		if not is_instance_valid(rod) or hubs.size() <= 1 or not _group_has_o_ring_v074(group):
 			continue
 		for i in range(hubs.size() - 1):
-			_guard_adjacent_axle_pair_v074(group, hubs[i] as Dictionary, hubs[i + 1] as Dictionary, delta)
+			var lower := (hubs[i] as Dictionary).get("connector") as RigidBody3D
+			var upper := (hubs[i + 1] as Dictionary).get("connector") as RigidBody3D
+			if is_instance_valid(_make_axle_pair_stop_joint_v074(rod, lower, upper)):
+				count += 1
+	return count
 
 
-# Disable v073's post-facto ownership transfer. A missed inversion remains a hard
-# regression failure instead of translating an already-overlapped assembly.
+func _build_axle_stop_ranges_v070() -> void:
+	# v073 builds the stable v0.5.15 outer-owner ranges and remembers BUILD order.
+	# Keep those stop ranges exactly as-is; add only adjacent hub no-pass joints.
+	super._build_axle_stop_ranges_v070()
+	axle_ranked_stop_count_v074 = _count_complex_o_ring_hubs_v074()
+	_configure_axle_pair_stop_joints_v074()
+
+
+# The pairwise constraint lives inside Jolt, so no pre-step velocity intervention
+# and no post-facto ownership/position repair are needed.
+func _predict_axle_order_v073(_delta: float) -> void:
+	pass
+
+
 func _correct_axle_order_v073() -> bool:
 	return false
 
@@ -159,8 +168,7 @@ func _correct_axle_stop_positions_v071() -> void:
 	if not simulating:
 		return
 
-	# Apply only the released v0.5.15 finite boundary correction. Pairwise hub
-	# protection is predictive and velocity-only.
+	# Apply only the released v0.5.15 finite O-Ring / rod-end correction.
 	for value in axle_stop_ranges_v070:
 		var stop := value as Dictionary
 		var connector := stop.get("connector") as RigidBody3D
@@ -192,6 +200,7 @@ func _prepare_stable_simulation_graph() -> void:
 
 
 func _restore_o_ring_followers_v068(restore_build_pose: bool = true) -> void:
+	_remove_axle_pair_stop_joints_v074()
 	axle_ranked_stop_count_v074 = 0
 	axle_stack_shape_state_v074.clear()
 	o_ring_axle_stop_joints_v074.clear()

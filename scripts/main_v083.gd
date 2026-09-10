@@ -65,7 +65,7 @@ func _add_sim_hitbox_v083(ring: RigidBody3D) -> void:
 	var collision := CollisionShape3D.new()
 	collision.name = "O_Ring_Sim_Hitbox_v083"
 	var cylinder := CylinderShape3D.new()
-	cylinder.radius = O_RING_RADIUS
+	cylinder.radius = O_RING_OUTER_RADIUS
 	cylinder.height = O_RING_SIM_HITBOX_HEIGHT_V083
 	collision.shape = cylinder
 	collision.set_meta("o_ring_sim_hitbox_v083", true)

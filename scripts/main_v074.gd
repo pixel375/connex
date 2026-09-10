@@ -15,18 +15,9 @@ var o_ring_axle_stop_joints_v074: Array = []
 # free axial slide and free axle rotation. O-Rings remain exact rod-local visual
 # followers as in v0.5.15.
 #
-# The v0.5.15 failure that remains with multiple hubs is tunnelling: Jolt can
-# solve a violent spoke/contact step after our pre-step predictor and move an
-# interior hub through the outer hub before script-side correction runs.
-# Script-side position projection then over-constrains the attached spoke graph
-# and can manufacture energy.
-#
-# Instead, create one TEMPORARY orthogonal Generic6DOF per AXLE hub. Every DOF on
-# this extra joint is free except linear Y, which is bounded to the hub's initial
-# non-overlapping rank inside the O-Ring/rod-end segment. Because the extra joint
-# constrains only the one degree of freedom the normal AXLE deliberately leaves
-# free, Jolt resolves the stop in the same solver step without teleporting any
-# body or changing O-Ring ownership. The temporary joints are removed on BUILD.
+# Only AXLE segments that actually contain O-Rings get an additional temporary
+# stop-only Generic6DOF. Every DOF on that helper is free except linear Y. Plain
+# axles keep the exact v0.5.15 predictor/corrector and receive no extra joint.
 # -----------------------------------------------------------------------------
 
 func _rank_spacing_for_group_v074(group: Dictionary) -> float:
@@ -36,14 +27,11 @@ func _rank_spacing_for_group_v074(group: Dictionary) -> float:
 	var lower: float = float(group.get("lower", -INF))
 	var upper: float = float(group.get("upper", INF))
 	var spacing := AXLE_HUB_RANK_SPACING_V074
-
-	# Do not make SIMULATE rearrange a compact but valid BUILD pose. Reduce the
-	# spacing only when the existing build genuinely has less room than 0.62.
 	var initial_values: Array = []
+	var rod := group.get("rod") as RigidBody3D
 	for hub_value in hubs:
 		var hub := hub_value as Dictionary
 		var connector := hub.get("connector") as RigidBody3D
-		var rod := group.get("rod") as RigidBody3D
 		if is_instance_valid(connector) and is_instance_valid(rod):
 			initial_values.append(_rod_local_along_v070(connector, rod))
 		else:
@@ -68,13 +56,24 @@ func _find_rank_stop_v074(rod: RigidBody3D, connector: RigidBody3D, segment: int
 	return {}
 
 
+func _group_has_o_ring_v074(group: Dictionary) -> bool:
+	var rod := group.get("rod") as RigidBody3D
+	var segment: int = int(group.get("segment", 0))
+	for hub_value in group.get("hubs", []) as Array:
+		var connector := (hub_value as Dictionary).get("connector") as RigidBody3D
+		var stop: Dictionary = _find_rank_stop_v074(rod, connector, segment)
+		if not stop.is_empty() and int(stop.get("ring_count", 0)) > 0:
+			return true
+	return false
+
+
 func _apply_ranked_axle_stops_v074() -> void:
 	axle_ranked_stop_count_v074 = 0
 	for group_value in axle_order_groups_v073:
 		var group := group_value as Dictionary
 		var rod := group.get("rod") as RigidBody3D
 		var hubs: Array = group.get("hubs", []) as Array
-		if not is_instance_valid(rod) or hubs.is_empty():
+		if not is_instance_valid(rod) or hubs.is_empty() or not _group_has_o_ring_v074(group):
 			continue
 		var segment: int = int(group.get("segment", 0))
 		var lower: float = float(group.get("lower", -INF))
@@ -112,6 +111,8 @@ func _normal_axle_joint_for_stop_v074(stop: Dictionary) -> Generic6DOFJoint3D:
 
 
 func _make_solver_stop_joint_v074(stop: Dictionary) -> Generic6DOFJoint3D:
+	if int(stop.get("ring_count", 0)) <= 0:
+		return null
 	var connector := stop.get("connector") as RigidBody3D
 	var rod := stop.get("rod") as RigidBody3D
 	var normal := _normal_axle_joint_for_stop_v074(stop)
@@ -126,8 +127,6 @@ func _make_solver_stop_joint_v074(stop: Dictionary) -> Generic6DOFJoint3D:
 	var lower_delta := -1000.0
 	var upper_delta := 1000.0
 	if lower_abs > -INF:
-		# Arm slightly early for Jolt's hard-limit slop, but never place the BUILD
-		# pose outside the newly created constraint at simulation start.
 		var guarded_lower: float = minf(current_along, lower_abs + AXLE_STOP_SOLVER_GUARD_V074)
 		lower_delta = guarded_lower - current_along
 	if upper_abs < INF:
@@ -140,8 +139,6 @@ func _make_solver_stop_joint_v074(stop: Dictionary) -> Generic6DOFJoint3D:
 	var joint := Generic6DOFJoint3D.new()
 	joint.name = "AxleO_RingStop_%d" % o_ring_axle_stop_joints_v074.size()
 	joint.exclude_nodes_from_collision = normal.exclude_nodes_from_collision
-	# Explicitly leave every unrelated degree of freedom free. The existing AXLE
-	# joint remains the sole owner of X/Z alignment and X/Z angular locking.
 	for axis_name in ["x", "z"]:
 		joint.set("linear_limit_%s/enabled" % axis_name, false)
 		joint.set("angular_limit_%s/enabled" % axis_name, false)
@@ -156,8 +153,6 @@ func _make_solver_stop_joint_v074(stop: Dictionary) -> Generic6DOFJoint3D:
 
 	add_child(joint)
 	joint.global_transform = normal.global_transform
-	# Configure before binding so Jolt creates the native constraint in limited-Y
-	# mode from the beginning.
 	joint.node_a = normal.node_a
 	joint.node_b = normal.node_b
 	joints.append(joint)
@@ -181,7 +176,10 @@ func _configure_solver_stop_joints_v074() -> int:
 	_remove_solver_stop_joints_v074()
 	var count := 0
 	for stop_value in axle_stop_ranges_v070:
-		if is_instance_valid(_make_solver_stop_joint_v074(stop_value as Dictionary)):
+		var stop := stop_value as Dictionary
+		if int(stop.get("ring_count", 0)) <= 0:
+			continue
+		if is_instance_valid(_make_solver_stop_joint_v074(stop)):
 			count += 1
 	return count
 
@@ -192,15 +190,63 @@ func _build_axle_stop_ranges_v070() -> void:
 	_configure_solver_stop_joints_v074()
 
 
-# The solver-native stop joints now own O-Ring/rod-end translation boundaries.
-# Disable every script-side stop/order intervention so no body transform or
-# linear velocity is rewritten after the Jolt solve.
-func _predict_axle_stops_v071(_delta: float) -> void:
-	pass
+# Preserve v0.5.15 script-side rod-end behavior only for axle segments without
+# O-Rings. O-Ring-bearing segments are handled entirely inside Jolt by the
+# temporary stop-only joints above.
+func _predict_axle_stops_v071(delta: float) -> void:
+	if not simulating or delta <= 0.000001:
+		return
+	for value in axle_stop_ranges_v070:
+		var stop := value as Dictionary
+		if int(stop.get("ring_count", 0)) > 0:
+			continue
+		var connector := stop.get("connector") as RigidBody3D
+		var rod := stop.get("rod") as RigidBody3D
+		if not is_instance_valid(connector) or not is_instance_valid(rod) or connector.freeze:
+			continue
+		var axis: Vector3 = _rod_axis_v020(rod).normalized()
+		var along: float = _rod_local_along_v070(connector, rod)
+		var relative_speed: float = _relative_axial_speed_v071(stop)
+		var lower: float = float(stop.get("lower", -INF))
+		var upper: float = float(stop.get("upper", INF))
+		if lower > -INF:
+			var lower_guard: float = lower + AXLE_STOP_PREDICT_MARGIN_V071
+			if relative_speed < 0.0 and along + relative_speed * delta < lower_guard:
+				var allowed_speed: float = minf(0.0, (lower_guard - along) / delta)
+				_shift_component_velocity_v071(stop, axis * (allowed_speed - relative_speed))
+				relative_speed = allowed_speed
+		if upper < INF:
+			var upper_guard: float = upper - AXLE_STOP_PREDICT_MARGIN_V071
+			if relative_speed > 0.0 and along + relative_speed * delta > upper_guard:
+				var allowed_speed: float = maxf(0.0, (upper_guard - along) / delta)
+				_shift_component_velocity_v071(stop, axis * (allowed_speed - relative_speed))
 
 
 func _correct_axle_stop_positions_v071() -> void:
-	pass
+	if not simulating:
+		return
+	for value in axle_stop_ranges_v070:
+		var stop := value as Dictionary
+		if int(stop.get("ring_count", 0)) > 0:
+			continue
+		var connector := stop.get("connector") as RigidBody3D
+		var rod := stop.get("rod") as RigidBody3D
+		if not is_instance_valid(connector) or not is_instance_valid(rod):
+			continue
+		var axis: Vector3 = _rod_axis_v020(rod).normalized()
+		var along: float = _rod_local_along_v070(connector, rod)
+		var lower: float = float(stop.get("lower", -INF))
+		var upper: float = float(stop.get("upper", INF))
+		if lower > -INF and along < lower - AXLE_STOP_POSITION_EPS_V071:
+			_shift_stop_component_v071(stop, axis * (lower - along))
+			var lower_speed: float = _relative_axial_speed_v071(stop)
+			if lower_speed < 0.0:
+				_shift_component_velocity_v071(stop, axis * -lower_speed)
+		elif upper < INF and along > upper + AXLE_STOP_POSITION_EPS_V071:
+			_shift_stop_component_v071(stop, axis * (upper - along))
+			var upper_speed: float = _relative_axial_speed_v071(stop)
+			if upper_speed > 0.0:
+				_shift_component_velocity_v071(stop, axis * -upper_speed)
 
 
 func _predict_axle_order_v073(_delta: float) -> void:

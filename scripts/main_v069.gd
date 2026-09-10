@@ -55,9 +55,8 @@ func _prepare_o_ring_followers_v068() -> int:
 		if not is_instance_valid(ring) or not is_instance_valid(rod) or not is_instance_valid(joint):
 			continue
 
-		# Keep the real physical mount live. _release_physics() in the inherited
-		# O-Ring implementation releases the ring at the same time as the rod.
-		# CCD helps the thin stop survive fast impacts without changing its model.
+		# Keep the real physical mount live. CCD helps the thin stop survive fast
+		# impacts without changing the original ring-on-rod model.
 		ring.continuous_cd = true
 		ring.sleeping = false
 		o_ring_stop_pair_count_v069 += 1
@@ -65,10 +64,24 @@ func _prepare_o_ring_followers_v068() -> int:
 	return o_ring_stop_pair_count_v069
 
 
+func _release_physical_o_rings_v069() -> void:
+	for ring_value in o_ring_stops:
+		var ring := ring_value as RigidBody3D
+		if not is_instance_valid(ring):
+			continue
+		ring.linear_velocity = Vector3.ZERO
+		ring.angular_velocity = Vector3.ZERO
+		ring.freeze = false
+		ring.sleeping = false
+
+
 func _release_physics() -> void:
 	await super._release_physics()
 	if not simulating:
 		return
+	# Later editor runtimes no longer release O-Rings through the old v0.1.4 path,
+	# so explicitly release these physical mounts alongside the ordinary pieces.
+	_release_physical_o_rings_v069()
 	_status("Physics running — %d physical O-Ring Stop%s fixed to host rod%s; axle slide/rotation remain free until contact" % [
 		o_ring_stop_pair_count_v069,
 		"" if o_ring_stop_pair_count_v069 == 1 else "s",

@@ -37,6 +37,12 @@ func _add_o_ring_proxy_shapes_v068(_ring: RigidBody3D, _rod: RigidBody3D) -> int
 #   * the mount excludes only ring-vs-host-rod self collision,
 #   * the ring remains a real collider for axle connectors and other pieces,
 #   * when the rod falls/rotates, the fixed mount carries the ring with it.
+#
+# Deliberately do not enable CCD on the ring. The older working implementation
+# used ordinary discrete/speculative contact, and independently CCD-stopping the
+# thin ring can momentarily pull it away from the rod before the fixed constraint
+# catches up. Keeping rod, ring and contact in the same solver step is both simpler
+# and more faithful to the original behavior.
 func _prepare_o_ring_followers_v068() -> int:
 	o_ring_followers_v068.clear()
 	o_ring_proxy_shapes_v068.clear()
@@ -55,9 +61,7 @@ func _prepare_o_ring_followers_v068() -> int:
 		if not is_instance_valid(ring) or not is_instance_valid(rod) or not is_instance_valid(joint):
 			continue
 
-		# Keep the real physical mount live. CCD helps the thin stop survive fast
-		# impacts without changing the original ring-on-rod model.
-		ring.continuous_cd = true
+		ring.continuous_cd = false
 		ring.sleeping = false
 		o_ring_stop_pair_count_v069 += 1
 
@@ -71,6 +75,7 @@ func _release_physical_o_rings_v069() -> void:
 			continue
 		ring.linear_velocity = Vector3.ZERO
 		ring.angular_velocity = Vector3.ZERO
+		ring.continuous_cd = false
 		ring.freeze = false
 		ring.sleeping = false
 
@@ -89,35 +94,13 @@ func _release_physics() -> void:
 	])
 
 
-func _reset_o_ring_ccd_v069() -> void:
-	for ring_value in o_ring_stops:
-		var ring := ring_value as RigidBody3D
-		if is_instance_valid(ring):
-			ring.continuous_cd = false
-
-
-func _reset_pose() -> void:
-	_reset_o_ring_ccd_v069()
-	super._reset_pose()
-
-
-func _restore_state(snapshot: Dictionary) -> void:
-	_reset_o_ring_ccd_v069()
-	super._restore_state(snapshot)
-
-
-func _restart_build() -> void:
-	_reset_o_ring_ccd_v069()
-	super._restart_build()
-
-
 func _update_help_text_v030() -> void:
 	super._update_help_text_v030()
 	if help_panel == null:
 		return
 	var label: Label = _find_label_v030(help_panel)
 	if label != null:
-		label.text += "\n\nv0.5.14 O-RING STOPPER: restored the simple physical behavior from the older implementation. An O-Ring Stop is a real collision body fixed directly to its host rod. It moves and falls with that rod, while the normal AXLE joint keeps sliding and rotating freely until the axle connector physically reaches the ring. No host-rod proxy collider, moving proxy body, replacement axle joint, or rewritten AXLE travel limit is used. BUILD keeps the O-Ring editable on the rod; SIMULATE releases the rod and ring together."
+		label.text += "\n\nv0.5.14 O-RING STOPPER: restored the simple physical behavior from the older implementation. An O-Ring Stop is a real collision body fixed directly to its host rod. It moves and falls with that rod, while the normal AXLE joint keeps sliding and rotating freely until the axle connector physically reaches the ring. No host-rod proxy collider, moving proxy body, replacement axle joint, rewritten AXLE travel limit, or O-Ring CCD is used. BUILD keeps the O-Ring editable on the rod; SIMULATE releases the rod and ring together."
 
 
 func _on_update_request_completed_v021(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:

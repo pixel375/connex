@@ -1,18 +1,17 @@
 extends "res://scripts/main_v073.gd"
 
 const VERSION_074 := "0.5.16"
-const COMPLEX_ORING_PHYSICS_TPS_V074 := 120
 const AXLE_HUB_PAIR_GUARD_SPACING_V074 := 0.60
 
 # Number of AXLE hubs participating in multi-hub segments on rods that contain
 # at least one O-Ring. Kept under the old debug name for test compatibility.
 var axle_ranked_stop_count_v074: int = 0
+var axle_pair_guard_events_v074: int = 0
+
+# Compatibility/debug surfaces for abandoned experiments. They stay inactive.
 var o_ring_precision_ticks_active_v074: bool = false
 var saved_physics_ticks_v074: int = -1
-var axle_pair_guard_events_v074: int = 0
 var axle_order_repair_events_v074: int = 0
-
-# Compatibility/debug surfaces for abandoned experiments. They stay empty.
 var axle_stack_shape_state_v074: Array = []
 var o_ring_axle_stop_joints_v074: Array = []
 var o_ring_sim_colliders_v074: Array = []
@@ -21,32 +20,27 @@ var o_ring_sim_colliders_v074: Array = []
 # -----------------------------------------------------------------------------
 # Durable multi-hub O-Ring simulation
 #
-# Keep the released v0.5.15 O-Ring stop topology:
+# Keep the released v0.5.15 O-Ring stop topology and the normal project physics
+# cadence:
 #
 # - O-Rings are collisionless exact rod-local followers;
 # - the normal AXLE joint remains free in axial slide and rotation;
 # - only the original outer hub owns each finite O-Ring / rod-end stop;
-# - ordinary connector collision remains the visible/physical stack behavior.
+# - ordinary connector collision remains the visible/physical stack behavior;
+# - physics stays at the project-default tick rate (60 Hz).
 #
-# The remaining failure was not the O-Ring boundary itself. Under a loaded
-# asymmetric assembly, Jolt could occasionally move one AXLE hub completely
-# through its adjacent hub in a single integration step. Every post-facto repair
-# that translated an already-tunnelled fixed assembly produced large solver
-# energy later.
+# The actual failure in larger assemblies was rare hub-through-hub tunnelling.
+# Post-facto transform repairs and 120 Hz both proved destabilizing. v0.5.16
+# instead adds one narrow predictive contact rule between adjacent AXLE hubs on
+# an O-Ring-bearing rod. Only when their current relative axial velocity predicts
+# that they will enter the normal ~0.60 hub contact spacing during the NEXT step,
+# apply a one-dimensional perfectly-inelastic contact impulse along the rod axis.
 #
-# v0.5.16 prevents that impossible state before it happens. For adjacent hubs in
-# a multi-hub O-Ring segment, only when their current relative axial velocity
-# predicts that their centers will cross the normal ~0.60 hub contact spacing in
-# the next physics step, apply a one-dimensional, perfectly inelastic contact
-# impulse along the rod axis. The two connector-side fixed components receive
-# equal/opposite momentum-conserving velocity changes weighted by inverse mass.
-# This can only remove closing relative kinetic energy; it does not move bodies,
-# impose persistent rank floors, or push either component relative to the rod.
-# Once the pair is no longer closing, the guard is completely dormant.
-#
-# Multi-hub O-Ring builds additionally run at 120 Hz while SIMULATE is active to
-# reduce one-step travel. Ordinary simulations keep the project tick rate, and
-# BUILD restores the exact prior value.
+# The impulse is split between the two connector-side fixed components by inverse
+# mass, so total axial momentum is conserved while closing relative kinetic energy
+# can only decrease. No body transform, O-Ring coordinate, collision shape, joint
+# limit, or persistent rank boundary is changed. Once the pair is not closing,
+# the guard is completely dormant.
 # -----------------------------------------------------------------------------
 
 func _find_stop_v074(rod: RigidBody3D, connector: RigidBody3D, segment: int) -> Dictionary:
@@ -80,27 +74,11 @@ func _count_complex_o_ring_hubs_v074() -> int:
 	return count
 
 
-func _enable_precision_ticks_v074() -> void:
-	if axle_ranked_stop_count_v074 <= 0 or o_ring_precision_ticks_active_v074:
-		return
-	saved_physics_ticks_v074 = Engine.physics_ticks_per_second
-	Engine.physics_ticks_per_second = maxi(saved_physics_ticks_v074, COMPLEX_ORING_PHYSICS_TPS_V074)
-	o_ring_precision_ticks_active_v074 = Engine.physics_ticks_per_second > saved_physics_ticks_v074
-
-
-func _restore_precision_ticks_v074() -> void:
-	if saved_physics_ticks_v074 > 0:
-		Engine.physics_ticks_per_second = saved_physics_ticks_v074
-	saved_physics_ticks_v074 = -1
-	o_ring_precision_ticks_active_v074 = false
-
-
 func _build_axle_stop_ranges_v070() -> void:
 	# v073 builds the stable v0.5.15 outer-owner ranges and remembers BUILD order.
-	# Do not rewrite any stop boundary or ownership here.
+	# Do not rewrite any stop boundary/ownership or change Engine tick rate here.
 	super._build_axle_stop_ranges_v070()
 	axle_ranked_stop_count_v074 = _count_complex_o_ring_hubs_v074()
-	_enable_precision_ticks_v074()
 
 
 func _guard_adjacent_axle_pair_v074(group: Dictionary, lower_info: Dictionary, upper_info: Dictionary, delta: float) -> bool:
@@ -116,8 +94,7 @@ func _guard_adjacent_axle_pair_v074(group: Dictionary, lower_info: Dictionary, u
 	var upper_along: float = _rod_local_along_v070(upper, rod)
 	var gap: float = upper_along - lower_along
 	if gap <= 0.0:
-		# Never perform a post-facto transform repair. A negative gap is left as a
-		# hard regression failure so this predictor cannot hide a missed tunnel.
+		# Never hide a missed tunnel with post-facto position repair.
 		return false
 
 	var relative_speed: float = (upper.linear_velocity - lower.linear_velocity).dot(axis)
@@ -127,9 +104,9 @@ func _guard_adjacent_axle_pair_v074(group: Dictionary, lower_info: Dictionary, u
 	if predicted_gap >= AXLE_HUB_PAIR_GUARD_SPACING_V074:
 		return false
 
-	# Permit the maximum closing speed that lands exactly at the contact guard on
-	# the next step. If the pair is already inside that spacing, stop additional
-	# closing but do not separate/teleport it.
+	# Permit the most closing speed that lands exactly at the contact guard next
+	# step. If already inside that spacing, prevent further closing but do not
+	# separate or teleport the hubs.
 	var allowed_relative: float = minf(0.0, (AXLE_HUB_PAIR_GUARD_SPACING_V074 - gap) / delta)
 	var relative_change: float = allowed_relative - relative_speed
 	if relative_change <= 0.000001:
@@ -150,8 +127,8 @@ func _guard_adjacent_axle_pair_v074(group: Dictionary, lower_info: Dictionary, u
 	if inv_sum <= 0.000001:
 		return false
 
-	# Equivalent to a perfectly inelastic 1-D contact impulse. Because the
-	# relative change is split by inverse mass, total axial momentum is conserved.
+	# 1-D inelastic contact impulse. The inverse-mass split makes the summed axial
+	# momentum change zero while increasing relative speed only toward zero.
 	var lower_delta_speed: float = -relative_change * inv_lower / inv_sum
 	var upper_delta_speed: float = relative_change * inv_upper / inv_sum
 	_shift_component_velocity_v071(lower_stop, axis * lower_delta_speed)
@@ -168,15 +145,12 @@ func _predict_axle_order_v073(delta: float) -> void:
 		var hubs: Array = group.get("hubs", []) as Array
 		if hubs.size() <= 1 or not _group_has_o_ring_v074(group):
 			continue
-		# The array remains in BUILD order. Guard each neighboring pair against
-		# closing through that order; ordinary Jolt collision still handles contact.
 		for i in range(hubs.size() - 1):
 			_guard_adjacent_axle_pair_v074(group, hubs[i] as Dictionary, hubs[i + 1] as Dictionary, delta)
 
 
-# Disable v073's post-facto ownership transfer. If the predictor ever misses an
-# inversion, the strict regression must expose it rather than translating an
-# already-overlapped assembly or moving the O-Ring boundary to the bad state.
+# Disable v073's post-facto ownership transfer. A missed inversion remains a hard
+# regression failure instead of translating an already-overlapped assembly.
 func _correct_axle_order_v073() -> bool:
 	return false
 
@@ -186,7 +160,7 @@ func _correct_axle_stop_positions_v071() -> void:
 		return
 
 	# Apply only the released v0.5.15 finite boundary correction. Pairwise hub
-	# protection happens predictively through _predict_axle_order_v073().
+	# protection is predictive and velocity-only.
 	for value in axle_stop_ranges_v070:
 		var stop := value as Dictionary
 		var connector := stop.get("connector") as RigidBody3D
@@ -212,11 +186,12 @@ func _correct_axle_stop_positions_v071() -> void:
 func _prepare_stable_simulation_graph() -> void:
 	axle_pair_guard_events_v074 = 0
 	axle_order_repair_events_v074 = 0
+	o_ring_precision_ticks_active_v074 = false
+	saved_physics_ticks_v074 = -1
 	super._prepare_stable_simulation_graph()
 
 
 func _restore_o_ring_followers_v068(restore_build_pose: bool = true) -> void:
-	_restore_precision_ticks_v074()
 	axle_ranked_stop_count_v074 = 0
 	axle_stack_shape_state_v074.clear()
 	o_ring_axle_stop_joints_v074.clear()

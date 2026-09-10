@@ -83,6 +83,7 @@ jobs:
           run_smoke strict_autoconnect_no_warp_smoke_v510.gd STRICT_510_SMOKE_OK STRICT_510_SMOKE_FAIL strict-510
           run_smoke structure_rigidity_smoke_v061.gd RIGIDITY_061_SMOKE_OK RIGIDITY_061_SMOKE_FAIL rigidity-061
           run_smoke rigidity_live_axle_smoke_v062.gd RIGIDITY_AXLE_062_SMOKE_OK RIGIDITY_AXLE_062_SMOKE_FAIL rigidity-axle-062
+          run_smoke o_ring_pair_diagnostic_v074.gd ORING_PAIR_DIAG_074_OK ORING_PAIR_DIAG_074_FAIL oring-pair-diag-074
           run_smoke o_ring_mixed_stability_smoke_v063.gd ORING_STABILITY_063_SMOKE_OK ORING_STABILITY_063_SMOKE_FAIL oring-063
           run_smoke axle_o_ring_video_stability_smoke_v064.gd AXLE_ORING_VIDEO_064_SMOKE_OK AXLE_ORING_VIDEO_064_SMOKE_FAIL oring-video-064
           run_smoke editor_socket_workflows_smoke_v070.gd EDITOR_SOCKET_070_SMOKE_OK EDITOR_SOCKET_070_SMOKE_FAIL socket-070

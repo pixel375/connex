@@ -38,7 +38,7 @@ func _add_axle_connection(main: Node, connector: RigidBody3D, rod: RigidBody3D) 
 	return joint
 
 
-func _add_o_ring(main: Node, rod: RigidBody3D, along: float) -> RigidBody3D:
+func _add_o_ring(main: Node, rod: RigidBody3D, along: float) -> Dictionary:
 	var axis: Vector3 = (main.call("_rod_axis_v020", rod) as Vector3).normalized()
 	var center: Vector3 = rod.global_position + axis * along
 	var basis: Basis = main.call("_basis_for_axle_v020", axis) as Basis
@@ -48,7 +48,7 @@ func _add_o_ring(main: Node, rod: RigidBody3D, along: float) -> RigidBody3D:
 	joint.set_meta("o_ring_mount", true)
 	ring.set_meta("host_rod", rod)
 	ring.set_meta("build_transform", ring.global_transform)
-	return ring
+	return {"ring": ring, "joint": joint}
 
 
 func _along(main: Node, body: Node3D, rod: RigidBody3D) -> float:
@@ -104,7 +104,9 @@ func _run() -> void:
 	_add_exact_socket_rod(main, d, 270, a, 90)
 	var axle_joint := _add_axle_connection(main, a, axle)
 	var hub_start_along := _along(main, a, axle)
-	var ring := _add_o_ring(main, axle, hub_start_along - 0.92)
+	var ring_info := _add_o_ring(main, axle, hub_start_along - 0.92)
+	var ring := ring_info.get("ring") as RigidBody3D
+	var ring_mount := ring_info.get("joint") as Generic6DOFJoint3D
 	main.call("_rebuild_connection_graph_v020")
 
 	var ring_local_before: Transform3D = axle.global_transform.affine_inverse() * ring.global_transform
@@ -119,8 +121,9 @@ func _run() -> void:
 	if not bool(main.get("simulating")):
 		_fail("simulation did not start")
 		return
-	if not (main.get("o_ring_followers_v068") as Array).is_empty():
-		_fail("video O-Ring was incorrectly converted to a collisionless follower")
+	var followers := main.get("o_ring_followers_v068") as Array
+	if followers.size() != 1:
+		_fail("video fixture did not create exactly one collidable rod-relative O-Ring follower")
 		return
 	if not (main.get("o_ring_proxy_shapes_v068") as Array).is_empty():
 		_fail("host-rod O-Ring proxy collision was recreated")
@@ -132,13 +135,22 @@ func _run() -> void:
 		_fail("AXLE joint was replaced instead of using physical O-Ring contact")
 		return
 	if int(main.get("o_ring_stop_pair_count_v069")) != 1:
-		_fail("video fixture did not keep exactly one physical O-Ring mount")
+		_fail("video fixture did not keep exactly one O-Ring stop")
 		return
-	if ring.freeze or ring.collision_layer != 2 or ring.collision_mask != 3:
-		_fail("video O-Ring no longer follows the v0.3.8 construction collision policy; layer=%d mask=%d" % [ring.collision_layer, ring.collision_mask])
+	if not ring.freeze or ring.freeze_mode != RigidBody3D.FREEZE_MODE_KINEMATIC:
+		_fail("video O-Ring is not an exact kinematic follower")
 		return
-	if ring.continuous_cd:
-		_fail("legacy video O-Ring unexpectedly has CCD enabled")
+	if ring.get_parent() != axle:
+		_fail("video O-Ring is not parented to its axle rod")
+		return
+	if ring.collision_layer != 2 or ring.collision_mask != 3:
+		_fail("video O-Ring lost construction collision policy; layer=%d mask=%d" % [ring.collision_layer, ring.collision_mask])
+		return
+	if not ring.get_collision_exceptions().has(axle):
+		_fail("video O-Ring does not exclude its host rod")
+		return
+	if not ring_mount.node_a.is_empty() or not ring_mount.node_b.is_empty():
+		_fail("video O-Ring BUILD weld remained active during follower simulation")
 		return
 
 	if axle_joint.node_a.is_empty() or axle_joint.node_b.is_empty():
@@ -151,21 +163,11 @@ func _run() -> void:
 		_fail("normal AXLE rotation was accidentally locked")
 		return
 
-	main.call("_rebuild_connection_graph_v020")
-	var ring_mount: Joint3D = null
-	for value in (main.get("connections_v020") as Array):
-		var record := value as Dictionary
-		if str(record.get("kind", "")) == "o_ring" and record.get("ring") == ring:
-			ring_mount = record.get("joint") as Joint3D
-			break
-	if not is_instance_valid(ring_mount) or ring_mount.node_a.is_empty() or ring_mount.node_b.is_empty():
-		_fail("physical O-Ring-to-rod mount is not live")
-		return
-
 	var max_linear := 0.0
 	var max_angular := 0.0
 	var min_stop_clearance := INF
 	var max_gap := 0.0
+	var max_ring_drift := 0.0
 	const CLEARANCE := 0.43
 	for frame_index in range(720):
 		await physics_frame
@@ -179,17 +181,19 @@ func _run() -> void:
 			max_linear = maxf(max_linear, body.linear_velocity.length())
 			max_angular = maxf(max_angular, body.angular_velocity.length())
 
+		var ring_expected: Transform3D = axle.global_transform * ring_local_before
+		var ring_drift := ring.global_position.distance_to(ring_expected.origin)
+		max_ring_drift = maxf(max_ring_drift, ring_drift)
+		if ring_drift > 0.015:
+			_fail("rod-relative O-Ring drifted off axle at frame %d: %.4f" % [frame_index, ring_drift])
+			return
+
 		var hub_along := _along(main, a, axle)
 		var ring_along := _along(main, ring, axle)
 		var stop_clearance := hub_along - ring_along
 		min_stop_clearance = minf(min_stop_clearance, stop_clearance)
 		if stop_clearance < CLEARANCE - 0.12:
 			_fail("axle hub crossed through physical O-Ring at frame %d: clearance=%.3f required≈%.3f" % [frame_index, stop_clearance, CLEARANCE])
-			return
-
-		var ring_expected: Transform3D = axle.global_transform * ring_local_before
-		if ring.global_position.distance_to(ring_expected.origin) > 0.10:
-			_fail("physical O-Ring drifted off its axle rod")
 			return
 
 		if frame_index % 30 == 0:
@@ -211,11 +215,20 @@ func _run() -> void:
 	if axle_joint.node_a.is_empty() or axle_joint.node_b.is_empty() or bool(axle_joint.get("linear_limit_y/enabled")):
 		_fail("normal free AXLE did not survive return to BUILD")
 		return
-	if not ring.freeze or ring.collision_layer != 2 or ring.collision_mask != 3:
-		_fail("physical O-Ring did not return to editable BUILD state with construction collision policy")
+	if ring_mount.node_a.is_empty() or ring_mount.node_b.is_empty():
+		_fail("O-Ring BUILD weld did not restore")
+		return
+	if not (main.get("o_ring_followers_v068") as Array).is_empty():
+		_fail("O-Ring follower state leaked into BUILD")
+		return
+	if not ring.freeze or ring.get_parent() == axle or ring.collision_layer != 2 or ring.collision_mask != 3:
+		_fail("physical O-Ring did not return to editable BUILD state")
+		return
+	if ring.get_collision_exceptions().has(axle):
+		_fail("temporary host collision exception leaked into BUILD")
 		return
 
-	print("AXLE_ORING_VIDEO_064_SMOKE_OK: physical rod-mounted O-Ring blocks loaded axle hub and closed frame settles; min_clearance=%.3f vmax=%.2f wmax=%.2f gap=%.3f" % [min_stop_clearance, max_linear, max_angular, max_gap])
+	print("AXLE_ORING_VIDEO_064_SMOKE_OK: exact collidable rod-relative O-Ring blocks loaded axle hub and closed frame settles; min_clearance=%.3f max_drift=%.4f vmax=%.2f wmax=%.2f gap=%.3f" % [min_stop_clearance, max_ring_drift, max_linear, max_angular, max_gap])
 	main.queue_free()
 	await process_frame
 	quit(0)

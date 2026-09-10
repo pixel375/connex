@@ -2,12 +2,15 @@ extends "res://scripts/main_v072.gd"
 
 # v0.5.17 release candidate follow-up.
 # Solver preflight may temporarily disable an otherwise legitimate AXLE joint as
-# redundant. Wake ownership must therefore come from the authoritative saved
-# connection graph, not from the temporary solver-active joint list.
+# redundant. Wake ownership therefore comes from the authoritative connection
+# graph captured before preflight, never from the temporary solver-active graph.
 
 func _wake_authoritative_axles_v073() -> int:
 	active_axle_component_ids_v072.clear()
-	_rebuild_connection_graph_v020()
+	# IMPORTANT: do not call _rebuild_connection_graph_v020() here. The inherited
+	# stable-simulation preflight may have temporarily blanked node_a/node_b on
+	# solver-redundant joints. Rebuilding at that point would erase legitimate
+	# authoritative AXLE records and reproduce the save/load freeze.
 	var awakened := 0
 	for record_value in connections_v020:
 		var record := record_value as Dictionary

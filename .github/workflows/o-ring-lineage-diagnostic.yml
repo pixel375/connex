@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runtime: [main_v071, main_v072, main_v073, main_v081]
+        runtime: [main_v073, main_v074, main_v075, main_v076, main_v081]
     steps:
       - name: Checkout
         uses: actions/checkout@v5

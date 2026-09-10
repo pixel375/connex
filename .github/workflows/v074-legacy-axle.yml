@@ -1,0 +1,58 @@
+name: v0.5.18 Legacy AXLE Recovery Validation
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  legacy-axle-repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Godot 4.6.3
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -fL --retry 3 -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/4.6.3-stable/Godot_v4.6.3-stable_linux.x86_64.zip"
+          mkdir -p /tmp/godot
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          GODOT_BIN="$(find /tmp/godot -maxdepth 1 -type f -name 'Godot*' | head -n 1)"
+          chmod +x "$GODOT_BIN"
+          sudo install -m 0755 "$GODOT_BIN" /usr/local/bin/godot
+          godot --version
+
+      - name: Activate v0.5.18 candidate runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i 's#res://scripts/main_v073.gd#res://scripts/main_v074.gd#g' Main.tscn
+          sed -Ei 's/main_v072\.gd/main_v074.gd/g' tests/axle_cross_stop_roundtrip_smoke_v072.gd
+
+      - name: Parse project
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --editor --quit 2>&1 | tee /tmp/godot-editor.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|Failed to load script" /tmp/godot-editor.log; then exit 1; fi
+
+      - name: Reproduce and repair corrupted legacy AXLE save
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/legacy_axle_corrupt_save_repair_smoke_v074.gd 2>&1 | tee /tmp/legacy-axle-074.log
+          grep -F 'LEGACY_AXLE_REPAIR_074_SMOKE_OK' /tmp/legacy-axle-074.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|LEGACY_AXLE_REPAIR_074_SMOKE_FAIL" /tmp/legacy-axle-074.log; then exit 1; fi
+
+      - name: Re-run four-post AXLE CROSS stop roundtrip
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/axle_cross_stop_roundtrip_smoke_v072.gd 2>&1 | tee /tmp/axle-cross-072-on-074.log
+          grep -F 'AXLE_CROSS_ROUNDTRIP_072_SMOKE_OK' /tmp/axle-cross-072-on-074.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|AXLE_CROSS_ROUNDTRIP_072_SMOKE_FAIL" /tmp/axle-cross-072-on-074.log; then exit 1; fi

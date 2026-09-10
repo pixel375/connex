@@ -63,6 +63,11 @@ func _run() -> void:
 	root.add_child(main)
 	await process_frame
 
+	var requested_rigidity := OS.get_environment("ORING_PAIR_RIGIDITY").strip_edges()
+	if not requested_rigidity.is_empty():
+		main.set("physics_structure_rigidity_v066", float(requested_rigidity))
+	print("ORING_PAIR_DIAG_CONFIG rigidity=%.1f requested=%s" % [float(main.get("physics_structure_rigidity_v066")), requested_rigidity if not requested_rigidity.is_empty() else "persisted/default"])
+
 	var axle := main.call("_make_rod", 4, Vector3(0, 13, 0), Vector3(0, 29, 0)) as RigidBody3D
 	var hub_a := main.call("_make_connector", 6, Transform3D(Basis.IDENTITY, Vector3(0, 19, 0))) as RigidBody3D
 	var hub_b := main.call("_make_connector", 6, Transform3D(Basis.IDENTITY, Vector3(0, 23, 0))) as RigidBody3D

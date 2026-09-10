@@ -12,7 +12,7 @@ func _ready() -> void:
 	super._ready()
 	if update_status_v021 != null:
 		_set_update_status_v021("Current version: v%s" % VERSION_073)
-	_status("v0.5.16 ready — live O-Ring stop ownership, rigid high-end structure settings and progressive realistic flex below 90%.")
+	_status("v0.5.16 ready — live O-Ring stop ownership, stable closed-loop rigidity and progressive realistic flex below 90%.")
 
 
 func _status(text: String) -> void:
@@ -22,10 +22,8 @@ func _status(text: String) -> void:
 
 func _structure_flex_angle_rad_v066() -> float:
 	var rigidity: float = clampf(physics_structure_rigidity_v066, 0.0, 100.0)
-	# Jolt treats a tiny non-zero angular allowance as a materially different
-	# constraint from a true fixed joint. Keep the upper end exactly rigid so the
-	# default 92% physics remains stable, then ramp compliance through the lower
-	# slider range where the user actually wants visible structure flex.
+	# The visible/high-end behavior is genuinely rigid. Below 90%, compliance
+	# ramps in progressively across the construction.
 	if rigidity >= STRUCTURE_FLEX_RIGID_THRESHOLD_V073:
 		return 0.0
 	var flexible01: float = 1.0 - rigidity / STRUCTURE_FLEX_RIGID_THRESHOLD_V073
@@ -37,13 +35,49 @@ func _structure_flex_angle_deg_v066() -> float:
 	return rad_to_deg(_structure_flex_angle_rad_v066())
 
 
+func _cycle_solver_relief_rad_v073() -> float:
+	# Closed rigid loops are over-constrained. v0.5.11 solved their delayed Jolt
+	# energy buildup by giving only the redundant cycle-closing edge a tiny angular
+	# allowance. Preserve that proven relief when the user-facing high end is 0°.
+	var rigidity01: float = clampf(physics_structure_rigidity_v066 / 100.0, 0.0, 1.0)
+	var loose01: float = pow(1.0 - rigidity01, 1.35)
+	var degrees: float = lerpf(STRUCTURE_FLEX_MIN_DEG_V066, STRUCTURE_FLEX_MAX_DEG_V066, loose01)
+	return deg_to_rad(degrees)
+
+
+func _apply_structure_flex_all_v072() -> int:
+	var global_flex: float = _structure_flex_angle_rad_v066()
+	var high_end: bool = physics_structure_rigidity_v066 >= STRUCTURE_FLEX_RIGID_THRESHOLD_V073
+	var cycle_relief: float = _cycle_solver_relief_rad_v073()
+	var count := 0
+	_rebuild_connection_graph_v020(false)
+	for record_value in connections_v020:
+		var record := record_value as Dictionary
+		if str(record.get("kind", "")) not in ["socket", "cross"]:
+			continue
+		var joint := record.get("joint") as Generic6DOFJoint3D
+		if not is_instance_valid(joint):
+			continue
+		var applied_flex: float = global_flex
+		if high_end and bool(joint.get_meta("sim_soft_socket_cycle_v064", false)):
+			applied_flex = cycle_relief
+		for axis_name in ["x", "y", "z"]:
+			joint.set("angular_limit_%s/enabled" % axis_name, true)
+			joint.set("angular_limit_%s/lower_angle" % axis_name, -applied_flex)
+			joint.set("angular_limit_%s/upper_angle" % axis_name, applied_flex)
+		joint.set_meta("sim_rigidity_all_v072", true)
+		joint.set_meta("sim_structure_rigidity_v066", physics_structure_rigidity_v066)
+		joint.set_meta("sim_structure_flex_rad_v066", applied_flex)
+		joint.set_meta("sim_cycle_relief_v073", high_end and bool(joint.get_meta("sim_soft_socket_cycle_v064", false)))
+		count += 1
+	return count
+
+
 # O-Ring boundaries belong to rod segments, not permanently to the connector
 # that happened to be nearest when SIMULATE started. Keep each AXLE's original
 # O-Ring segment so a hub can never change sides by crossing a ring, but refresh
 # which hub is currently the lower/upper boundary owner inside that segment.
 # Interior hubs remain ordinary physical hubs and stack by normal collision.
-# This prevents stale ownership without adding artificial hidden floors between
-# adjacent connectors (which caused solver energy when loaded constructions hit).
 func _build_axle_stop_ranges_v070() -> void:
 	axle_stop_ranges_v070.clear()
 	if axle_stop_segment_by_uid_v073.is_empty():

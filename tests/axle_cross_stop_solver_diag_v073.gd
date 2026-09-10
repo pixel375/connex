@@ -1,9 +1,7 @@
 extends "res://tests/axle_cross_stop_roundtrip_smoke_v072.gd"
 
 # Diagnostic version of the four-post regression. It keeps the exact same
-# fixture/save-load path but records the solver state after preflight so a
-# visually identical restored build cannot hide a different disabled edge,
-# drifting stop mount, or off-axis hub.
+# fixture/save-load path but records the graph before and after solver preflight.
 
 func _joint_for_pair_meta(main: Node, kind: String, connector: RigidBody3D, rod: RigidBody3D) -> Joint3D:
 	var connector_uid := _uid(connector)
@@ -26,6 +24,40 @@ func _radial_error(main: Node, hub: RigidBody3D, rod: RigidBody3D) -> float:
 	var axis := (main.call("_rod_axis_v020", rod) as Vector3).normalized()
 	var delta := hub.global_position - rod.global_position
 	return (delta - axis * delta.dot(axis)).length()
+
+
+func _print_graph_signature(main: Node, fixture: Dictionary, label: String) -> void:
+	main.call("_rebuild_connection_graph_v020")
+	var rods := fixture.get("rods") as Array
+	for i in range(4):
+		var rod := rods[i] as RigidBody3D
+		var entries: Array[String] = []
+		for record_value in (main.get("connections_v020") as Array):
+			var record := record_value as Dictionary
+			if record.get("rod") != rod and record.get("a") != rod and record.get("b") != rod:
+				continue
+			var kind := str(record.get("kind", ""))
+			var connector := record.get("connector") as RigidBody3D
+			var other_uid := _uid(connector) if is_instance_valid(connector) else -1
+			var joint := record.get("joint") as Joint3D
+			entries.append("%s:c%d:j%s:u%d" % [kind, other_uid, str(is_instance_valid(joint)), int(record.get("uid", -1))])
+		entries.sort()
+		print("AXLE_GRAPH_DIAG %s host=%d uid=%d records=%s" % [label, i, _uid(rod), ",".join(entries)])
+
+	# Also list every live joint touching the fixture host rods by persisted metadata.
+	for i in range(4):
+		var rod := rods[i] as RigidBody3D
+		var rod_uid := _uid(rod)
+		var joint_entries: Array[String] = []
+		for joint_value in (main.get("joints") as Array):
+			var joint := joint_value as Joint3D
+			if not is_instance_valid(joint):
+				continue
+			if int(joint.get_meta("rod_uid_v020", -1)) != rod_uid:
+				continue
+			joint_entries.append("%s:c%d:u%d" % [str(joint.get_meta("connection_kind_v020", "?")), int(joint.get_meta("connector_uid_v020", -1)), int(joint.get_meta("connection_uid_v020", -1))])
+		joint_entries.sort()
+		print("AXLE_JOINT_DIAG %s host=%d uid=%d joints=%s" % [label, i, rod_uid, ",".join(joint_entries)])
 
 
 func _solver_signature(main: Node, fixture: Dictionary, label: String, stop_alongs: Array) -> bool:
@@ -54,10 +86,10 @@ func _solver_signature(main: Node, fixture: Dictionary, label: String, stop_alon
 			_fail("%s: CROSS stop mount %d was solver-disabled by preflight" % [label, i])
 			return false
 		if stop_drift > 0.12:
-			_fail("%s: CROSS stop %d drifted on its host before support (%.3f)" % [label, i, stop_drift])
+			_fail("%s: CROSS stop %d drifted on its host before support (%.3f; axle_disabled=%s)" % [label, i, stop_drift, str(axle_disabled)])
 			return false
 		if radial > 0.20:
-			_fail("%s: AXLE hub %d left its shaft radially after preflight (%.3f)" % [label, i, radial])
+			_fail("%s: AXLE hub %d left its shaft radially after preflight (%.3f; axle_disabled=%s)" % [label, i, radial, str(axle_disabled)])
 			return false
 	return true
 
@@ -72,6 +104,7 @@ func _run_fixture(main: Node, fixture: Dictionary, label: String) -> Array:
 		start_gaps.append(_along(main, hubs[i] as RigidBody3D, rods[i] as RigidBody3D) - _along(main, stops[i] as RigidBody3D, rods[i] as RigidBody3D))
 		stop_alongs.append(_along(main, stops[i] as RigidBody3D, rods[i] as RigidBody3D))
 
+	_print_graph_signature(main, fixture, "%s preflight" % label)
 	main.call("_toggle_simulation")
 	for _i in range(12):
 		await physics_frame

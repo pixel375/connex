@@ -2,6 +2,7 @@ extends SceneTree
 
 const CONNECTOR_TYPE := 6
 const ROD_TYPE := 2
+const EDITOR_MOVE := 3
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -41,6 +42,8 @@ func _run() -> void:
 	if not is_instance_valid(rod):
 		_fail("CROSS socket did not create a rod")
 		return
+	var rod_uid := int(rod.get_meta("piece_uid_v020", -1))
+	var connector_uid := int(connector.get_meta("piece_uid_v020", -1))
 
 	if rod.global_position.distance_to(socket_point) > 0.05:
 		_fail("new CROSS rod was not centered at the clicked socket; midpoint gap %.3f" % rod.global_position.distance_to(socket_point))
@@ -66,7 +69,7 @@ func _run() -> void:
 		return
 
 	main.call("_set_selected", rod)
-	main.call("_set_editor_mode_v032", int(main.get("EDITOR_MOVE_042")) if main.get("EDITOR_MOVE_042") != null else 3, false)
+	main.call("_set_editor_mode_v032", EDITOR_MOVE, false)
 	await process_frame
 	var special := main.call("_cross_slide_record_v074", rod) as Dictionary
 	if special.is_empty():
@@ -117,9 +120,10 @@ func _run() -> void:
 		var body := value as RigidBody3D
 		if not is_instance_valid(body):
 			continue
-		if int(body.get_meta("piece_uid_v020", -1)) == int(rod.get_meta("piece_uid_v020", -2)):
+		var uid := int(body.get_meta("piece_uid_v020", -1))
+		if uid == rod_uid:
 			restored_rod = body
-		elif int(body.get_meta("piece_uid_v020", -1)) == int(connector.get_meta("piece_uid_v020", -3)):
+		elif uid == connector_uid:
 			restored_connector = body
 	if not is_instance_valid(restored_rod) or not is_instance_valid(restored_connector):
 		_fail("CROSS rod or connector was lost after save/load")

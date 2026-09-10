@@ -60,6 +60,11 @@ jobs:
             tests/o_ring_mixed_stability_smoke_v063.gd \
             tests/axle_o_ring_video_stability_smoke_v064.gd \
             tests/editor_socket_workflows_smoke_v070.gd || true
+          # The mixed fixture activates 120 Hz precision physics. Double its
+          # frame counts so it covers the same real-time duration as the 60 Hz
+          # v0.5.15 baseline rather than passing simply because time was halved.
+          sed -Ei 's/range\(12\)/range(24)/; s/range\(72\)/range(144)/; s/range\(420\)/range(840)/' \
+            tests/o_ring_mixed_stability_smoke_v063.gd
 
       - name: Run complete regression suite through v0.5.16
         shell: bash

@@ -236,7 +236,11 @@ func _build_axle_stop_ranges_v070() -> void:
 					"rod": rod,
 					"uid": int(axle.get("uid", -1)),
 				})
-			if ordered_guards.size() > 1:
+			# With one or two hubs there is no interior hub that can bypass a
+			# boundary owner. Leave the proven v0.5.15 path completely untouched.
+			# The topology guard is reserved for 3+ hubs, where an interior hub
+			# genuinely has no O-Ring boundary of its own.
+			if ordered_guards.size() > 2:
 				axle_order_groups_v073.append({
 					"rod": rod,
 					"hubs": ordered_guards,

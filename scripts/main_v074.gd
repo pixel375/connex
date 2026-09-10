@@ -2,12 +2,14 @@ extends "res://scripts/main_v073.gd"
 
 const VERSION_074 := "0.5.16"
 const AXLE_HUB_RANK_SPACING_V074 := 0.62
-const AXLE_HUB_STACK_HEIGHT_V074 := 0.72
+const COMPLEX_ORING_PHYSICS_TPS_V074 := 120
 
 var axle_ranked_stop_count_v074: int = 0
-var axle_stack_shape_state_v074: Array = []
+var o_ring_precision_ticks_active_v074: bool = false
+var saved_physics_ticks_v074: int = -1
 
-# Compatibility/debug surfaces for abandoned experiments. They must remain empty.
+# Compatibility/debug surfaces for abandoned experiments. They stay empty.
+var axle_stack_shape_state_v074: Array = []
 var o_ring_axle_stop_joints_v074: Array = []
 var o_ring_sim_colliders_v074: Array = []
 
@@ -19,21 +21,23 @@ var o_ring_sim_colliders_v074: Array = []
 # O-Ring/rod-end boundary may receive a post-step connector-side correction.
 # That path is proven stable even with asymmetric spoke assemblies.
 #
-# The user-reported failure in larger builds is different: an interior AXLE hub
-# can occasionally tunnel through the outer hub, after which it can bypass the
-# boundary owner. Two deliberately low-impact protections close that hole:
+# Larger constructions exposed one narrow failure: at 60 Hz Jolt can create a
+# large relative axial change after our predictor, allowing an interior AXLE hub
+# to pass the outer hub and bypass its O-Ring boundary. v0.5.16 closes that hole
+# without extra joints, collision proxies, ownership swaps or interior teleports:
 #
-# 1. Every hub keeps a predictive rod-local rank limit, spaced by physical hub
-#    thickness. Interior rank limits are VELOCITY-ONLY; they never teleport or
-#    post-correct attached assemblies.
-# 2. AXLE hubs sharing a rod that contains an O-Ring temporarily use a slightly
-#    taller axial collision cylinder (0.72 vs 0.60). This begins ordinary
-#    hub-to-hub contact 0.06 units earlier per face, giving Jolt/CCD more room to
-#    resolve stacking before a one-frame pass-through. The visible connector is
-#    unchanged and the original collision shape is restored in BUILD.
+# - every hub in a multi-hub O-Ring segment gets a predictive rod-local rank
+#   limit spaced by physical connector thickness;
+# - interior rank limits are velocity-only and NEVER post-correct transforms;
+# - only while such a complex O-Ring segment is simulated, physics resolution is
+#   raised from the normal 60 Hz to 120 Hz so the predictor/Jolt solver exchange
+#   has half the integration distance per step;
+# - ordinary simulations stay at the project-default 60 Hz and BUILD restores
+#   the previous tick rate exactly.
 #
-# O-Rings themselves remain collisionless exact rod-local followers. The normal
-# AXLE joint is never replaced or limited, and Y rotation remains free.
+# O-Rings remain collisionless exact rod-local followers. The normal AXLE joint
+# is never replaced or limited, and its axial slide/rotation stay free inside the
+# permitted interval.
 # -----------------------------------------------------------------------------
 
 func _rank_spacing_for_group_v074(group: Dictionary) -> float:
@@ -47,8 +51,9 @@ func _rank_spacing_for_group_v074(group: Dictionary) -> float:
 	var upper: float = float(group.get("upper", INF))
 	var spacing := AXLE_HUB_RANK_SPACING_V074
 
-	# Use the actual BUILD positions at simulation setup. This avoids depending on
-	# legacy group metadata and never makes a compact valid build jump apart.
+	# Derive setup positions from actual BUILD geometry rather than old metadata.
+	# If a compact but valid build starts closer than 0.62, shrink only that
+	# segment's predictive spacing; SIMULATE must not rearrange the BUILD pose.
 	var initial_values: Array = []
 	for hub_value in hubs:
 		var connector := (hub_value as Dictionary).get("connector") as RigidBody3D
@@ -90,7 +95,7 @@ func _apply_ranked_axle_stops_v074() -> void:
 		var group := group_value as Dictionary
 		var rod := group.get("rod") as RigidBody3D
 		var hubs: Array = group.get("hubs", []) as Array
-		if not is_instance_valid(rod) or hubs.is_empty() or not _group_has_o_ring_v074(group):
+		if not is_instance_valid(rod) or hubs.size() <= 1 or not _group_has_o_ring_v074(group):
 			continue
 		var segment: int = int(group.get("segment", 0))
 		var lower: float = float(group.get("lower", -INF))
@@ -110,72 +115,32 @@ func _apply_ranked_axle_stops_v074() -> void:
 			if upper < INF:
 				stop["upper"] = upper - spacing * float(hubs.size() - 1 - i)
 			stop["rank_spacing_v074"] = spacing
-			stop["ranked_stop_v074"] = hubs.size() > 1
-			if hubs.size() > 1:
-				axle_ranked_stop_count_v074 += 1
+			stop["ranked_stop_v074"] = true
+			axle_ranked_stop_count_v074 += 1
 
 
-func _restore_axle_stack_shapes_v074() -> void:
-	for state_value in axle_stack_shape_state_v074:
-		var state := state_value as Dictionary
-		var collider := state.get("collider") as CollisionShape3D
-		var original_shape := state.get("shape") as Shape3D
-		if is_instance_valid(collider) and original_shape != null:
-			collider.shape = original_shape
-	axle_stack_shape_state_v074.clear()
+func _enable_precision_ticks_v074() -> void:
+	if axle_ranked_stop_count_v074 <= 0 or o_ring_precision_ticks_active_v074:
+		return
+	saved_physics_ticks_v074 = Engine.physics_ticks_per_second
+	Engine.physics_ticks_per_second = maxi(saved_physics_ticks_v074, COMPLEX_ORING_PHYSICS_TPS_V074)
+	o_ring_precision_ticks_active_v074 = Engine.physics_ticks_per_second > saved_physics_ticks_v074
 
 
-func _expand_axle_hub_shape_v074(connector: RigidBody3D) -> bool:
-	if not is_instance_valid(connector):
-		return false
-	for state_value in axle_stack_shape_state_v074:
-		if (state_value as Dictionary).get("connector") == connector:
-			return true
-	var best: CollisionShape3D = null
-	var best_radius := 0.0
-	for child_value in connector.get_children():
-		var collider := child_value as CollisionShape3D
-		if collider == null or collider.disabled or not (collider.shape is CylinderShape3D):
-			continue
-		var cylinder := collider.shape as CylinderShape3D
-		if cylinder.radius > best_radius:
-			best = collider
-			best_radius = cylinder.radius
-	if best == null:
-		return false
-	var original_shape := best.shape
-	var expanded := original_shape.duplicate(true) as CylinderShape3D
-	if expanded == null:
-		return false
-	expanded.height = maxf(expanded.height, AXLE_HUB_STACK_HEIGHT_V074)
-	axle_stack_shape_state_v074.append({"connector": connector, "collider": best, "shape": original_shape})
-	best.shape = expanded
-	connector.sleeping = false
-	return true
-
-
-func _prepare_axle_stack_shapes_v074() -> int:
-	_restore_axle_stack_shapes_v074()
-	var count := 0
-	var seen: Dictionary = {}
-	for stop_value in axle_stop_ranges_v070:
-		var stop := stop_value as Dictionary
-		if int(stop.get("ring_count", 0)) <= 0:
-			continue
-		var connector := stop.get("connector") as RigidBody3D
-		if not is_instance_valid(connector) or seen.has(connector.get_instance_id()):
-			continue
-		seen[connector.get_instance_id()] = true
-		if _expand_axle_hub_shape_v074(connector):
-			count += 1
-	return count
+func _restore_precision_ticks_v074() -> void:
+	if saved_physics_ticks_v074 > 0:
+		Engine.physics_ticks_per_second = saved_physics_ticks_v074
+	saved_physics_ticks_v074 = -1
+	o_ring_precision_ticks_active_v074 = false
 
 
 func _build_axle_stop_ranges_v070() -> void:
-	# main_v073 builds v0.5.15 boundary ownership and initial hub ordering.
+	# main_v073 builds the stable v0.5.15 outer-boundary ownership and the initial
+	# per-segment hub order. Add predictive-only rank limits, then raise temporal
+	# resolution only when those multi-hub O-Ring ranks actually exist.
 	super._build_axle_stop_ranges_v070()
 	_apply_ranked_axle_stops_v074()
-	_prepare_axle_stack_shapes_v074()
+	_enable_precision_ticks_v074()
 
 
 # Interior ranked limits are predictive only. Post-step correction remains
@@ -215,8 +180,9 @@ func _correct_axle_order_v073() -> bool:
 
 
 func _restore_o_ring_followers_v068(restore_build_pose: bool = true) -> void:
-	_restore_axle_stack_shapes_v074()
+	_restore_precision_ticks_v074()
 	axle_ranked_stop_count_v074 = 0
+	axle_stack_shape_state_v074.clear()
 	o_ring_axle_stop_joints_v074.clear()
 	o_ring_sim_colliders_v074.clear()
 	super._restore_o_ring_followers_v068(restore_build_pose)

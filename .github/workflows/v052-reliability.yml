@@ -42,7 +42,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v072.gd")/g' \
+          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v073.gd")/g' \
             tests/editor_reliability_smoke_v052.gd \
             tests/editor_touch_attach_smoke_v053.gd \
             tests/editor_autoattach_selection_smoke_v054.gd \
@@ -54,11 +54,13 @@ jobs:
             tests/physics_stability_smoke_v059.gd \
             tests/strict_autoconnect_no_warp_smoke_v510.gd \
             tests/structure_rigidity_smoke_v061.gd \
-            tests/rigidity_live_axle_smoke_v062.gd || true
-          sed -Ei 's/main_v(069|070|071)\.gd/main_v072.gd/g' \
+            tests/rigidity_live_axle_smoke_v062.gd \
+            tests/followup_regression_smoke_v072.gd || true
+          sed -Ei 's/main_v(069|070|071|072)\.gd/main_v073.gd/g' \
             tests/o_ring_mixed_stability_smoke_v063.gd \
             tests/axle_o_ring_video_stability_smoke_v064.gd \
-            tests/editor_socket_workflows_smoke_v070.gd || true
+            tests/editor_socket_workflows_smoke_v070.gd \
+            tests/followup_regression_smoke_v072.gd || true
 
       - name: Run complete regression suite through v0.5.16
         shell: bash

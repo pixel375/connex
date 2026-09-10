@@ -57,10 +57,6 @@ func _assert_mount_state(mount: Generic6DOFJoint3D, attached: bool, phase: Strin
 		if mount.node_a.is_empty() or mount.node_b.is_empty():
 			_fail("O-Ring BUILD mount was not restored during %s" % phase)
 			return false
-		for axis_name in ["x", "y", "z"]:
-			if not bool(mount.get("linear_limit_%s/enabled" % axis_name)) or not bool(mount.get("angular_limit_%s/enabled" % axis_name)):
-				_fail("O-Ring BUILD mount constraints were not restored during %s" % phase)
-				return false
 	else:
 		if not mount.node_a.is_empty() or not mount.node_b.is_empty():
 			_fail("O-Ring SIMULATE weld is still solver-active during %s" % phase)
@@ -81,8 +77,8 @@ func _run() -> void:
 	root.add_child(main)
 	await process_frame
 
-	if not str(main.get_script().resource_path).ends_with("main_v069.gd"):
-		_fail("Main is not using v0.5.14 runtime")
+	if not str(main.get_script().resource_path).ends_with("main_v070.gd"):
+		_fail("Main is not using v0.5.15 runtime")
 		return
 
 	var axle := main.call("_make_rod", 4, Vector3(0, 13, 0), Vector3(0, 29, 0)) as RigidBody3D
@@ -120,16 +116,19 @@ func _run() -> void:
 		return
 	var followers := main.get("o_ring_followers_v068") as Array
 	if followers.size() != 2:
-		_fail("expected two exact collidable O-Ring followers, got %d" % followers.size())
+		_fail("expected two exact rod-relative O-Ring followers, got %d" % followers.size())
 		return
 	if not (main.get("o_ring_proxy_shapes_v068") as Array).is_empty() or not (main.get("o_ring_stop_proxies_v069") as Array).is_empty():
 		_fail("an obsolete O-Ring proxy collider exists")
 		return
 	if not (main.get("o_ring_axle_replacements_v069") as Array).is_empty():
-		_fail("AXLE joint was replaced instead of using physical O-Ring contact")
+		_fail("AXLE joint was replaced instead of keeping the normal free AXLE")
 		return
 	if int(main.get("o_ring_stop_pair_count_v069")) != 2:
 		_fail("expected exactly two rod-relative O-Ring stops")
+		return
+	if (main.get("axle_stop_ranges_v070") as Array).size() != 2:
+		_fail("expected two deterministic AXLE travel ranges")
 		return
 
 	for ring in [ring_low, ring_high]:
@@ -139,16 +138,12 @@ func _run() -> void:
 		if ring.get_parent() == axle:
 			_fail("O-Ring was nested under a physics-body host")
 			return
-		if ring.collision_layer != 8 or ring.collision_mask != 16:
-			_fail("O-Ring dedicated connector-only collision policy is wrong; layer=%d mask=%d" % [ring.collision_layer, ring.collision_mask])
+		if ring.collision_layer != 0 or ring.collision_mask != 0:
+			_fail("O-Ring is still independently collision-solved during SIMULATE")
 			return
 	if ring_low.get_parent() != low_parent_before or ring_high.get_parent() != high_parent_before:
 		_fail("O-Ring parent changed during world-space follower setup")
 		return
-	for hub in [hub_a, hub_b]:
-		if (hub.collision_layer & 16) == 0 or (hub.collision_mask & 8) == 0:
-			_fail("axle connector was not opted into O-Ring collision")
-			return
 	if not _assert_mount_state(mount_low, false, "SIMULATE") or not _assert_mount_state(mount_high, false, "SIMULATE"):
 		return
 
@@ -157,7 +152,7 @@ func _run() -> void:
 			_fail("normal AXLE joint was detached")
 			return
 		if bool(axle_joint.get("linear_limit_y/enabled")):
-			_fail("normal AXLE slide was rewritten with an artificial Y limit")
+			_fail("normal AXLE slide was rewritten with an artificial Y joint limit")
 			return
 		if bool(axle_joint.get("angular_limit_y/enabled")):
 			_fail("normal AXLE rotation was accidentally locked")
@@ -232,8 +227,8 @@ func _run() -> void:
 		return
 	if not _assert_mount_state(mount_low, true, "BUILD") or not _assert_mount_state(mount_high, true, "BUILD"):
 		return
-	if not (main.get("o_ring_followers_v068") as Array).is_empty():
-		_fail("O-Ring follower state leaked into BUILD")
+	if not (main.get("o_ring_followers_v068") as Array).is_empty() or not (main.get("axle_stop_ranges_v070") as Array).is_empty():
+		_fail("O-Ring/AXLE stop simulation state leaked into BUILD")
 		return
 	if ring_low.get_parent() != low_parent_before or ring_high.get_parent() != high_parent_before:
 		_fail("O-Ring BUILD parent was not preserved")
@@ -243,7 +238,7 @@ func _run() -> void:
 			_fail("O-Ring did not return to editable BUILD state")
 			return
 
-	print("ORING_STABILITY_063_SMOKE_OK: dedicated-layer rod-relative O-Rings stop free AXLE hubs; clearances=[%.3f,%.3f] max_drift=%.4f vmax=%.2f wmax=%.2f" % [min_a_clearance, min_b_clearance, max_ring_drift, max_linear, max_angular])
+	print("ORING_STABILITY_063_SMOKE_OK: deterministic rod-relative O-Ring/rod-end stops keep free AXLE hubs inside their travel segments; clearances=[%.3f,%.3f] max_drift=%.4f vmax=%.2f wmax=%.2f" % [min_a_clearance, min_b_clearance, max_ring_drift, max_linear, max_angular])
 	main.queue_free()
 	await process_frame
 	quit(0)

@@ -1,6 +1,7 @@
 extends "res://scripts/main_v068.gd"
 
 const VERSION_069 := "0.5.14"
+const O_RING_SIM_MASS_V069 := 0.05
 
 # v0.5.14 deliberately returns to the original O-Ring model: the ring is a real
 # rigid body fixed to its host rod. The axle joint remains the normal free-slide,
@@ -23,6 +24,16 @@ func _ready() -> void:
 func _status(text: String) -> void:
 	if status_label != null:
 		status_label.text = "Connex Lab v%s  •  %s" % [VERSION_069, text]
+
+
+# Keep the old physical O-Ring body, with only a small mass stabilization. The
+# legacy 0.035 body is disproportionately easy to kick away from its fixed mount
+# during a loaded axle impact. 0.05 matches the lightest rod and remains much
+# lighter than the connector/frame it is stopping.
+func _make_o_ring_body(transform: Transform3D) -> RigidBody3D:
+	var ring := super._make_o_ring_body(transform)
+	ring.mass = O_RING_SIM_MASS_V069
+	return ring
 
 
 # Never copy O-Ring collision into the host rod. AXLE joints intentionally
@@ -61,6 +72,7 @@ func _prepare_o_ring_followers_v068() -> int:
 		if not is_instance_valid(ring) or not is_instance_valid(rod) or not is_instance_valid(joint):
 			continue
 
+		ring.mass = O_RING_SIM_MASS_V069
 		ring.continuous_cd = false
 		ring.sleeping = false
 		o_ring_stop_pair_count_v069 += 1
@@ -75,6 +87,7 @@ func _release_physical_o_rings_v069() -> void:
 			continue
 		ring.linear_velocity = Vector3.ZERO
 		ring.angular_velocity = Vector3.ZERO
+		ring.mass = O_RING_SIM_MASS_V069
 		ring.continuous_cd = false
 		ring.freeze = false
 		ring.sleeping = false
@@ -100,7 +113,7 @@ func _update_help_text_v030() -> void:
 		return
 	var label: Label = _find_label_v030(help_panel)
 	if label != null:
-		label.text += "\n\nv0.5.14 O-RING STOPPER: restored the simple physical behavior from the older implementation. An O-Ring Stop is a real collision body fixed directly to its host rod. It moves and falls with that rod, while the normal AXLE joint keeps sliding and rotating freely until the axle connector physically reaches the ring. No host-rod proxy collider, moving proxy body, replacement axle joint, rewritten AXLE travel limit, or O-Ring CCD is used. BUILD keeps the O-Ring editable on the rod; SIMULATE releases the rod and ring together."
+		label.text += "\n\nv0.5.14 O-RING STOPPER: restored the simple physical behavior from the older implementation. An O-Ring Stop is a real collision body fixed directly to its host rod. It moves and falls with that rod, while the normal AXLE joint keeps sliding and rotating freely until the axle connector physically reaches the ring. No host-rod proxy collider, moving proxy body, replacement axle joint, rewritten AXLE travel limit, or O-Ring CCD is used. The O-Ring uses a small 0.05 mass stabilization so loaded contact does not pull the tiny stop away from its rod mount. BUILD keeps the O-Ring editable on the rod; SIMULATE releases the rod and ring together."
 
 
 func _on_update_request_completed_v021(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:

@@ -160,6 +160,8 @@ func _run() -> void:
 	var max_angular := 0.0
 	var min_a_clearance := INF
 	var min_b_clearance := INF
+	var max_ring_drift := 0.0
+	var max_ring_drift_frame := -1
 	const EXPECTED_CLEARANCE := 0.43
 	for frame_index in range(420):
 		await physics_frame
@@ -175,9 +177,12 @@ func _run() -> void:
 
 		var low_expected: Transform3D = axle.global_transform * low_local_before
 		var high_expected: Transform3D = axle.global_transform * high_local_before
-		if ring_low.global_position.distance_to(low_expected.origin) > 0.10 or ring_high.global_position.distance_to(high_expected.origin) > 0.10:
-			_fail("physical O-Ring drifted away from its host rod")
-			return
+		var low_drift := ring_low.global_position.distance_to(low_expected.origin)
+		var high_drift := ring_high.global_position.distance_to(high_expected.origin)
+		var frame_drift := maxf(low_drift, high_drift)
+		if frame_drift > max_ring_drift:
+			max_ring_drift = frame_drift
+			max_ring_drift_frame = frame_index
 
 		var low_along := _along(main, ring_low, axle)
 		var high_along := _along(main, ring_high, axle)
@@ -190,12 +195,15 @@ func _run() -> void:
 		min_a_clearance = minf(min_a_clearance, minf(a_low_gap, a_high_gap))
 		min_b_clearance = minf(min_b_clearance, minf(b_low_gap, b_high_gap))
 		if a_low_gap < EXPECTED_CLEARANCE - 0.12 or a_high_gap < EXPECTED_CLEARANCE - 0.12:
-			_fail("hub A crossed an O-Ring at frame %d: gaps=[%.3f, %.3f]" % [frame_index, a_low_gap, a_high_gap])
+			_fail("hub A crossed an O-Ring at frame %d: gaps=[%.3f, %.3f] max_mount_drift=%.3f@%d" % [frame_index, a_low_gap, a_high_gap, max_ring_drift, max_ring_drift_frame])
 			return
 		if b_low_gap < EXPECTED_CLEARANCE - 0.12 or b_high_gap < EXPECTED_CLEARANCE - 0.12:
-			_fail("hub B crossed an O-Ring at frame %d: gaps=[%.3f, %.3f]" % [frame_index, b_low_gap, b_high_gap])
+			_fail("hub B crossed an O-Ring at frame %d: gaps=[%.3f, %.3f] max_mount_drift=%.3f@%d" % [frame_index, b_low_gap, b_high_gap, max_ring_drift, max_ring_drift_frame])
 			return
 
+	if max_ring_drift > 0.10:
+		_fail("physical O-Ring mount flex exceeded tolerance: max_drift=%.3f at frame %d" % [max_ring_drift, max_ring_drift_frame])
+		return
 	if max_linear > 41.9 or max_angular > 54.9:
 		_fail("mixed build became unstable: vmax=%.2f wmax=%.2f" % [max_linear, max_angular])
 		return
@@ -217,7 +225,7 @@ func _run() -> void:
 			_fail("O-Ring did not return to editable BUILD state with construction collision policy")
 			return
 
-	print("ORING_STABILITY_063_SMOKE_OK: physical O-Rings stay fixed to falling rod and stop free-sliding axle hubs by contact; clearances=[%.3f,%.3f] vmax=%.2f wmax=%.2f" % [min_a_clearance, min_b_clearance, max_linear, max_angular])
+	print("ORING_STABILITY_063_SMOKE_OK: physical O-Rings stay fixed to falling rod and stop free-sliding axle hubs by contact; clearances=[%.3f,%.3f] max_mount_drift=%.3f vmax=%.2f wmax=%.2f" % [min_a_clearance, min_b_clearance, max_ring_drift, max_linear, max_angular])
 	main.queue_free()
 	await process_frame
 	quit(0)

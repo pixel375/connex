@@ -105,18 +105,19 @@ func _run() -> void:
 			_fail("visible O-Ring follower was left active in collision physics")
 			return
 
-	# Stopping must happen on the axle's existing Y slide DOF. For this fixture:
-	# hub A starts at -2 with rings -3/+6 => about [-0.57, +7.57] travel.
-	# hub B starts at +2 with rings -3/+6 => about [-4.57, +3.57] travel.
+	# Native hard limits arm 0.27 before the physical 0.43 clearance so measured
+	# Jolt impact slop cannot produce visible crossing. For this fixture:
+	# hub A starts at -2 with rings -3/+6 => about [-0.30, +7.30] travel.
+	# hub B starts at +2 with rings -3/+6 => about [-4.30, +3.30] travel.
 	for axle_joint in [axle_joint_a, axle_joint_b]:
 		if not bool(axle_joint.get("linear_limit_y/enabled")):
 			_fail("O-Ring implementation did not bound the axle joint Y slide")
 			return
-	if absf(float(axle_joint_a.get("linear_limit_y/lower_distance")) - (-0.57)) > 0.08 or absf(float(axle_joint_a.get("linear_limit_y/upper_distance")) - 7.57) > 0.08:
-		_fail("hub A native axle limits are wrong: [%.3f, %.3f]" % [float(axle_joint_a.get("linear_limit_y/lower_distance")), float(axle_joint_a.get("linear_limit_y/upper_distance"))])
+	if absf(float(axle_joint_a.get("linear_limit_y/lower_distance")) - (-0.30)) > 0.08 or absf(float(axle_joint_a.get("linear_limit_y/upper_distance")) - 7.30) > 0.08:
+		_fail("hub A guarded native axle limits are wrong: [%.3f, %.3f]" % [float(axle_joint_a.get("linear_limit_y/lower_distance")), float(axle_joint_a.get("linear_limit_y/upper_distance"))])
 		return
-	if absf(float(axle_joint_b.get("linear_limit_y/lower_distance")) - (-4.57)) > 0.08 or absf(float(axle_joint_b.get("linear_limit_y/upper_distance")) - 3.57) > 0.08:
-		_fail("hub B native axle limits are wrong: [%.3f, %.3f]" % [float(axle_joint_b.get("linear_limit_y/lower_distance")), float(axle_joint_b.get("linear_limit_y/upper_distance"))])
+	if absf(float(axle_joint_b.get("linear_limit_y/lower_distance")) - (-4.30)) > 0.08 or absf(float(axle_joint_b.get("linear_limit_y/upper_distance")) - 3.30) > 0.08:
+		_fail("hub B guarded native axle limits are wrong: [%.3f, %.3f]" % [float(axle_joint_b.get("linear_limit_y/lower_distance")), float(axle_joint_b.get("linear_limit_y/upper_distance"))])
 		return
 
 	for _i in range(72):
@@ -172,7 +173,7 @@ func _run() -> void:
 		_fail("ordinary mixed fixture needed the emergency stability guard (%d events)" % int(main.get("runaway_guard_events_v068")))
 		return
 
-	print("ORING_STABILITY_063_SMOKE_OK: native axle limits block hubs at O-Rings without proxy bodies/weld runaway; clearances=[%.3f,%.3f] vmax=%.2f wmax=%.2f" % [min_a_clearance, min_b_clearance, max_linear, max_angular])
+	print("ORING_STABILITY_063_SMOKE_OK: guarded native axle limits block hubs at O-Rings without proxy bodies/weld runaway; clearances=[%.3f,%.3f] vmax=%.2f wmax=%.2f" % [min_a_clearance, min_b_clearance, max_linear, max_angular])
 	main.queue_free()
 	await process_frame
 	quit(0)

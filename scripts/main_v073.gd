@@ -86,9 +86,8 @@ func _apply_structure_flex_all_v072() -> int:
 # The missing case from larger device builds was tunnelling: an interior hub can
 # pass completely through the current boundary owner in one physics step and is
 # then free to continue through the O-Ring. Record the original hub order and
-# prevent only an actual/predicted order reversal. This is a topological safety
-# guard, not a continuously active hidden joint, so it does not fight normal hub
-# collisions or force several connected assemblies onto artificial coordinates.
+# correct only an actual post-step order reversal. Normal Jolt contact therefore
+# resolves ordinary hub collisions without custom pre-emptive velocity changes.
 # -----------------------------------------------------------------------------
 
 func _build_axle_stop_ranges_v070() -> void:
@@ -211,36 +210,11 @@ func _guard_component_contains_v073(guard: Dictionary, body: RigidBody3D) -> boo
 	return false
 
 
-func _predict_axle_order_v073(delta: float) -> void:
-	if not simulating or delta <= 0.000001:
-		return
-	for group_value in axle_order_groups_v073:
-		var group := group_value as Dictionary
-		var rod := group.get("rod") as RigidBody3D
-		if not is_instance_valid(rod):
-			continue
-		var axis: Vector3 = _rod_axis_v020(rod).normalized()
-		var hubs: Array = group.get("hubs", []) as Array
-		for i in range(hubs.size() - 1):
-			var low := hubs[i] as Dictionary
-			var high := hubs[i + 1] as Dictionary
-			var low_body := low.get("connector") as RigidBody3D
-			var high_body := high.get("connector") as RigidBody3D
-			if not is_instance_valid(low_body) or not is_instance_valid(high_body):
-				continue
-			if _guard_component_contains_v073(low, high_body) or _guard_component_contains_v073(high, low_body):
-				continue
-			var low_along: float = _rod_local_along_v070(low_body, rod)
-			var high_along: float = _rod_local_along_v070(high_body, rod)
-			var gap: float = high_along - low_along
-			var low_speed: float = _hub_guard_axial_speed_v073(low, axis, rod)
-			var high_speed: float = _hub_guard_axial_speed_v073(high, axis, rod)
-			var relative: float = high_speed - low_speed
-			if relative < 0.0 and gap > AXLE_HUB_ORDER_EPS_V073 and gap + relative * delta <= AXLE_HUB_ORDER_EPS_V073:
-				# Match the two axial velocities for this step. Physical connector
-				# collision remains responsible for the actual contact/stacking.
-				_shift_component_velocity_v071(high, axis * -relative)
-				axle_order_guard_events_v073 += 1
+# Leave ordinary approaching hubs entirely to Jolt. Pre-step prediction was
+# injecting velocity changes into attached assemblies before real contact and
+# could manufacture energy in the mixed O-Ring fixture.
+func _predict_axle_order_v073(_delta: float) -> void:
+	pass
 
 
 func _correct_axle_order_v073() -> void:
@@ -269,8 +243,7 @@ func _correct_axle_order_v073() -> void:
 				continue
 			# A center-order reversal means collision tunnelling already occurred.
 			# Restore the upper hub just beyond physical overlap and match the lower
-			# hub's axial speed. This path should be rare; unlike ranked floors it is
-			# completely inactive during ordinary contact.
+			# hub's axial speed. This path is inactive during ordinary contact.
 			var target: float = low_along + AXLE_HUB_PASS_GUARD_SPACING_V073
 			if upper_boundary < INF:
 				target = minf(target, upper_boundary)

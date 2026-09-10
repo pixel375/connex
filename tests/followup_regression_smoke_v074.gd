@@ -58,6 +58,20 @@ func _add_o_ring(main: Node, rod: RigidBody3D, along: float) -> Dictionary:
 	return {"ring": ring, "joint": joint}
 
 
+func _largest_cylinder_height(body: RigidBody3D) -> float:
+	var best_radius := -1.0
+	var best_height := -1.0
+	for child_value in body.get_children():
+		var collider := child_value as CollisionShape3D
+		if collider == null or not (collider.shape is CylinderShape3D):
+			continue
+		var cylinder := collider.shape as CylinderShape3D
+		if cylinder.radius > best_radius:
+			best_radius = cylinder.radius
+			best_height = cylinder.height
+	return best_height
+
+
 func _run() -> void:
 	var packed := load("res://Main.tscn") as PackedScene
 	if packed == null:
@@ -70,11 +84,12 @@ func _run() -> void:
 		_fail("Main is not using final v0.5.16 runtime")
 		return
 
-	# O-Ring selection and final SIMULATE collision architecture.
+	# O-Ring selection + final collisionless follower / stronger hub-stack model.
 	var axle := main.call("_make_rod", 5, Vector3(0, 2, 0), Vector3(0, 21.2, 0)) as RigidBody3D
 	var axis := (main.call("_rod_axis_v020", axle) as Vector3).normalized()
 	var axle_basis := main.call("_basis_for_axle_v020", axis) as Basis
 	var hub := main.call("_make_connector", 6, Transform3D(axle_basis, Vector3(0, 12, 0))) as RigidBody3D
+	var original_hub_height := _largest_cylinder_height(hub)
 	var axle_joint := main.call("_make_axle_joint", hub, axle) as Generic6DOFJoint3D
 	main.call("_tag_connection_v020", axle_joint, "axle", hub, axle, -1, 0, 0.0, null, false)
 	hub.set_meta("axle_occupied", true)
@@ -93,31 +108,33 @@ func _run() -> void:
 	main.call("_toggle_simulation")
 	for _i in range(8):
 		await physics_frame
-	if ring.collision_layer != 8 or ring.collision_mask != 16:
-		_fail("O-Ring is not using the connector-only simulation collision policy")
+	if ring.collision_layer != 0 or ring.collision_mask != 0:
+		_fail("O-Ring must remain a collisionless exact rod-local follower in SIMULATE")
 		return
-	var collars := main.get("o_ring_sim_colliders_v074") as Array
-	if collars.size() != 1:
-		_fail("expected exactly one temporary O-Ring simulation collar")
-		return
-	var collar := collars[0] as CollisionShape3D
-	if not is_instance_valid(collar) or not (collar.shape is CylinderShape3D):
-		_fail("O-Ring simulation collar is missing its cylinder shape")
-		return
-	if float((collar.shape as CylinderShape3D).height) < 0.49:
-		_fail("O-Ring simulation collar is not thick enough to absorb solver contact slop")
-		return
-	if bool(axle_joint.get("linear_limit_y/enabled")) or bool(axle_joint.get("angular_limit_y/enabled")):
-		_fail("normal AXLE joint was modified by the O-Ring stop")
+	if not (main.get("o_ring_sim_colliders_v074") as Array).is_empty():
+		_fail("abandoned O-Ring collision collars still exist")
 		return
 	if not (main.get("o_ring_axle_stop_joints_v074") as Array).is_empty():
 		_fail("abandoned extra AXLE stop joints still exist")
 		return
+	if bool(axle_joint.get("linear_limit_y/enabled")) or bool(axle_joint.get("angular_limit_y/enabled")):
+		_fail("normal AXLE slide/rotation was modified by O-Ring protection")
+		return
+	if (main.get("axle_stack_shape_state_v074") as Array).size() != 1:
+		_fail("AXLE hub on an O-Ring rod did not receive temporary stack-collision protection")
+		return
+	if _largest_cylinder_height(hub) < 0.719:
+		_fail("AXLE hub temporary stack collision height was not expanded")
+		return
+
 	main.call("_toggle_simulation")
 	for _i in range(4):
 		await physics_frame
-	if not (main.get("o_ring_sim_colliders_v074") as Array).is_empty():
-		_fail("temporary O-Ring collar leaked back into BUILD")
+	if not (main.get("axle_stack_shape_state_v074") as Array).is_empty():
+		_fail("temporary AXLE stack shape leaked into BUILD")
+		return
+	if absf(_largest_cylinder_height(hub) - original_hub_height) > 0.0001:
+		_fail("AXLE hub collision shape was not restored in BUILD")
 		return
 	if ring.collision_layer != 2 or ring.collision_mask != 3:
 		_fail("O-Ring BUILD collision policy was not restored")
@@ -143,8 +160,7 @@ func _run() -> void:
 	if absf(cross_axis.dot(socket_dir)) > 0.08:
 		_fail("CROSS rod is not perpendicular/side-mounted to the socket")
 		return
-	var cross_record := _find_record(main, "cross", cross_connector, cross_rod)
-	if cross_record.is_empty():
+	if _find_record(main, "cross", cross_connector, cross_rod).is_empty():
 		_fail("CROSS rod did not create a CROSS connection record")
 		return
 	var ends := cross_rod.get_meta("end_occupied", {}) as Dictionary
@@ -204,7 +220,7 @@ func _run() -> void:
 			_fail("multi-rod re-seat moved an anchored rod/remote structure")
 			return
 
-	print("FOLLOWUP_074_SMOKE_OK: O-Ring touch/collar + side-middle CROSS + reconnect auto-resnap + anchored multi-rod re-seat")
+	print("FOLLOWUP_074_SMOKE_OK: O-Ring touch + collisionless durable axle stacking + side-middle CROSS + reconnect auto-resnap + anchored multi-rod re-seat")
 	main.queue_free()
 	await process_frame
 	quit(0)

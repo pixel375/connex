@@ -325,14 +325,14 @@ func _solve_group_commands_v076(group: Dictionary, delta: float) -> bool:
 		var changed := false
 		if lower > -INF:
 			var lower_guard := lower + AXLE_STACK_PREDICT_MARGIN_V076
-			var predicted_lower := target_positions[0] + target_velocities[0] * delta
+			var predicted_lower: float = float(target_positions[0]) + float(target_velocities[0]) * delta
 			if target_velocities[0] < 0.0 and predicted_lower < lower_guard:
 				target_velocities[0] = maxf(0.0, (lower_guard - target_positions[0]) / maxf(delta, 0.000001))
 				changed = true
 		if upper < INF:
 			var last := target_positions.size() - 1
 			var upper_guard := upper - AXLE_STACK_PREDICT_MARGIN_V076
-			var predicted_upper := target_positions[last] + target_velocities[last] * delta
+			var predicted_upper: float = float(target_positions[last]) + float(target_velocities[last]) * delta
 			if target_velocities[last] > 0.0 and predicted_upper > upper_guard:
 				target_velocities[last] = minf(0.0, (upper_guard - target_positions[last]) / maxf(delta, 0.000001))
 				changed = true
@@ -341,7 +341,7 @@ func _solve_group_commands_v076(group: Dictionary, delta: float) -> bool:
 			var relative: float = target_velocities[i + 1] - target_velocities[i]
 			if relative >= 0.0 or gap + relative * delta >= AXLE_STACK_SEPARATION_V076 + AXLE_STACK_PREDICT_MARGIN_V076:
 				continue
-			var common := (masses[i] * target_velocities[i] + masses[i + 1] * target_velocities[i + 1]) / (masses[i] + masses[i + 1])
+			var common: float = (float(masses[i]) * float(target_velocities[i]) + float(masses[i + 1]) * float(target_velocities[i + 1])) / (float(masses[i]) + float(masses[i + 1]))
 			target_velocities[i] = common
 			target_velocities[i + 1] = common
 			changed = true
@@ -350,8 +350,8 @@ func _solve_group_commands_v076(group: Dictionary, delta: float) -> bool:
 
 	var guarded := false
 	for i in range(hubs.size()):
-		var position_delta := target_positions[i] - positions[i]
-		var velocity_delta := target_velocities[i] - velocities[i]
+		var position_delta: float = float(target_positions[i]) - float(positions[i])
+		var velocity_delta: float = float(target_velocities[i]) - float(velocities[i])
 		if absf(position_delta) <= AXLE_STACK_POSITION_EPS_V076 and absf(velocity_delta) <= 0.0001:
 			continue
 		var hub := hubs[i] as Dictionary

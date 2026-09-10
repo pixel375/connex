@@ -2,13 +2,14 @@ extends "res://scripts/main_v073.gd"
 
 const VERSION_074 := "0.5.16"
 const COMPLEX_ORING_PHYSICS_TPS_V074 := 120
-const AXLE_HUB_ORDER_REPAIR_SPACING_V074 := 0.62
+const AXLE_HUB_PAIR_GUARD_SPACING_V074 := 0.60
 
 # Number of AXLE hubs participating in multi-hub segments on rods that contain
 # at least one O-Ring. Kept under the old debug name for test compatibility.
 var axle_ranked_stop_count_v074: int = 0
 var o_ring_precision_ticks_active_v074: bool = false
 var saved_physics_ticks_v074: int = -1
+var axle_pair_guard_events_v074: int = 0
 var axle_order_repair_events_v074: int = 0
 
 # Compatibility/debug surfaces for abandoned experiments. They stay empty.
@@ -24,25 +25,28 @@ var o_ring_sim_colliders_v074: Array = []
 #
 # - O-Rings are collisionless exact rod-local followers;
 # - the normal AXLE joint remains free in axial slide and rotation;
-# - the original outermost hub in each O-Ring segment owns the finite stop;
-# - normal hub-to-hub collision remains the ordinary stacking mechanism.
+# - only the original outer hub owns each finite O-Ring / rod-end stop;
+# - ordinary connector collision remains the visible/physical stack behavior.
 #
-# Rarely, Jolt can tunnel one AXLE hub completely through its neighbour. That is
-# an impossible physical state. Transferring O-Ring ownership to the tunnelled
-# hub was not safe: later snapping that hub to the O-Ring could place its attached
-# assembly directly inside the previous owner and create an energy explosion.
+# The remaining failure was not the O-Ring boundary itself. Under a loaded
+# asymmetric assembly, Jolt could occasionally move one AXLE hub completely
+# through its adjacent hub in a single integration step. Every post-facto repair
+# that translated an already-tunnelled fixed assembly produced large solver
+# energy later.
 #
-# v0.5.16 therefore repairs only the impossible order inversion itself. When two
-# adjacent hubs actually reverse their BUILD order, move only the hub whose
-# relative axial velocity caused the crossing back to the correct side of its
-# neighbour with physical hub spacing, and match only that component's axial
-# velocity to the neighbour. The host rod and original O-Ring owner never move.
-# This guard is dormant during normal contact and does not create hidden floors,
-# replacement joints, O-Ring collision proxies, or persistent rank constraints.
+# v0.5.16 prevents that impossible state before it happens. For adjacent hubs in
+# a multi-hub O-Ring segment, only when their current relative axial velocity
+# predicts that their centers will cross the normal ~0.60 hub contact spacing in
+# the next physics step, apply a one-dimensional, perfectly inelastic contact
+# impulse along the rod axis. The two connector-side fixed components receive
+# equal/opposite momentum-conserving velocity changes weighted by inverse mass.
+# This can only remove closing relative kinetic energy; it does not move bodies,
+# impose persistent rank floors, or push either component relative to the rod.
+# Once the pair is no longer closing, the guard is completely dormant.
 #
 # Multi-hub O-Ring builds additionally run at 120 Hz while SIMULATE is active to
-# reduce one-step tunnelling distance. Ordinary simulations keep the project tick
-# rate, and BUILD restores the exact prior value.
+# reduce one-step travel. Ordinary simulations keep the project tick rate, and
+# BUILD restores the exact prior value.
 # -----------------------------------------------------------------------------
 
 func _find_stop_v074(rod: RigidBody3D, connector: RigidBody3D, segment: int) -> Dictionary:
@@ -53,25 +57,25 @@ func _find_stop_v074(rod: RigidBody3D, connector: RigidBody3D, segment: int) -> 
 	return {}
 
 
+func _group_has_o_ring_v074(group: Dictionary) -> bool:
+	var rod := group.get("rod") as RigidBody3D
+	var segment: int = int(group.get("segment", 0))
+	if not is_instance_valid(rod):
+		return false
+	for hub_value in group.get("hubs", []) as Array:
+		var connector := (hub_value as Dictionary).get("connector") as RigidBody3D
+		var stop: Dictionary = _find_stop_v074(rod, connector, segment)
+		if not stop.is_empty() and int(stop.get("ring_count", 0)) > 0:
+			return true
+	return false
+
+
 func _count_complex_o_ring_hubs_v074() -> int:
 	var count := 0
 	for group_value in axle_order_groups_v073:
 		var group := group_value as Dictionary
 		var hubs: Array = group.get("hubs", []) as Array
-		if hubs.size() <= 1:
-			continue
-		var rod := group.get("rod") as RigidBody3D
-		var segment: int = int(group.get("segment", 0))
-		if not is_instance_valid(rod):
-			continue
-		var has_ring := false
-		for hub_value in hubs:
-			var connector := (hub_value as Dictionary).get("connector") as RigidBody3D
-			var stop: Dictionary = _find_stop_v074(rod, connector, segment)
-			if not stop.is_empty() and int(stop.get("ring_count", 0)) > 0:
-				has_ring = true
-				break
-		if has_ring:
+		if hubs.size() > 1 and _group_has_o_ring_v074(group):
 			count += hubs.size()
 	return count
 
@@ -92,87 +96,87 @@ func _restore_precision_ticks_v074() -> void:
 
 
 func _build_axle_stop_ranges_v070() -> void:
-	# v073 builds the v0.5.15 outer-owner ranges and preserves the initial hub
-	# order in axle_order_groups_v073. Keep those finite owners unchanged.
+	# v073 builds the stable v0.5.15 outer-owner ranges and remembers BUILD order.
+	# Do not rewrite any stop boundary or ownership here.
 	super._build_axle_stop_ranges_v070()
 	axle_ranked_stop_count_v074 = _count_complex_o_ring_hubs_v074()
 	_enable_precision_ticks_v074()
 
 
-func _repair_axle_hub_order_v074() -> bool:
-	if not simulating:
+func _guard_adjacent_axle_pair_v074(group: Dictionary, lower_info: Dictionary, upper_info: Dictionary, delta: float) -> bool:
+	var rod := group.get("rod") as RigidBody3D
+	var segment: int = int(group.get("segment", 0))
+	var lower := lower_info.get("connector") as RigidBody3D
+	var upper := upper_info.get("connector") as RigidBody3D
+	if not is_instance_valid(rod) or not is_instance_valid(lower) or not is_instance_valid(upper):
 		return false
-	var repaired_any := false
 
+	var axis: Vector3 = _rod_axis_v020(rod).normalized()
+	var lower_along: float = _rod_local_along_v070(lower, rod)
+	var upper_along: float = _rod_local_along_v070(upper, rod)
+	var gap: float = upper_along - lower_along
+	if gap <= 0.0:
+		# Never perform a post-facto transform repair. A negative gap is left as a
+		# hard regression failure so this predictor cannot hide a missed tunnel.
+		return false
+
+	var relative_speed: float = (upper.linear_velocity - lower.linear_velocity).dot(axis)
+	if relative_speed >= 0.0:
+		return false
+	var predicted_gap: float = gap + relative_speed * delta
+	if predicted_gap >= AXLE_HUB_PAIR_GUARD_SPACING_V074:
+		return false
+
+	# Permit the maximum closing speed that lands exactly at the contact guard on
+	# the next step. If the pair is already inside that spacing, stop additional
+	# closing but do not separate/teleport it.
+	var allowed_relative: float = minf(0.0, (AXLE_HUB_PAIR_GUARD_SPACING_V074 - gap) / delta)
+	var relative_change: float = allowed_relative - relative_speed
+	if relative_change <= 0.000001:
+		return false
+
+	var lower_stop: Dictionary = _find_stop_v074(rod, lower, segment)
+	var upper_stop: Dictionary = _find_stop_v074(rod, upper, segment)
+	if lower_stop.is_empty() or upper_stop.is_empty():
+		return false
+	var lower_component: Array = _stop_component_v071(lower_stop)
+	var upper_component: Array = _stop_component_v071(upper_stop)
+	if lower_component.is_empty() or upper_component.is_empty() or _components_overlap_v070(lower_component, upper_component):
+		return false
+
+	var inv_lower: float = _component_inverse_mass_v070(lower_component)
+	var inv_upper: float = _component_inverse_mass_v070(upper_component)
+	var inv_sum: float = inv_lower + inv_upper
+	if inv_sum <= 0.000001:
+		return false
+
+	# Equivalent to a perfectly inelastic 1-D contact impulse. Because the
+	# relative change is split by inverse mass, total axial momentum is conserved.
+	var lower_delta_speed: float = -relative_change * inv_lower / inv_sum
+	var upper_delta_speed: float = relative_change * inv_upper / inv_sum
+	_shift_component_velocity_v071(lower_stop, axis * lower_delta_speed)
+	_shift_component_velocity_v071(upper_stop, axis * upper_delta_speed)
+	axle_pair_guard_events_v074 += 1
+	return true
+
+
+func _predict_axle_order_v073(delta: float) -> void:
+	if not simulating or delta <= 0.000001:
+		return
 	for group_value in axle_order_groups_v073:
 		var group := group_value as Dictionary
-		var rod := group.get("rod") as RigidBody3D
-		var expected: Array = group.get("hubs", []) as Array
-		if not is_instance_valid(rod) or expected.size() <= 1:
+		var hubs: Array = group.get("hubs", []) as Array
+		if hubs.size() <= 1 or not _group_has_o_ring_v074(group):
 			continue
-		var segment: int = int(group.get("segment", 0))
-		var axis: Vector3 = _rod_axis_v020(rod).normalized()
-
-		# A single physics step can theoretically create more than one adjacent
-		# inversion in a larger stack. Iterate only enough passes to restore the
-		# original ordering; normal non-crossed contact is never touched.
-		for _pass in range(expected.size()):
-			var repaired_this_pass := false
-			for i in range(expected.size() - 1):
-				var lower_info := expected[i] as Dictionary
-				var upper_info := expected[i + 1] as Dictionary
-				var lower := lower_info.get("connector") as RigidBody3D
-				var upper := upper_info.get("connector") as RigidBody3D
-				if not is_instance_valid(lower) or not is_instance_valid(upper):
-					continue
-				var lower_along: float = _rod_local_along_v070(lower, rod)
-				var upper_along: float = _rod_local_along_v070(upper, rod)
-				if upper_along >= lower_along:
-					continue
-
-				var lower_speed: float = lower.linear_velocity.dot(axis)
-				var upper_speed: float = upper.linear_velocity.dot(axis)
-				var move_upper: bool = upper_speed - lower_speed <= 0.0
-				if move_upper:
-					# The upper hub moved downward through the lower hub. Restore it just
-					# above the lower hub, then remove only the closing axial speed.
-					var stop: Dictionary = _find_stop_v074(rod, upper, segment)
-					if stop.is_empty():
-						continue
-					var target_along := lower_along + AXLE_HUB_ORDER_REPAIR_SPACING_V074
-					_shift_stop_component_v071(stop, axis * (target_along - upper_along))
-					var velocity_delta := lower_speed - upper_speed
-					if velocity_delta > 0.0:
-						_shift_component_velocity_v071(stop, axis * velocity_delta)
-				else:
-					# The lower hub moved upward through the upper hub. Restore it just
-					# below the upper hub and match only its axial speed to the neighbour.
-					var stop: Dictionary = _find_stop_v074(rod, lower, segment)
-					if stop.is_empty():
-						continue
-					var target_along := upper_along - AXLE_HUB_ORDER_REPAIR_SPACING_V074
-					_shift_stop_component_v071(stop, axis * (target_along - lower_along))
-					var velocity_delta := upper_speed - lower_speed
-					if velocity_delta < 0.0:
-						_shift_component_velocity_v071(stop, axis * velocity_delta)
-
-				axle_order_repair_events_v074 += 1
-				axle_order_guard_events_v073 += 1
-				repaired_any = true
-				repaired_this_pass = true
-			if not repaired_this_pass:
-				break
-
-	return repaired_any
+		# The array remains in BUILD order. Guard each neighboring pair against
+		# closing through that order; ordinary Jolt collision still handles contact.
+		for i in range(hubs.size() - 1):
+			_guard_adjacent_axle_pair_v074(group, hubs[i] as Dictionary, hubs[i + 1] as Dictionary, delta)
 
 
-# Disable v073's ownership-transfer recovery. The BUILD order remains the source
-# of truth; v074 repairs impossible hub tunnelling instead of moving the O-Ring
-# boundary to whichever hub happened to tunnel through.
-func _predict_axle_order_v073(_delta: float) -> void:
-	pass
-
-
+# Disable v073's post-facto ownership transfer. If the predictor ever misses an
+# inversion, the strict regression must expose it rather than translating an
+# already-overlapped assembly or moving the O-Ring boundary to the bad state.
 func _correct_axle_order_v073() -> bool:
 	return false
 
@@ -181,12 +185,8 @@ func _correct_axle_stop_positions_v071() -> void:
 	if not simulating:
 		return
 
-	# Repair a genuine hub-through-hub inversion first. This keeps the original
-	# finite stop owner outside the stack and avoids ever snapping a tunnelled hub
-	# onto the O-Ring inside another connector.
-	_repair_axle_hub_order_v074()
-
-	# Then apply the released v0.5.15 outer-boundary correction exactly once.
+	# Apply only the released v0.5.15 finite boundary correction. Pairwise hub
+	# protection happens predictively through _predict_axle_order_v073().
 	for value in axle_stop_ranges_v070:
 		var stop := value as Dictionary
 		var connector := stop.get("connector") as RigidBody3D
@@ -210,6 +210,7 @@ func _correct_axle_stop_positions_v071() -> void:
 
 
 func _prepare_stable_simulation_graph() -> void:
+	axle_pair_guard_events_v074 = 0
 	axle_order_repair_events_v074 = 0
 	super._prepare_stable_simulation_graph()
 

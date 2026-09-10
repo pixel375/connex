@@ -93,44 +93,31 @@ func _run() -> void:
 	if int((main.get("o_ring_proxy_shapes_v068") as Array).size()) != 0:
 		_fail("v0.5.13 host-rod O-Ring proxy collision still exists")
 		return
-	var stop_proxies := main.get("o_ring_stop_proxies_v069") as Array
-	if stop_proxies.size() != 2:
-		_fail("expected two root-level O-Ring stopper proxies, got %d" % stop_proxies.size())
+	if int((main.get("o_ring_stop_proxies_v069") as Array).size()) != 0:
+		_fail("v0.5.14 recreated a moving O-Ring proxy body")
 		return
 	if int(main.get("o_ring_stop_pair_count_v069")) < 4:
-		_fail("dedicated O-Ring/axle-hub collision pairs were not configured")
+		_fail("native O-Ring/axle stop relations were not configured")
 		return
 
 	for ring in [ring_low, ring_high]:
 		if not ring.freeze or ring.collision_layer != 0 or ring.collision_mask != 0:
 			_fail("visible O-Ring follower was left active in collision physics")
 			return
-	for state_value in stop_proxies:
-		var state := state_value as Dictionary
-		var proxy := state.get("proxy") as AnimatableBody3D
-		if not is_instance_valid(proxy) or proxy.get_parent() != main:
-			_fail("O-Ring physics stopper is not a root-level AnimatableBody3D")
-			return
-		if proxy.collision_layer != int(main.get("O_RING_STOP_LAYER_V069")) or proxy.collision_mask != int(main.get("AXLE_STOP_TARGET_LAYER_V069")):
-			_fail("O-Ring stopper proxy collision channels are wrong")
-			return
-		var shape_count := 0
-		for child in proxy.get_children():
-			if child is CollisionShape3D and (child as CollisionShape3D).shape != null:
-				shape_count += 1
-		if shape_count < 1:
-			_fail("O-Ring stopper proxy has no physical collision shape")
-			return
-	for hub in [hub_a, hub_b]:
-		if (hub.collision_layer & int(main.get("AXLE_STOP_TARGET_LAYER_V069"))) == 0 or (hub.collision_mask & int(main.get("O_RING_STOP_LAYER_V069"))) == 0:
-			_fail("axle hub is not on the dedicated O-Ring collision channels")
-			return
-	# The axle remains a true free slide/spin joint. Stopping is contact against a
-	# separate moving ring collider, not another over-constraining joint.
+
+	# Stopping must happen on the axle's existing Y slide DOF. For this fixture:
+	# hub A starts at -2 with rings -3/+6 => about [-0.57, +7.57] travel.
+	# hub B starts at +2 with rings -3/+6 => about [-4.57, +3.57] travel.
 	for axle_joint in [axle_joint_a, axle_joint_b]:
-		if bool(axle_joint.get("linear_limit_y/enabled")):
-			_fail("O-Ring implementation incorrectly bounded the axle joint itself")
+		if not bool(axle_joint.get("linear_limit_y/enabled")):
+			_fail("O-Ring implementation did not bound the axle joint Y slide")
 			return
+	if absf(float(axle_joint_a.get("linear_limit_y/lower_distance")) - (-0.57)) > 0.08 or absf(float(axle_joint_a.get("linear_limit_y/upper_distance")) - 7.57) > 0.08:
+		_fail("hub A native axle limits are wrong: [%.3f, %.3f]" % [float(axle_joint_a.get("linear_limit_y/lower_distance")), float(axle_joint_a.get("linear_limit_y/upper_distance"))])
+		return
+	if absf(float(axle_joint_b.get("linear_limit_y/lower_distance")) - (-4.57)) > 0.08 or absf(float(axle_joint_b.get("linear_limit_y/upper_distance")) - 3.57) > 0.08:
+		_fail("hub B native axle limits are wrong: [%.3f, %.3f]" % [float(axle_joint_b.get("linear_limit_y/lower_distance")), float(axle_joint_b.get("linear_limit_y/upper_distance"))])
+		return
 
 	for _i in range(72):
 		await physics_frame
@@ -160,20 +147,6 @@ func _run() -> void:
 		if ring_low.global_position.distance_to(low_expected.origin) > 0.03 or ring_high.global_position.distance_to(high_expected.origin) > 0.03:
 			_fail("visible O-Ring follower drifted away from host rod")
 			return
-		# The separate moving collider must track the same host pose without being
-		# parented into the rigid-body hierarchy.
-		for state_value in stop_proxies:
-			var state := state_value as Dictionary
-			var proxy := state.get("proxy") as AnimatableBody3D
-			var rod := state.get("rod") as RigidBody3D
-			var local_transform := state.get("local_transform", Transform3D.IDENTITY) as Transform3D
-			if not is_instance_valid(proxy) or not is_instance_valid(rod):
-				_fail("O-Ring stopper proxy disappeared during simulation")
-				return
-			var expected := rod.global_transform * local_transform
-			if proxy.global_position.distance_to(expected.origin) > 0.08:
-				_fail("O-Ring stopper proxy drifted from axle at frame %d" % frame_index)
-				return
 
 		var low_along := _along(main, ring_low, axle)
 		var high_along := _along(main, ring_high, axle)
@@ -199,7 +172,7 @@ func _run() -> void:
 		_fail("ordinary mixed fixture needed the emergency stability guard (%d events)" % int(main.get("runaway_guard_events_v068")))
 		return
 
-	print("ORING_STABILITY_063_SMOKE_OK: root moving O-Ring stoppers block axle hubs without host proxy/weld runaway; clearances=[%.3f,%.3f] vmax=%.2f wmax=%.2f" % [min_a_clearance, min_b_clearance, max_linear, max_angular])
+	print("ORING_STABILITY_063_SMOKE_OK: native axle limits block hubs at O-Rings without proxy bodies/weld runaway; clearances=[%.3f,%.3f] vmax=%.2f wmax=%.2f" % [min_a_clearance, min_b_clearance, max_linear, max_angular])
 	main.queue_free()
 	await process_frame
 	quit(0)

@@ -1,13 +1,12 @@
 extends "res://scripts/main_v068.gd"
 
 const VERSION_069 := "0.5.14"
-const O_RING_STOP_COLLIDER_HEIGHT_V069 := 0.32
 
-# v0.5.14 deliberately returns to the original O-Ring model: the ring is a real
-# rigid body fixed to its host rod. The axle joint remains the normal free-slide,
-# free-rotation AXLE joint and the ring itself is what physically stops the hub.
-# These compatibility/debug arrays must stay empty so old proxy/bounded-joint
-# experiments cannot silently return.
+# v0.5.14 keeps the normal AXLE joint completely unchanged. During SIMULATE an
+# O-Ring becomes an exact rod-relative kinematic collider: the editable BUILD
+# weld is detached, the real ring remains collidable, and the ring is parented to
+# its host rod at the same local transform. This avoids both the v0.5.13
+# rod-owned proxy bug and the tiny rigid-body weld flex seen under axle impacts.
 var o_ring_stop_pair_count_v069: int = 0
 var o_ring_axle_replacements_v069: Array = []
 var o_ring_stop_proxies_v069: Array = []
@@ -18,7 +17,7 @@ func _ready() -> void:
 	_update_help_text_v030()
 	if update_status_v021 != null:
 		_set_update_status_v021("Current version: v%s" % VERSION_069)
-	_status("O-Ring Stops are physical rod-mounted stops again.")
+	_status("O-Ring Stops are exact rod-relative physical stops.")
 
 
 func _status(text: String) -> void:
@@ -26,38 +25,15 @@ func _status(text: String) -> void:
 		status_label.text = "Connex Lab v%s  •  %s" % [VERSION_069, text]
 
 
-# Keep the legacy 0.035 O-Ring body and visual geometry. Only make its stopper
-# collider slightly thicker (0.26 -> 0.32) so loaded contact begins about 0.03
-# units earlier on each face. This absorbs normal Jolt contact/joint compliance
-# without changing the visible part, AXLE joint, rod, or global solver settings.
-func _make_o_ring_body(transform: Transform3D) -> RigidBody3D:
-	var ring := super._make_o_ring_body(transform)
-	for child in ring.get_children():
-		if child is CollisionShape3D:
-			var collision := child as CollisionShape3D
-			if collision.shape is CylinderShape3D:
-				var cylinder := collision.shape as CylinderShape3D
-				cylinder.height = O_RING_STOP_COLLIDER_HEIGHT_V069
-	return ring
-
-
 # Never copy O-Ring collision into the host rod. AXLE joints intentionally
-# exclude connector-vs-rod collision, so a rod-owned proxy cannot stop an axle.
+# exclude connector-vs-rod collision, so a rod-owned proxy can never stop the
+# axle connector reliably.
 func _add_o_ring_proxy_shapes_v068(_ring: RigidBody3D, _rod: RigidBody3D) -> int:
 	return 0
 
 
-# v0.5.13 converted the ring to a collisionless visual follower. Do not do that.
-# The legacy O-Ring body already has exactly the desired semantics:
-#   * a FixedJoint3D-style Generic6DOF mount keeps it attached to the rod,
-#   * the mount excludes only ring-vs-host-rod self collision,
-#   * the ring remains a real collider for axle connectors and other pieces,
-#   * when the rod falls/rotates, the fixed mount carries the ring with it.
-#
-# Deliberately do not enable CCD on the ring. The old behavior used ordinary
-# contact, and testing showed CCD made no measurable difference to this stop.
 func _prepare_o_ring_followers_v068() -> int:
-	o_ring_followers_v068.clear()
+	_restore_o_ring_followers_v068(false)
 	o_ring_proxy_shapes_v068.clear()
 	o_ring_stop_proxies_v069.clear()
 	o_ring_axle_replacements_v069.clear()
@@ -68,39 +44,88 @@ func _prepare_o_ring_followers_v068() -> int:
 		var record := record_value as Dictionary
 		if str(record.get("kind", "")) != "o_ring":
 			continue
+		var joint := record.get("joint") as Joint3D
 		var ring := record.get("ring") as RigidBody3D
 		var rod := record.get("rod") as RigidBody3D
-		var joint := record.get("joint") as Joint3D
-		if not is_instance_valid(ring) or not is_instance_valid(rod) or not is_instance_valid(joint):
+		if not is_instance_valid(joint) or not is_instance_valid(ring) or not is_instance_valid(rod):
 			continue
 
-		ring.continuous_cd = false
-		ring.sleeping = false
-		o_ring_stop_pair_count_v069 += 1
+		var local_transform: Transform3D = rod.global_transform.affine_inverse() * ring.global_transform
+		var original_parent := ring.get_parent()
+		var original_index := ring.get_index()
+		var ring_had_host_exception: bool = ring.get_collision_exceptions().has(rod)
+		var rod_had_ring_exception: bool = rod.get_collision_exceptions().has(ring)
+		o_ring_followers_v068.append({
+			"ring": ring,
+			"rod": rod,
+			"joint": joint,
+			"local_transform": local_transform,
+			"collision_layer": ring.collision_layer,
+			"collision_mask": ring.collision_mask,
+			"continuous_cd": ring.continuous_cd,
+			"freeze_mode": ring.freeze_mode,
+			"can_sleep": ring.can_sleep,
+			"original_parent": original_parent,
+			"original_index": original_index,
+			"ring_had_host_exception": ring_had_host_exception,
+			"rod_had_ring_exception": rod_had_ring_exception,
+		})
 
-	return o_ring_stop_pair_count_v069
+		# The BUILD weld is no longer needed in SIMULATE because the ring follows
+		# the rod transform exactly. Removing it also removes the source of the
+		# measured 0.44-unit weld stretch under repeated stopper impacts.
+		_disable_o_ring_joint_v068(joint)
 
+		# Preserve normal construction collision for every other body, but never
+		# collide the O-Ring with the rod it is mounted around.
+		if not ring_had_host_exception:
+			ring.add_collision_exception_with(rod)
+		if not rod_had_ring_exception:
+			rod.add_collision_exception_with(ring)
 
-func _release_physical_o_rings_v069() -> void:
-	for ring_value in o_ring_stops:
-		var ring := ring_value as RigidBody3D
-		if not is_instance_valid(ring):
-			continue
 		ring.linear_velocity = Vector3.ZERO
 		ring.angular_velocity = Vector3.ZERO
 		ring.continuous_cd = false
-		ring.freeze = false
+		ring.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+		ring.freeze = true
 		ring.sleeping = false
+		ring.can_sleep = false
+
+		ring.reparent(rod, true)
+		ring.transform = local_transform
+		o_ring_stop_pair_count_v069 += 1
+
+	if o_ring_stop_pair_count_v069 > 0:
+		_rebind_all_joints()
+	return o_ring_stop_pair_count_v069
+
+
+func _restore_o_ring_followers_v068(restore_build_pose: bool = true) -> void:
+	# Remove only the temporary host/self exceptions added by v0.5.14. The base
+	# restore then reparents the ring, restores the BUILD weld, collision policy,
+	# and editable frozen pose.
+	for follower_value in o_ring_followers_v068:
+		var follower := follower_value as Dictionary
+		var ring := follower.get("ring") as RigidBody3D
+		var rod := follower.get("rod") as RigidBody3D
+		if is_instance_valid(ring) and is_instance_valid(rod):
+			if not bool(follower.get("ring_had_host_exception", false)):
+				ring.remove_collision_exception_with(rod)
+			if not bool(follower.get("rod_had_ring_exception", false)):
+				rod.remove_collision_exception_with(ring)
+			var saved_freeze_mode: int = int(follower.get("freeze_mode", RigidBody3D.FREEZE_MODE_STATIC))
+			ring.freeze_mode = saved_freeze_mode as RigidBody3D.FreezeMode
+			ring.continuous_cd = bool(follower.get("continuous_cd", false))
+			ring.can_sleep = bool(follower.get("can_sleep", true))
+	super._restore_o_ring_followers_v068(restore_build_pose)
+	o_ring_stop_pair_count_v069 = 0
 
 
 func _release_physics() -> void:
 	await super._release_physics()
 	if not simulating:
 		return
-	# Later editor runtimes no longer release O-Rings through the old v0.1.4 path,
-	# so explicitly release these physical mounts alongside the ordinary pieces.
-	_release_physical_o_rings_v069()
-	_status("Physics running — %d physical O-Ring Stop%s fixed to host rod%s; axle slide/rotation remain free until contact" % [
+	_status("Physics running — %d collidable O-Ring Stop%s locked exactly to host rod%s; AXLE slide/rotation stay free until contact" % [
 		o_ring_stop_pair_count_v069,
 		"" if o_ring_stop_pair_count_v069 == 1 else "s",
 		"" if o_ring_stop_pair_count_v069 == 1 else "s"
@@ -113,7 +138,7 @@ func _update_help_text_v030() -> void:
 		return
 	var label: Label = _find_label_v030(help_panel)
 	if label != null:
-		label.text += "\n\nv0.5.14 O-RING STOPPER: restored the simple physical behavior from the older implementation. An O-Ring Stop is a real collision body fixed directly to its host rod. It moves and falls with that rod, while the normal AXLE joint keeps sliding and rotating freely until the axle connector physically reaches the ring. No host-rod proxy collider, moving proxy body, replacement axle joint, rewritten AXLE travel limit, or O-Ring CCD is used. The visible ring and legacy mass are unchanged; its stopper collider is only slightly thicker to tolerate loaded contact. BUILD keeps the O-Ring editable on the rod; SIMULATE releases the rod and ring together."
+		label.text += "\n\nv0.5.14 O-RING STOPPER: the real O-Ring collider is locked exactly to its host rod during SIMULATE. Its BUILD weld is temporarily detached and the ring becomes a kinematic child of the rod, so it follows every fall and rotation without a tiny rigid-body joint stretching under load. The ring keeps normal construction collision against axle connectors and other pieces, while host-rod self-collision is excluded. The normal AXLE joint remains untouched and keeps free Y slide plus free axle rotation until physical contact. No rod-owned proxy collider, moving proxy body, replacement AXLE joint, artificial travel limit, enlarged O-Ring collider, or O-Ring CCD is used. BUILD/Restore returns the original editable ring and weld."
 
 
 func _on_update_request_completed_v021(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:

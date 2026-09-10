@@ -1,31 +1,31 @@
 extends "res://scripts/main_v073.gd"
 
 const VERSION_074 := "0.5.16"
-const AXLE_HUB_CCD_SPACING_V074 := 0.62
-const AXLE_HUB_CCD_EPS_V074 := 0.0001
-const AXLE_HUB_CCD_PAIR_PASSES_V074 := 4
-const AXLE_HUB_CCD_COUPLED_PASSES_V074 := 8
+const AXLE_HUB_STACK_SPACING_V074 := 0.62
+const AXLE_HUB_STACK_ACTIVE_DISTANCE_V074 := 0.82
+const AXLE_HUB_STACK_EPS_V074 := 0.0001
+const AXLE_HUB_STACK_PASSES_V074 := 4
 
 var axle_hub_ccd_events_v074: int = 0
 
 
 # -----------------------------------------------------------------------------
-# AXLE hub continuous collision
+# O-Ring-local AXLE hub stacking guard
 #
-# Keep v0.5.15's proven O-Ring ownership exactly as built: the original
-# outermost AXLE hubs own the O-Ring / rod-end boundaries for their segment.
-# The missing case is hub-vs-hub tunnelling after an outer hub reaches a stop.
+# v0.5.15 is stable when the outer hub owns the real O-Ring / rod-end stop.
+# Its remaining failure mode is narrowly defined: once that owner is stopped,
+# another AXLE hub can occasionally tunnel through it in one Jolt step and then
+# reach the O-Ring itself.
 #
-# Resolve only the one-dimensional axial approach before integration. For each
-# adjacent hub pair, reduce only the amount of relative closing speed that would
-# place their centers inside the physical connector thickness next frame.
-# Velocity changes are mass-weighted and equal/opposite across each connector's
-# fixed component, so axial linear momentum is conserved. No transform, angular
-# velocity, O-Ring ownership, host-rod velocity, or AXLE joint limit is changed.
+# Do not create ranked floors, swap ownership, move bodies, or exchange impulses
+# with the stopped owner. Only while an owner is physically near its boundary,
+# cap an approaching follower's axial speed so its center cannot enter the
+# connector ahead of it on the next step. The cap is dissipative: it can remove
+# inward relative motion, but it never launches a follower away from the stop.
 # -----------------------------------------------------------------------------
 
-func _ccd_component_v074(hub_info: Dictionary) -> Array:
-	var cached := hub_info.get("ccd_component_v074", []) as Array
+func _stack_component_v074(hub_info: Dictionary) -> Array:
+	var cached := hub_info.get("stack_component_v074", []) as Array
 	var valid := not cached.is_empty()
 	if valid:
 		for value in cached:
@@ -35,87 +35,124 @@ func _ccd_component_v074(hub_info: Dictionary) -> Array:
 	if valid:
 		return cached
 	var component: Array = _stop_component_v071(hub_info)
-	hub_info["ccd_component_v074"] = component
+	hub_info["stack_component_v074"] = component
 	return component
 
 
-func _ccd_dynamic_mass_v074(hub_info: Dictionary) -> float:
-	var total := 0.0
-	for value in _ccd_component_v074(hub_info):
-		var body := value as RigidBody3D
-		if not is_instance_valid(body) or body.freeze:
-			continue
-		total += maxf(body.mass, 0.0001)
-	return total
-
-
-func _ccd_components_overlap_v074(a: Dictionary, b: Dictionary) -> bool:
+func _stack_components_overlap_v074(a: Dictionary, b: Dictionary) -> bool:
 	var ids: Dictionary = {}
-	for value in _ccd_component_v074(a):
+	for value in _stack_component_v074(a):
 		var body := value as RigidBody3D
 		if is_instance_valid(body):
 			ids[body.get_instance_id()] = true
-	for value in _ccd_component_v074(b):
+	for value in _stack_component_v074(b):
 		var body := value as RigidBody3D
 		if is_instance_valid(body) and ids.has(body.get_instance_id()):
 			return true
 	return false
 
 
-func _ccd_apply_velocity_delta_v074(hub_info: Dictionary, delta_velocity: Vector3) -> void:
-	if delta_velocity.length_squared() <= 0.0000000001:
+func _stack_apply_axis_delta_v074(hub_info: Dictionary, axis: Vector3, amount: float) -> void:
+	if absf(amount) <= 0.000001:
 		return
-	for value in _ccd_component_v074(hub_info):
+	for value in _stack_component_v074(hub_info):
 		var body := value as RigidBody3D
 		if not is_instance_valid(body) or body.freeze:
 			continue
-		body.linear_velocity += delta_velocity
+		body.linear_velocity += axis * amount
 		body.sleeping = false
 
 
-func _ccd_hub_axis_speed_v074(hub_info: Dictionary, axis: Vector3, rod: RigidBody3D) -> float:
+func _stack_axis_speed_v074(hub_info: Dictionary, axis: Vector3, rod: RigidBody3D) -> float:
 	var connector := hub_info.get("connector") as RigidBody3D
 	if not is_instance_valid(connector) or not is_instance_valid(rod):
 		return 0.0
 	return (connector.linear_velocity - rod.linear_velocity).dot(axis)
 
 
-func _resolve_axle_hub_pair_v074(low: Dictionary, high: Dictionary, rod: RigidBody3D, axis: Vector3, delta: float) -> bool:
-	var low_body := low.get("connector") as RigidBody3D
-	var high_body := high.get("connector") as RigidBody3D
-	if not is_instance_valid(low_body) or not is_instance_valid(high_body):
-		return false
-	if low_body.freeze and high_body.freeze:
-		return false
-	if _ccd_components_overlap_v074(low, high):
-		return false
-
-	var low_along: float = _rod_local_along_v070(low_body, rod)
-	var high_along: float = _rod_local_along_v070(high_body, rod)
-	var gap: float = high_along - low_along
-	# Existing tiny overlap is left to Jolt's normal contact separation. This pass
-	# only removes additional closing motion; it never teleports either assembly.
-	var allowed_closing: float = maxf(0.0, (gap - AXLE_HUB_CCD_SPACING_V074) / delta)
-	var low_speed: float = _ccd_hub_axis_speed_v074(low, axis, rod)
-	var high_speed: float = _ccd_hub_axis_speed_v074(high, axis, rod)
-	var closing_speed: float = low_speed - high_speed
-	if closing_speed <= allowed_closing + AXLE_HUB_CCD_EPS_V074:
-		return false
-
-	var low_mass: float = _ccd_dynamic_mass_v074(low)
-	var high_mass: float = _ccd_dynamic_mass_v074(high)
-	if low_mass <= 0.0001 or high_mass <= 0.0001:
-		return false
-
-	var remove_relative: float = closing_speed - allowed_closing
-	var impulse: float = remove_relative / (1.0 / low_mass + 1.0 / high_mass)
-	_ccd_apply_velocity_delta_v074(low, axis * (-impulse / low_mass))
-	_ccd_apply_velocity_delta_v074(high, axis * (impulse / high_mass))
-	axle_hub_ccd_events_v074 += 1
-	return true
+func _stack_pair_allowed_closing_v074(a: Dictionary, b: Dictionary, rod: RigidBody3D, delta: float) -> float:
+	var body_a := a.get("connector") as RigidBody3D
+	var body_b := b.get("connector") as RigidBody3D
+	if not is_instance_valid(body_a) or not is_instance_valid(body_b):
+		return INF
+	var gap: float = _rod_local_along_v070(body_b, rod) - _rod_local_along_v070(body_a, rod)
+	return maxf(0.0, (gap - AXLE_HUB_STACK_SPACING_V074) / delta)
 
 
-func _predict_axle_hub_ccd_v074(delta: float) -> bool:
+func _guard_lower_stack_v074(group: Dictionary, rod: RigidBody3D, axis: Vector3, delta: float) -> bool:
+	var hubs: Array = group.get("hubs", []) as Array
+	if hubs.size() < 2:
+		return false
+	var lower: float = float(group.get("lower", -INF))
+	if lower <= -INF:
+		return false
+	var owner := (hubs[0] as Dictionary).get("connector") as RigidBody3D
+	if not is_instance_valid(owner):
+		return false
+	var owner_along: float = _rod_local_along_v070(owner, rod)
+	if owner_along - lower > AXLE_HUB_STACK_ACTIVE_DISTANCE_V074:
+		return false
+
+	var changed := false
+	# Propagate from the lower stop outward. Each upper follower is allowed to
+	# approach the hub below it only as fast as the remaining physical gap permits.
+	for i in range(hubs.size() - 1):
+		var leader := hubs[i] as Dictionary
+		var follower := hubs[i + 1] as Dictionary
+		if _stack_components_overlap_v074(leader, follower):
+			continue
+		var allowed: float = _stack_pair_allowed_closing_v074(leader, follower, rod, delta)
+		var leader_speed: float = _stack_axis_speed_v074(leader, axis, rod)
+		var follower_speed: float = _stack_axis_speed_v074(follower, axis, rod)
+		# Lower-boundary inward motion is negative. Never accelerate a follower
+		# upward just because the leader is rebounding away from the stop.
+		var reference_speed: float = minf(0.0, leader_speed)
+		var minimum_follower_speed: float = reference_speed - allowed
+		if follower_speed < minimum_follower_speed - AXLE_HUB_STACK_EPS_V074:
+			_stack_apply_axis_delta_v074(follower, axis, minimum_follower_speed - follower_speed)
+			axle_hub_ccd_events_v074 += 1
+			changed = true
+	return changed
+
+
+func _guard_upper_stack_v074(group: Dictionary, rod: RigidBody3D, axis: Vector3, delta: float) -> bool:
+	var hubs: Array = group.get("hubs", []) as Array
+	if hubs.size() < 2:
+		return false
+	var upper: float = float(group.get("upper", INF))
+	if upper >= INF:
+		return false
+	var owner := (hubs[hubs.size() - 1] as Dictionary).get("connector") as RigidBody3D
+	if not is_instance_valid(owner):
+		return false
+	var owner_along: float = _rod_local_along_v070(owner, rod)
+	if upper - owner_along > AXLE_HUB_STACK_ACTIVE_DISTANCE_V074:
+		return false
+
+	var changed := false
+	# Propagate from the upper stop inward. Each lower follower is allowed to
+	# approach the hub above it only as fast as the remaining physical gap permits.
+	for offset in range(hubs.size() - 1):
+		var high_index: int = hubs.size() - 1 - offset
+		var leader := hubs[high_index] as Dictionary
+		var follower := hubs[high_index - 1] as Dictionary
+		if _stack_components_overlap_v074(follower, leader):
+			continue
+		var allowed: float = _stack_pair_allowed_closing_v074(follower, leader, rod, delta)
+		var leader_speed: float = _stack_axis_speed_v074(leader, axis, rod)
+		var follower_speed: float = _stack_axis_speed_v074(follower, axis, rod)
+		# Upper-boundary inward motion is positive. Never accelerate a follower
+		# downward just because the leader is rebounding away from the stop.
+		var reference_speed: float = maxf(0.0, leader_speed)
+		var maximum_follower_speed: float = reference_speed + allowed
+		if follower_speed > maximum_follower_speed + AXLE_HUB_STACK_EPS_V074:
+			_stack_apply_axis_delta_v074(follower, axis, maximum_follower_speed - follower_speed)
+			axle_hub_ccd_events_v074 += 1
+			changed = true
+	return changed
+
+
+func _predict_axle_hub_stack_v074(delta: float) -> bool:
 	if not simulating or delta <= 0.000001:
 		return false
 	var any_changed := false
@@ -124,24 +161,14 @@ func _predict_axle_hub_ccd_v074(delta: float) -> bool:
 		var rod := group.get("rod") as RigidBody3D
 		if not is_instance_valid(rod):
 			continue
-		var hubs: Array = group.get("hubs", []) as Array
-		if hubs.size() < 2:
-			continue
 		var axis: Vector3 = _rod_axis_v020(rod).normalized()
-		var pass_count: int = mini(AXLE_HUB_CCD_PAIR_PASSES_V074, hubs.size() + 1)
-		for _pass in range(pass_count):
-			var changed := false
-			for i in range(hubs.size() - 1):
-				if _resolve_axle_hub_pair_v074(hubs[i] as Dictionary, hubs[i + 1] as Dictionary, rod, axis, delta):
-					changed = true
-					any_changed = true
-			if not changed:
-				break
+		any_changed = _guard_lower_stack_v074(group, rod, axis, delta) or any_changed
+		any_changed = _guard_upper_stack_v074(group, rod, axis, delta) or any_changed
 	return any_changed
 
 
-# Disable v0.5.16's experimental ownership-swap path. Boundary ownership stays
-# exactly as produced by _build_axle_stop_ranges_v070(), matching v0.5.15.
+# Disable the abandoned ownership-swap path. Stop ownership remains exactly as
+# v0.5.15 built it for the entire simulation.
 func _predict_axle_order_v073(_delta: float) -> void:
 	pass
 
@@ -151,16 +178,14 @@ func _correct_axle_order_v073() -> bool:
 
 
 func _predict_axle_stops_v071(delta: float) -> void:
-	# The O-Ring stop can slow an outer hub, which may make the next hub catch it
-	# during the same integration step. Conversely, the momentum-conserving hub
-	# contact can slightly change the outer hub speed. Alternate both unilateral
-	# constraints until a pass needs no hub correction. This is a short 1-D PGS
-	# solve and only becomes active when hubs are actually about to stack.
-	for _pass in range(AXLE_HUB_CCD_COUPLED_PASSES_V074):
+	# First let the proven O-Ring predictor settle the actual boundary owner.
+	# Then, only near that boundary, dissipate follower motion that would tunnel
+	# through the stopped connector. A few passes propagate the stopped stack
+	# through 3+ hubs without ever moving the O-Ring owner itself.
+	for _pass in range(AXLE_HUB_STACK_PASSES_V074):
 		super._predict_axle_stops_v071(delta)
-		if not _predict_axle_hub_ccd_v074(delta):
+		if not _predict_axle_hub_stack_v074(delta):
 			return
-	# Finish on the physical O-Ring / rod-end boundary after the bounded solve.
 	super._predict_axle_stops_v071(delta)
 
 

@@ -5,17 +5,17 @@ Follow-up release based on hands-on v0.5.15 testing. This update focuses on O-Ri
 ### O-Ring selection and axle stops
 O-Rings keep their small visual/physical size but now have a much larger screen-space selection target, making them substantially easier to select for MOVE/ROTATE on a phone even when larger parts overlap nearby.
 
-The axle-stop solver is strengthened for larger constructions. Every AXLE connector in an O-Ring/rod-end segment receives a finite ranked travel range rather than leaving interior hubs unbounded. Multiple hubs retain their original order and stacking space instead of being projected onto one stop coordinate. Connector-side stop correction explicitly cannot traverse into the host axle rod through another fixed path in a complex construction.
+The axle-stop model keeps the stable v0.5.15 nearest-hub behavior: only the lowest/highest AXLE hub in each O-Ring segment owns that segment's physical O-Ring/rod-end boundary, while interior hubs continue to stack through normal connector collision. A separate post-step topology guard now catches the rare case where two axle hubs genuinely tunnel through one another in a physics step and restores their original order before an interior hub can bypass the O-Ring. The guard does not pre-empt normal Jolt contact or continuously force hidden spacing between hubs.
 
-O-Rings remain exact rod-relative followers with no collision proxy or independently solved stopper body. AXLE rotation remains free; only longitudinal travel is stopped by O-Rings and physical rod ends.
+Connector-side stop correction explicitly cannot traverse into the host axle rod through another fixed path in a complex construction. O-Rings remain exact rod-relative followers with no collision proxy or independently solved stopper body. AXLE rotation remains free; only longitudinal travel is stopped by O-Rings and physical rod ends.
 
 ### Structure Rigidity works across the construction
-The Structure Rigidity control now applies bounded angular compliance to all SOCKET/CROSS structure joints during SIMULATE, not only a redundant joint in a closed loop.
+The Structure Rigidity control now applies bounded angular compliance to SOCKET/CROSS structure joints during SIMULATE instead of affecting only one redundant closed-loop edge.
 
-- 100% = rigid / 0° angular flex.
-- 92% default remains very firm at roughly ±0.15° for stability.
-- 50% gives roughly ±3.6° of visible flex.
-- Lower values progressively allow more realistic movement.
+- 92–100% keeps ordinary SOCKET/CROSS joints exactly rigid for stable normal builds.
+- Redundant closed-loop edges retain only a tiny solver-relief allowance at high rigidity so Jolt is not numerically over-constrained.
+- 50% gives about ±2.9° of visible bounded flex.
+- Lower values progressively allow more movement.
 - 0% is still bounded at about ±12°, not an uncontrolled free hinge.
 - Linear socket positions remain locked at every setting.
 
@@ -43,10 +43,11 @@ This supports operations such as rotating a multi-socket connector one socket le
 
 ### Validation
 v0.5.16 adds regression coverage for:
-- three AXLE hubs sharing one O-Ring segment, including previously interior hubs;
+- three AXLE hubs sharing one O-Ring segment;
+- actual hub-order tunnelling recovery without pre-empting ordinary hub collision;
 - connector-side O-Ring correction in complex graphs;
 - enlarged O-Ring touch selection;
-- whole-structure rigidity at 0%, 50%, 92%, and 100%;
+- whole-structure rigidity at 0%, 50%, 92%, and 100%, including closed-loop solver relief;
 - true side-middle CROSS rod creation;
 - second-rod auto-snap after explicit reconnect;
 - multi-rod socket re-seat while rods and far-end structures remain fixed;

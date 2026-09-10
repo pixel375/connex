@@ -4,9 +4,10 @@ const VERSION_069 := "0.5.14"
 
 # v0.5.14 keeps the normal AXLE joint completely unchanged. During SIMULATE an
 # O-Ring becomes an exact rod-relative kinematic collider: the editable BUILD
-# weld is detached, the real ring remains collidable, and the ring is parented to
-# its host rod at the same local transform. This avoids both the v0.5.13
-# rod-owned proxy bug and the tiny rigid-body weld flex seen under axle impacts.
+# weld is detached, the real ring remains collidable, and its world transform is
+# synchronized from the host rod's saved local transform every physics tick.
+# It is deliberately NOT reparented under the RigidBody3D host because nested
+# physics bodies are unreliable under Godot 4.6.3/Jolt.
 var o_ring_stop_pair_count_v069: int = 0
 var o_ring_axle_replacements_v069: Array = []
 var o_ring_stop_proxies_v069: Array = []
@@ -73,7 +74,7 @@ func _prepare_o_ring_followers_v068() -> int:
 
 		# The BUILD weld is no longer needed in SIMULATE because the ring follows
 		# the rod transform exactly. Removing it also removes the source of the
-		# measured 0.44-unit weld stretch under repeated stopper impacts.
+		# measured weld stretch under repeated stopper impacts.
 		_disable_o_ring_joint_v068(joint)
 
 		# Preserve normal construction collision for every other body, but never
@@ -90,9 +91,7 @@ func _prepare_o_ring_followers_v068() -> int:
 		ring.freeze = true
 		ring.sleeping = false
 		ring.can_sleep = false
-
-		ring.reparent(rod, true)
-		ring.transform = local_transform
+		ring.global_transform = rod.global_transform * local_transform
 		o_ring_stop_pair_count_v069 += 1
 
 	if o_ring_stop_pair_count_v069 > 0:
@@ -100,10 +99,27 @@ func _prepare_o_ring_followers_v068() -> int:
 	return o_ring_stop_pair_count_v069
 
 
+# Override v0.5.13's follower sync specifically to avoid reparenting one physics
+# body beneath another. A frozen kinematic RigidBody3D is intended for bodies
+# animated by code and still participates in collision along its movement path.
+func _sync_o_ring_followers_v068() -> void:
+	if not simulating:
+		return
+	for follower_value in o_ring_followers_v068:
+		var follower := follower_value as Dictionary
+		var ring := follower.get("ring") as RigidBody3D
+		var rod := follower.get("rod") as RigidBody3D
+		if not is_instance_valid(ring) or not is_instance_valid(rod):
+			continue
+		var local_transform := follower.get("local_transform", Transform3D.IDENTITY) as Transform3D
+		ring.global_transform = rod.global_transform * local_transform
+		ring.linear_velocity = rod.linear_velocity
+		ring.angular_velocity = rod.angular_velocity
+
+
 func _restore_o_ring_followers_v068(restore_build_pose: bool = true) -> void:
 	# Remove only the temporary host/self exceptions added by v0.5.14. The base
-	# restore then reparents the ring, restores the BUILD weld, collision policy,
-	# and editable frozen pose.
+	# restore then restores the BUILD weld, collision policy and editable pose.
 	for follower_value in o_ring_followers_v068:
 		var follower := follower_value as Dictionary
 		var ring := follower.get("ring") as RigidBody3D
@@ -137,7 +153,7 @@ func _update_help_text_v030() -> void:
 		return
 	var label: Label = _find_label_v030(help_panel)
 	if label != null:
-		label.text += "\n\nv0.5.14 O-RING STOPPER: the real O-Ring collider is locked exactly to its host rod during SIMULATE. Its BUILD weld is temporarily detached and the ring becomes a kinematic child of the rod, so it follows every fall and rotation without a tiny rigid-body joint stretching under load. The ring keeps normal construction collision against axle connectors and other pieces, while host-rod self-collision is excluded. The normal AXLE joint remains untouched and keeps free Y slide plus free axle rotation until physical contact. No rod-owned proxy collider, moving proxy body, replacement AXLE joint, artificial travel limit, enlarged O-Ring collider, or O-Ring CCD is used. BUILD/Restore returns the original editable ring and weld."
+		label.text += "\n\nv0.5.14 O-RING STOPPER: the real O-Ring collider is locked exactly to its host rod during SIMULATE. Its BUILD weld is temporarily detached and the ring becomes a frozen kinematic collider whose world transform is synchronized from the rod every physics tick. This avoids both tiny rigid-body weld stretch and unreliable nested RigidBody3D parenting in Jolt. The ring keeps normal construction collision against axle connectors and other pieces, while host-rod self-collision is excluded. The normal AXLE joint remains untouched and keeps free Y slide plus free axle rotation until physical contact. No rod-owned proxy collider, moving proxy body, replacement AXLE joint, artificial travel limit, enlarged O-Ring collider, or O-Ring-specific CCD is used. BUILD/Restore returns the original editable ring and weld."
 
 
 func _on_update_request_completed_v021(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:

@@ -49,12 +49,14 @@ func _along(main: Node, body: Node3D, rod: RigidBody3D) -> float:
 	return (body.global_position - rod.global_position).dot(axis)
 
 
-func _replacement_for(main: Node, original: Generic6DOFJoint3D) -> Generic6DOFJoint3D:
-	for value in (main.get("o_ring_axle_replacements_v069") as Array):
-		var state := value as Dictionary
-		if state.get("original") == original:
-			return state.get("replacement") as Generic6DOFJoint3D
-	return null
+func _o_ring_mounts(main: Node) -> Array:
+	var result: Array = []
+	main.call("_rebuild_connection_graph_v020")
+	for value in (main.get("connections_v020") as Array):
+		var record := value as Dictionary
+		if str(record.get("kind", "")) == "o_ring":
+			result.append(record)
+	return result
 
 
 func _run() -> void:
@@ -71,7 +73,8 @@ func _run() -> void:
 		return
 
 	# One long axle with two independently sliding hubs, asymmetric fixed spokes,
-	# and O-Ring stops below/above. This intentionally impacts the floor unevenly.
+	# and physical O-Ring stops below/above. This intentionally impacts the floor
+	# unevenly and proves the old simple ring-on-rod behavior under load.
 	var axle := main.call("_make_rod", 4, Vector3(0, 13, 0), Vector3(0, 29, 0)) as RigidBody3D
 	var hub_a := main.call("_make_connector", 6, Transform3D(Basis.IDENTITY, Vector3(0, 19, 0))) as RigidBody3D
 	var hub_b := main.call("_make_connector", 6, Transform3D(Basis.IDENTITY, Vector3(0, 23, 0))) as RigidBody3D
@@ -95,57 +98,66 @@ func _run() -> void:
 	for _i in range(12):
 		await physics_frame
 
-	if int((main.get("o_ring_followers_v068") as Array).size()) != 2:
-		_fail("O-Ring Stops were not converted to collisionless visual followers")
+	if not bool(main.get("simulating")):
+		_fail("simulation did not start")
 		return
-	if int((main.get("o_ring_proxy_shapes_v068") as Array).size()) != 0:
-		_fail("v0.5.13 host-rod O-Ring proxy collision still exists")
+	if not (main.get("o_ring_followers_v068") as Array).is_empty():
+		_fail("O-Rings were incorrectly converted to collisionless followers")
 		return
-	if int((main.get("o_ring_stop_proxies_v069") as Array).size()) != 0:
-		_fail("v0.5.14 recreated a moving O-Ring proxy body")
+	if not (main.get("o_ring_proxy_shapes_v068") as Array).is_empty():
+		_fail("host-rod O-Ring proxy collision still exists")
 		return
-	if int(main.get("o_ring_stop_pair_count_v069")) < 4:
-		_fail("bounded O-Ring/axle stop relations were not configured")
+	if not (main.get("o_ring_stop_proxies_v069") as Array).is_empty():
+		_fail("moving O-Ring proxy body was recreated")
 		return
-	if int((main.get("o_ring_axle_replacements_v069") as Array).size()) != 2:
-		_fail("expected exactly two bounded simulation axle replacements")
+	if not (main.get("o_ring_axle_replacements_v069") as Array).is_empty():
+		_fail("AXLE joint was replaced instead of using physical O-Ring contact")
+		return
+	if int(main.get("o_ring_stop_pair_count_v069")) != 2:
+		_fail("expected exactly two physical rod-mounted O-Rings")
 		return
 
 	for ring in [ring_low, ring_high]:
-		if not ring.freeze or ring.collision_layer != 0 or ring.collision_mask != 0:
-			_fail("visible O-Ring follower was left active in collision physics")
+		if ring.freeze:
+			_fail("physical O-Ring remained frozen while its host rod was released")
+			return
+		if ring.collision_layer != 4 or (ring.collision_mask & 2) == 0:
+			_fail("physical O-Ring collision was disabled or cannot see connector bodies")
+			return
+		if not ring.continuous_cd:
+			_fail("physical O-Ring CCD was not enabled for simulation")
 			return
 
-	var bounded_a := _replacement_for(main, axle_joint_a)
-	var bounded_b := _replacement_for(main, axle_joint_b)
-	if not is_instance_valid(bounded_a) or not is_instance_valid(bounded_b):
-		_fail("could not resolve bounded axle replacement joints")
-		return
-	if not axle_joint_a.node_a.is_empty() or not axle_joint_a.node_b.is_empty() or not axle_joint_b.node_a.is_empty() or not axle_joint_b.node_b.is_empty():
-		_fail("BUILD-time free axle joint remained live beside bounded replacement")
-		return
-
-	# Stopping must happen on one replacement of the axle's existing Y slide DOF.
-	# hub A starts at -2 with rings -3/+6 => about [-0.57, +7.57] travel.
-	# hub B starts at +2 with rings -3/+6 => about [-4.57, +3.57] travel.
-	for axle_joint in [bounded_a, bounded_b]:
-		if not bool(axle_joint.get("linear_limit_y/enabled")):
-			_fail("bounded axle replacement did not enable Y slide limits")
+	# The normal AXLE joint must remain live and retain free slide/free rotation.
+	for axle_joint in [axle_joint_a, axle_joint_b]:
+		if axle_joint.node_a.is_empty() or axle_joint.node_b.is_empty():
+			_fail("normal AXLE joint was detached")
+			return
+		if bool(axle_joint.get("linear_limit_y/enabled")):
+			_fail("normal AXLE slide was rewritten with an artificial Y limit")
 			return
 		if bool(axle_joint.get("angular_limit_y/enabled")):
-			_fail("bounded axle replacement accidentally locked axle rotation")
+			_fail("normal AXLE rotation was accidentally locked")
 			return
-	if absf(float(bounded_a.get("linear_limit_y/lower_distance")) - (-0.57)) > 0.08 or absf(float(bounded_a.get("linear_limit_y/upper_distance")) - 7.57) > 0.08:
-		_fail("hub A bounded axle limits are wrong: [%.3f, %.3f]" % [float(bounded_a.get("linear_limit_y/lower_distance")), float(bounded_a.get("linear_limit_y/upper_distance"))])
+
+	var mounts := _o_ring_mounts(main)
+	if mounts.size() != 2:
+		_fail("expected two live O-Ring-to-rod mount joints")
 		return
-	if absf(float(bounded_b.get("linear_limit_y/lower_distance")) - (-4.57)) > 0.08 or absf(float(bounded_b.get("linear_limit_y/upper_distance")) - 3.57) > 0.08:
-		_fail("hub B bounded axle limits are wrong: [%.3f, %.3f]" % [float(bounded_b.get("linear_limit_y/lower_distance")), float(bounded_b.get("linear_limit_y/upper_distance"))])
-		return
+	for record_value in mounts:
+		var record := record_value as Dictionary
+		var mount := record.get("joint") as Joint3D
+		if not is_instance_valid(mount) or mount.node_a.is_empty() or mount.node_b.is_empty():
+			_fail("O-Ring mount joint was detached")
+			return
+		if not mount.exclude_nodes_from_collision:
+			_fail("O-Ring mount must exclude only its own host-rod collision")
+			return
 
 	for _i in range(72):
 		await physics_frame
 	if ring_low.global_position.y > ring_low_start_y - 0.30 or ring_high.global_position.y > ring_high_start_y - 0.30:
-		_fail("O-Ring followers did not fall with their host construction")
+		_fail("O-Rings did not fall with their host rod")
 		return
 
 	var max_linear := 0.0
@@ -165,10 +177,12 @@ func _run() -> void:
 			max_linear = maxf(max_linear, body.linear_velocity.length())
 			max_angular = maxf(max_angular, body.angular_velocity.length())
 
+		# The fixed mount may have tiny solver compliance under impact, but the ring
+		# must remain physically attached to the rod rather than becoming an anchor.
 		var low_expected: Transform3D = axle.global_transform * low_local_before
 		var high_expected: Transform3D = axle.global_transform * high_local_before
-		if ring_low.global_position.distance_to(low_expected.origin) > 0.03 or ring_high.global_position.distance_to(high_expected.origin) > 0.03:
-			_fail("visible O-Ring follower drifted away from host rod")
+		if ring_low.global_position.distance_to(low_expected.origin) > 0.10 or ring_high.global_position.distance_to(high_expected.origin) > 0.10:
+			_fail("physical O-Ring drifted away from its host rod")
 			return
 
 		var low_along := _along(main, ring_low, axle)
@@ -195,22 +209,22 @@ func _run() -> void:
 		_fail("ordinary mixed fixture needed the emergency stability guard (%d events)" % int(main.get("runaway_guard_events_v068")))
 		return
 
-	# BUILD must return to the original free axle joints, with no simulation joint
-	# left in the graph.
+	# BUILD must keep the ordinary free AXLE and editable physical O-Rings.
 	main.call("_toggle_simulation")
 	for _i in range(4):
 		await physics_frame
-	if not (main.get("o_ring_axle_replacements_v069") as Array).is_empty():
-		_fail("bounded axle replacement survived return to BUILD")
-		return
 	if axle_joint_a.node_a.is_empty() or axle_joint_a.node_b.is_empty() or axle_joint_b.node_a.is_empty() or axle_joint_b.node_b.is_empty():
-		_fail("original free axle joints were not restored for BUILD")
+		_fail("normal AXLE joint did not survive return to BUILD")
 		return
 	if bool(axle_joint_a.get("linear_limit_y/enabled")) or bool(axle_joint_b.get("linear_limit_y/enabled")):
-		_fail("BUILD axle Y slide did not return to free mode")
+		_fail("BUILD axle Y slide is not free")
 		return
+	for ring in [ring_low, ring_high]:
+		if not ring.freeze or ring.collision_layer != 4:
+			_fail("O-Ring did not return to editable BUILD state")
+			return
 
-	print("ORING_STABILITY_063_SMOKE_OK: one bounded axle constraint per hub blocks O-Rings without proxy bodies/weld runaway; clearances=[%.3f,%.3f] vmax=%.2f wmax=%.2f" % [min_a_clearance, min_b_clearance, max_linear, max_angular])
+	print("ORING_STABILITY_063_SMOKE_OK: physical O-Rings stay fixed to falling rod and stop free-sliding axle hubs by contact; clearances=[%.3f,%.3f] vmax=%.2f wmax=%.2f" % [min_a_clearance, min_b_clearance, max_linear, max_angular])
 	main.queue_free()
 	await process_frame
 	quit(0)

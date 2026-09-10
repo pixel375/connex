@@ -125,29 +125,25 @@ func _run() -> void:
 	if int((main.get("o_ring_proxy_shapes_v068") as Array).size()) != 0:
 		_fail("v0.5.13 host-rod O-Ring proxy collision was recreated")
 		return
-	var stop_proxies := main.get("o_ring_stop_proxies_v069") as Array
-	if stop_proxies.size() != 1:
-		_fail("video fixture expected one root-level O-Ring stopper proxy, got %d" % stop_proxies.size())
+	if int((main.get("o_ring_stop_proxies_v069") as Array).size()) != 0:
+		_fail("v0.5.14 recreated a moving O-Ring proxy body")
 		return
 	if int(main.get("o_ring_stop_pair_count_v069")) < 1:
-		_fail("video fixture did not configure an O-Ring/axle-hub stop pair")
+		_fail("video fixture did not configure an O-Ring/axle-hub stop relation")
 		return
 	if not ring.freeze or ring.collision_layer != 0 or ring.collision_mask != 0:
 		_fail("visible video-fixture O-Ring was left active in collision physics")
 		return
-	var proxy_state := stop_proxies[0] as Dictionary
-	var proxy := proxy_state.get("proxy") as AnimatableBody3D
-	if not is_instance_valid(proxy) or proxy.get_parent() != main:
-		_fail("video fixture O-Ring stopper is not a root-level AnimatableBody3D")
+	if not bool(axle_joint.get("linear_limit_y/enabled")):
+		_fail("video fixture axle slide was not bounded by the O-Ring")
 		return
-	if proxy.collision_layer != int(main.get("O_RING_STOP_LAYER_V069")) or proxy.collision_mask != int(main.get("AXLE_STOP_TARGET_LAYER_V069")):
-		_fail("video fixture O-Ring stopper collision channels are wrong")
+	var lower_limit := float(axle_joint.get("linear_limit_y/lower_distance"))
+	var upper_limit := float(axle_joint.get("linear_limit_y/upper_distance"))
+	if absf(lower_limit - (-0.49)) > 0.08:
+		_fail("video fixture lower O-Ring stop is wrong: %.3f expected≈-0.490" % lower_limit)
 		return
-	if (a.collision_layer & int(main.get("AXLE_STOP_TARGET_LAYER_V069"))) == 0 or (a.collision_mask & int(main.get("O_RING_STOP_LAYER_V069"))) == 0:
-		_fail("video fixture axle hub is not paired to O-Ring collision channel")
-		return
-	if bool(axle_joint.get("linear_limit_y/enabled")):
-		_fail("video fixture axle slide was converted into a hard Y joint limit")
+	if upper_limit < 100.0:
+		_fail("video fixture unexpectedly bounded the axle above the hub: %.3f" % upper_limit)
 		return
 
 	var max_linear := 0.0
@@ -179,10 +175,6 @@ func _run() -> void:
 		if ring.global_position.distance_to(ring_expected.origin) > 0.03:
 			_fail("visible O-Ring follower drifted off its axle rod")
 			return
-		var proxy_expected: Transform3D = axle.global_transform * (proxy_state.get("local_transform", Transform3D.IDENTITY) as Transform3D)
-		if proxy.global_position.distance_to(proxy_expected.origin) > 0.08:
-			_fail("O-Ring stopper proxy drifted off axle at frame %d" % frame_index)
-			return
 
 		if frame_index % 30 == 0:
 			max_gap = maxf(max_gap, _max_socket_gap(main))
@@ -197,7 +189,7 @@ func _run() -> void:
 		_fail("closed frame opened while settling on O-Ring; max socket gap=%.3f" % max_gap)
 		return
 
-	print("AXLE_ORING_VIDEO_064_SMOKE_OK: moving O-Ring stopper blocks loaded axle hub and frame settles; min_clearance=%.3f vmax=%.2f wmax=%.2f gap=%.3f" % [min_stop_clearance, max_linear, max_angular, max_gap])
+	print("AXLE_ORING_VIDEO_064_SMOKE_OK: native axle stop blocks loaded hub and frame settles; min_clearance=%.3f vmax=%.2f wmax=%.2f gap=%.3f" % [min_stop_clearance, max_linear, max_angular, max_gap])
 	main.queue_free()
 	await process_frame
 	quit(0)

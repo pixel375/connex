@@ -213,16 +213,13 @@ func _restore_state(snapshot: Dictionary) -> void:
 # it. The inverse operation now works too: with CROSS selected, tap a free socket
 # on an existing connector and the currently selected rod is clipped into that
 # socket at the rod midpoint. It is one ordinary CROSS connection, not SOCKET.
+# The rod follows the connector face normal, matching the existing CROSS geometry.
 # -----------------------------------------------------------------------------
 
-func _cross_rod_axis_for_socket_v074(connector: RigidBody3D, slot: int) -> Vector3:
-	var local_slot: Vector3 = _slot_dir(slot).normalized()
-	var local_axis: Vector3 = Vector3.UP.cross(local_slot)
-	if local_axis.length_squared() < 0.02:
-		local_axis = Vector3.RIGHT.cross(local_slot)
-	if local_axis.length_squared() < 0.02:
-		local_axis = Vector3.BACK
-	return (connector.global_transform.basis * local_axis.normalized()).normalized()
+func _cross_rod_axis_for_socket_v074(connector: RigidBody3D, _slot: int) -> Vector3:
+	if not is_instance_valid(connector):
+		return Vector3.UP
+	return (connector.global_transform.basis * Vector3.UP).normalized()
 
 
 func _place_cross_rod_in_socket_v074(connector: RigidBody3D, slot: int) -> RigidBody3D:

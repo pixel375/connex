@@ -16,10 +16,10 @@ concurrency:
 env:
   GODOT_VERSION: 4.6.3
   GODOT_TAG: 4.6.3-stable
-  APP_VERSION: 0.5.16
-  APP_VERSION_CODE: 40
-  APK_NAME: Connex-v0.5.16.apk
-  ARTIFACT_NAME: Connex-Android-v0.5.16
+  APP_VERSION: 0.5.17
+  APP_VERSION_CODE: 41
+  APK_NAME: Connex-v0.5.17.apk
+  ARTIFACT_NAME: Connex-Android-v0.5.17
   EXPECTED_RELEASE_CERT_SHA256: BF:CD:2B:59:70:91:E4:AA:FE:4F:27:93:FD:14:A7:9A:2A:D4:94:0D:D1:06:9D:18:74:9C:E7:A9:99:50:D4:22
 
 jobs:
@@ -34,13 +34,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -F 'res://scripts/main_v071.gd' Main.tscn
-          grep -F 'const VERSION_071 := "0.5.16"' scripts/main_v071.gd
+          grep -F 'res://scripts/main_v073.gd' Main.tscn
+          grep -F 'const VERSION_072 := "0.5.17"' scripts/main_v072.gd
           grep -F 'boot_splash/show_image=false' project.godot
           grep -F '3d/physics_engine="JoltPhysics3D"' project.godot
-          grep -F 'export_path="build/Connex-v0.5.16.apk"' export_presets.cfg
-          grep -F 'version/code=40' export_presets.cfg
-          grep -F 'version/name="0.5.16"' export_presets.cfg
+          grep -F 'export_path="build/Connex-v0.5.17.apk"' export_presets.cfg
+          grep -F 'version/code=41' export_presets.cfg
+          grep -F 'version/name="0.5.17"' export_presets.cfg
           grep -F 'package/unique_name="com.pixel375.connex"' export_presets.cfg
           grep -F "\`$EXPECTED_RELEASE_CERT_SHA256\`" SIGNING.md
 
@@ -133,10 +133,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed -Ei 's/main_v[0-9]+\.gd/main_v071.gd/g' \
+          sed -Ei 's/main_v[0-9]+\.gd/main_v073.gd/g' \
             tests/editor_chunk2_smoke_v050.gd \
-            tests/editor_correctness_smoke_v051.gd || true
-          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v071.gd")/g' \
+            tests/editor_correctness_smoke_v051.gd \
+            tests/o_ring_mixed_stability_smoke_v063.gd \
+            tests/axle_o_ring_video_stability_smoke_v064.gd \
+            tests/editor_socket_workflows_smoke_v070.gd \
+            tests/axle_cross_stop_roundtrip_smoke_v072.gd || true
+          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v073.gd")/g' \
             tests/editor_reliability_smoke_v052.gd \
             tests/editor_touch_attach_smoke_v053.gd \
             tests/editor_autoattach_selection_smoke_v054.gd \
@@ -149,10 +153,6 @@ jobs:
             tests/strict_autoconnect_no_warp_smoke_v510.gd \
             tests/structure_rigidity_smoke_v061.gd \
             tests/rigidity_live_axle_smoke_v062.gd || true
-          sed -Ei 's/main_v070\.gd/main_v071.gd/g' \
-            tests/o_ring_mixed_stability_smoke_v063.gd \
-            tests/axle_o_ring_video_stability_smoke_v064.gd \
-            tests/editor_socket_workflows_smoke_v070.gd || true
 
       - name: Parse project and smoke-test main scene
         shell: bash
@@ -163,7 +163,7 @@ jobs:
           godot --headless --path . --quit-after 2 2>&1 | tee /tmp/godot-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|Failed to load script" /tmp/godot-smoke.log; then exit 1; fi
 
-      - name: Run complete regression suite through v0.5.16
+      - name: Run complete regression suite through v0.5.17
         shell: bash
         run: |
           set -euo pipefail
@@ -189,7 +189,7 @@ jobs:
           run_smoke editor_geometry_snap_smoke_v055.gd EDITOR_055_SMOKE_OK EDITOR_055_SMOKE_FAIL editor-055
           run_smoke editor_autodock_camera_smoke_v056.gd EDITOR_056_SMOKE_OK EDITOR_056_SMOKE_FAIL editor-056
           run_smoke rod_far_end_autoattach_smoke_v057.gd EDITOR_057_SMOKE_OK EDITOR_057_SMOKE_FAIL editor-057
-          run_smoke socket_loop_simulation_smoke_v058.gd EDITOR_058_SMOKE_OK EDITOR_058_SMOKE_FAIL editor-058
+          run_smoke socket_loop_simulation_smoke_v058.gd EDITOR_058_SMOKE_OK EDITOR_058_SMOKE_FAIL socket-loop-058
           run_smoke camera_gesture_smoke_v059.gd CAMERA_059_SMOKE_OK CAMERA_059_SMOKE_FAIL camera-059
           run_smoke physics_stability_smoke_v059.gd PHYSICS_059_SMOKE_OK PHYSICS_059_SMOKE_FAIL physics-059
           run_smoke strict_autoconnect_no_warp_smoke_v510.gd STRICT_510_SMOKE_OK STRICT_510_SMOKE_FAIL strict-510
@@ -198,6 +198,7 @@ jobs:
           run_smoke o_ring_mixed_stability_smoke_v063.gd ORING_STABILITY_063_SMOKE_OK ORING_STABILITY_063_SMOKE_FAIL oring-stability-063
           run_smoke axle_o_ring_video_stability_smoke_v064.gd AXLE_ORING_VIDEO_064_SMOKE_OK AXLE_ORING_VIDEO_064_SMOKE_FAIL axle-oring-video-064
           run_smoke editor_socket_workflows_smoke_v070.gd EDITOR_SOCKET_070_SMOKE_OK EDITOR_SOCKET_070_SMOKE_FAIL editor-socket-070
+          run_smoke axle_cross_stop_roundtrip_smoke_v072.gd AXLE_CROSS_ROUNDTRIP_072_SMOKE_OK AXLE_CROSS_ROUNDTRIP_072_SMOKE_FAIL axle-cross-roundtrip-072
 
       - name: Export Android APK
         shell: bash
@@ -245,11 +246,11 @@ jobs:
           name: ${{ env.ARTIFACT_NAME }}
           path: build
 
-      - name: Publish GitHub Release v0.5.16
+      - name: Publish GitHub Release v0.5.17
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.5.16
-          name: Connex Lab v0.5.16
+          tag_name: v0.5.17
+          name: Connex Lab v0.5.17
           body_path: RELEASE_NOTES.md
           make_latest: true
           files: |

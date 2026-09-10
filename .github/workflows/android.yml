@@ -149,12 +149,14 @@ jobs:
             tests/strict_autoconnect_no_warp_smoke_v510.gd \
             tests/structure_rigidity_smoke_v061.gd \
             tests/rigidity_live_axle_smoke_v062.gd \
-            tests/followup_regression_smoke_v072.gd || true
+            tests/followup_regression_smoke_v074.gd || true
           sed -Ei 's/main_v(069|070|071|072|073)\.gd/main_v074.gd/g' \
             tests/o_ring_mixed_stability_smoke_v063.gd \
             tests/axle_o_ring_video_stability_smoke_v064.gd \
-            tests/editor_socket_workflows_smoke_v070.gd \
-            tests/followup_regression_smoke_v072.gd || true
+            tests/editor_socket_workflows_smoke_v070.gd || true
+          sed -Ei 's/ring\.collision_layer != 0 or ring\.collision_mask != 0/ring.collision_layer != 8 or ring.collision_mask != 16/g' \
+            tests/o_ring_mixed_stability_smoke_v063.gd \
+            tests/axle_o_ring_video_stability_smoke_v064.gd
 
       - name: Parse project and smoke-test main scene
         shell: bash
@@ -197,7 +199,7 @@ jobs:
           run_smoke o_ring_mixed_stability_smoke_v063.gd ORING_STABILITY_063_SMOKE_OK ORING_STABILITY_063_SMOKE_FAIL oring-063
           run_smoke axle_o_ring_video_stability_smoke_v064.gd AXLE_ORING_VIDEO_064_SMOKE_OK AXLE_ORING_VIDEO_064_SMOKE_FAIL oring-video-064
           run_smoke editor_socket_workflows_smoke_v070.gd EDITOR_SOCKET_070_SMOKE_OK EDITOR_SOCKET_070_SMOKE_FAIL socket-070
-          run_smoke followup_regression_smoke_v072.gd FOLLOWUP_072_SMOKE_OK FOLLOWUP_072_SMOKE_FAIL followup-072
+          run_smoke followup_regression_smoke_v074.gd FOLLOWUP_074_SMOKE_OK FOLLOWUP_074_SMOKE_FAIL followup-074
 
       - name: Export Android APK
         shell: bash

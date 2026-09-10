@@ -137,8 +137,8 @@ func _run() -> void:
 	if ring.freeze or ring.collision_layer != 2 or ring.collision_mask != 3:
 		_fail("video O-Ring no longer follows the v0.3.8 construction collision policy; layer=%d mask=%d" % [ring.collision_layer, ring.collision_mask])
 		return
-	if not ring.continuous_cd:
-		_fail("video-fixture O-Ring CCD was not enabled")
+	if ring.continuous_cd:
+		_fail("legacy video O-Ring unexpectedly has CCD enabled")
 		return
 
 	if axle_joint.node_a.is_empty() or axle_joint.node_b.is_empty():

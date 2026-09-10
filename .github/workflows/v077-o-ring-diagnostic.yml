@@ -1,4 +1,4 @@
-name: v0.5.16 v081 O-Ring Diagnostic
+name: v0.5.16 v082 O-Ring Diagnostic
 
 on:
   pull_request:
@@ -8,13 +8,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: v081-oring-${{ github.ref }}
+  group: v082-oring-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  o-ring-v081:
+  o-ring-v082:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 24
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -31,24 +31,26 @@ jobs:
           sudo install -m 0755 "$GODOT_BIN" /usr/local/bin/godot
           godot --version
 
-      - name: Activate v081 only for diagnostic
+      - name: Activate v082 only for diagnostic
         shell: bash
         run: |
           set -euo pipefail
-          sed -i 's#res://scripts/main_v076.gd#res://scripts/main_v081.gd#g' Main.tscn
-          sed -Ei 's/main_v[0-9]+\.gd/main_v081.gd/g' \
+          sed -Ei 's#res://scripts/main_v[0-9]+\.gd#res://scripts/main_v082.gd#g' Main.tscn
+          sed -Ei 's/main_v[0-9]+\.gd/main_v082.gd/g' \
             tests/o_ring_mixed_stability_smoke_v063.gd \
             tests/axle_o_ring_video_stability_smoke_v064.gd || true
-          grep -F 'res://scripts/main_v081.gd' Main.tscn
+          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v082.gd")/g' \
+            tests/followup_regression_smoke_v074.gd || true
+          grep -F 'res://scripts/main_v082.gd' Main.tscn
 
-      - name: Parse v081
+      - name: Parse v082
         shell: bash
         run: |
           set -euo pipefail
-          godot --headless --path . --editor --quit 2>&1 | tee /tmp/v081-parse.log
-          if grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script' /tmp/v081-parse.log; then exit 1; fi
+          godot --headless --path . --editor --quit 2>&1 | tee /tmp/v082-parse.log
+          if grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script' /tmp/v082-parse.log; then exit 1; fi
 
-      - name: Run v081 O-Ring gates
+      - name: Run v082 O-Ring gates
         shell: bash
         run: |
           set -euo pipefail
@@ -59,5 +61,7 @@ jobs:
             if grep -Eq "SCRIPT ERROR|Parse Error|${fail}" "/tmp/${slug}.log"; then exit 1; fi
           }
           run_smoke o_ring_pair_diagnostic_v074.gd ORING_PAIR_DIAG_074_OK ORING_PAIR_DIAG_074_FAIL pair
+          grep -F 'no inversion/boundary event in 360 frames' /tmp/pair.log
           run_smoke o_ring_mixed_stability_smoke_v063.gd ORING_STABILITY_063_SMOKE_OK ORING_STABILITY_063_SMOKE_FAIL mixed
           run_smoke axle_o_ring_video_stability_smoke_v064.gd AXLE_ORING_VIDEO_064_SMOKE_OK AXLE_ORING_VIDEO_064_SMOKE_FAIL video
+          run_smoke followup_regression_smoke_v074.gd FOLLOWUP_074_SMOKE_OK FOLLOWUP_074_SMOKE_FAIL followup

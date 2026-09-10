@@ -42,9 +42,6 @@ func _assert_all_spatial_sockets_pick(main: Node, def_index: int, expected_count
 		return false
 	for slot_value in slots:
 		var slot := int(slot_value)
-		# Probe immediately after aiming. Waiting a process frame here would invoke
-		# Main._update_camera(), move the camera back to its orbit state, and make
-		# this synthetic tap coordinate belong to a different camera pose.
 		var screen_pos: Vector2 = _aim_camera_at_socket(main, connector, slot)
 		var picked := main.call("_pick_socket_on_connector_v070", connector, screen_pos, 108.0, false, {}) as Dictionary
 		if picked.is_empty() or int(picked.get("slot", -9999)) != slot:
@@ -53,13 +50,17 @@ func _assert_all_spatial_sockets_pick(main: Node, def_index: int, expected_count
 	return true
 
 
-func _find_socket_record(main: Node, connector: RigidBody3D, rod: RigidBody3D) -> Dictionary:
+func _find_connection_record(main: Node, connector: RigidBody3D, rod: RigidBody3D, wanted_kind: String) -> Dictionary:
 	main.call("_rebuild_connection_graph_v020")
 	for value in (main.get("connections_v020") as Array):
 		var record := value as Dictionary
-		if str(record.get("kind", "")) == "socket" and record.get("connector") == connector and record.get("rod") == rod:
+		if str(record.get("kind", "")) == wanted_kind and record.get("connector") == connector and record.get("rod") == rod:
 			return record
 	return {}
+
+
+func _find_socket_record(main: Node, connector: RigidBody3D, rod: RigidBody3D) -> Dictionary:
+	return _find_connection_record(main, connector, rod, "socket")
 
 
 func _run() -> void:
@@ -86,12 +87,15 @@ func _run() -> void:
 	if not await _assert_all_spatial_sockets_pick(main, fourteen_index, 14):
 		return
 
-	# CROSS mode must still let a connector socket grow a normal socket rod.
+	# Current CROSS semantics: tapping a free connector socket inserts the selected
+	# rod through that socket at the rod midpoint, and stores a CROSS relationship.
 	var cross_connector := main.call("_make_connector", 6, Transform3D(Basis.IDENTITY, Vector3(58.0, 8.0, 18.0))) as RigidBody3D
 	main.set("selected_rod_type", 2)
 	main.set("attach_mode", 2)
 	main.call("_set_editor_mode_v032", 0, false)
 	await physics_frame
+	var cross_socket := main.call("_socket_world_v020", cross_connector, 0) as Dictionary
+	var cross_socket_point := cross_socket.get("point", cross_connector.global_position) as Vector3
 	var cross_screen: Vector2 = _aim_camera_at_socket(main, cross_connector, 0)
 	var body_count_before := (main.get("bodies") as Array).size()
 	if not bool(main.call("_try_socket_create_tap_v054", cross_screen)):
@@ -103,8 +107,15 @@ func _run() -> void:
 		_fail("CROSS socket tap did not create exactly one rod")
 		return
 	var created_cross_rod := (main.get("bodies") as Array)[body_count_after - 1] as RigidBody3D
-	if str(created_cross_rod.get_meta("kind", "")) != "rod" or _find_socket_record(main, cross_connector, created_cross_rod).is_empty():
-		_fail("CROSS socket-created rod is not socket-attached to its source connector")
+	var created_cross_record := _find_connection_record(main, cross_connector, created_cross_rod, "cross")
+	if str(created_cross_rod.get_meta("kind", "")) != "rod" or created_cross_record.is_empty():
+		_fail("CROSS socket-created rod is not CROSS-attached to its source connector")
+		return
+	if created_cross_rod.global_position.distance_to(cross_socket_point) > 0.08:
+		_fail("CROSS socket-created rod is not centered on the clicked socket")
+		return
+	if absf(float(created_cross_record.get("host_along", 999.0))) > 0.05:
+		_fail("CROSS socket-created rod did not start with the socket at rod midpoint")
 		return
 
 	# Explicit free placement must create truly new parts in empty workspace.
@@ -175,7 +186,7 @@ func _run() -> void:
 		_fail("re-seated socket no longer lands on the unchanged rod end")
 		return
 
-	print("EDITOR_SOCKET_070_SMOKE_OK: all 11/14-point sockets pickable + CROSS socket rod creation + free rod/connector placement + validated socket-to-rod re-seat")
+	print("EDITOR_SOCKET_070_SMOKE_OK: all 11/14-point sockets pickable + midpoint CROSS socket rod creation + free rod/connector placement + validated socket-to-rod re-seat")
 	main.queue_free()
 	await process_frame
 	quit(0)

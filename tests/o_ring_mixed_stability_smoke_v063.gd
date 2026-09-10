@@ -82,6 +82,8 @@ func _run() -> void:
 
 	var ring_low_start_y := ring_low.global_position.y
 	var ring_high_start_y := ring_high.global_position.y
+	var low_parent_before := ring_low.get_parent()
+	var high_parent_before := ring_high.get_parent()
 	var low_local_before: Transform3D = axle.global_transform.affine_inverse() * ring_low.global_transform
 	var high_local_before: Transform3D = axle.global_transform.affine_inverse() * ring_high.global_transform
 
@@ -116,8 +118,8 @@ func _run() -> void:
 		if ring.freeze_mode != RigidBody3D.FREEZE_MODE_KINEMATIC:
 			_fail("rod-relative O-Ring is not using kinematic freeze mode")
 			return
-		if ring.get_parent() != axle:
-			_fail("rod-relative O-Ring is not parented to its host axle")
+		if ring.get_parent() == axle:
+			_fail("O-Ring was nested under a physics-body host")
 			return
 		if ring.collision_layer != 2 or ring.collision_mask != 3:
 			_fail("O-Ring lost the construction collision policy; layer=%d mask=%d" % [ring.collision_layer, ring.collision_mask])
@@ -125,6 +127,9 @@ func _run() -> void:
 		if not ring.get_collision_exceptions().has(axle):
 			_fail("O-Ring does not exclude collision with its own host rod")
 			return
+	if ring_low.get_parent() != low_parent_before or ring_high.get_parent() != high_parent_before:
+		_fail("O-Ring parent changed during world-space follower setup")
+		return
 
 	for mount in [mount_low, mount_high]:
 		if not mount.node_a.is_empty() or not mount.node_b.is_empty():
@@ -216,15 +221,18 @@ func _run() -> void:
 	if not (main.get("o_ring_followers_v068") as Array).is_empty():
 		_fail("O-Ring follower state leaked into BUILD")
 		return
+	if ring_low.get_parent() != low_parent_before or ring_high.get_parent() != high_parent_before:
+		_fail("O-Ring BUILD parent was not preserved")
+		return
 	for ring in [ring_low, ring_high]:
-		if not ring.freeze or ring.get_parent() == axle or ring.collision_layer != 2 or ring.collision_mask != 3:
+		if not ring.freeze or ring.collision_layer != 2 or ring.collision_mask != 3:
 			_fail("O-Ring did not return to editable BUILD state")
 			return
 		if ring.get_collision_exceptions().has(axle):
 			_fail("temporary host collision exception leaked into BUILD")
 			return
 
-	print("ORING_STABILITY_063_SMOKE_OK: exact collidable rod-relative O-Rings stop free AXLE hubs without weld flex; clearances=[%.3f,%.3f] max_drift=%.4f vmax=%.2f wmax=%.2f" % [min_a_clearance, min_b_clearance, max_ring_drift, max_linear, max_angular])
+	print("ORING_STABILITY_063_SMOKE_OK: exact collidable world-space O-Ring followers stop free AXLE hubs without weld flex; clearances=[%.3f,%.3f] max_drift=%.4f vmax=%.2f wmax=%.2f" % [min_a_clearance, min_b_clearance, max_ring_drift, max_linear, max_angular])
 	main.queue_free()
 	await process_frame
 	quit(0)

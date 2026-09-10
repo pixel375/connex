@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   pair-rigidity:
-    name: pair at ${{ matrix.rigidity }}% rigidity
+    name: v084 pair at ${{ matrix.rigidity }}% rigidity
     runs-on: ubuntu-latest
     timeout-minutes: 18
     strategy:
@@ -34,6 +34,15 @@ jobs:
           GODOT_BIN="$(find /tmp/godot -maxdepth 1 -type f -name 'Godot*' | head -n 1)"
           chmod +x "$GODOT_BIN"
           sudo install -m 0755 "$GODOT_BIN" /usr/local/bin/godot
+
+      - name: Activate v084 diagnostic runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -Ei 's#res://scripts/main_v[0-9]+\.gd#res://scripts/main_v084.gd#g' Main.tscn
+          grep -F 'res://scripts/main_v084.gd' Main.tscn
+          godot --headless --path . --editor --quit 2>&1 | tee /tmp/parse.log
+          if grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script' /tmp/parse.log; then exit 1; fi
 
       - name: Run strict pair diagnostic
         shell: bash

@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'scripts/main_v072.gd'
+      - 'scripts/main_v073.gd'
       - 'tests/axle_cross_stop_roundtrip_smoke_v072.gd'
       - '.github/workflows/v072-axle-cross.yml'
   workflow_dispatch:
@@ -35,11 +36,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed -i 's/main_v071.gd/main_v072.gd/g' Main.tscn
-          sed -Ei 's/main_v071\.gd/main_v072.gd/g; s/main_v070\.gd/main_v072.gd/g' \
+          sed -i 's/main_v071.gd/main_v073.gd/g; s/main_v072.gd/main_v073.gd/g' Main.tscn
+          sed -Ei 's/main_v071\.gd/main_v073.gd/g; s/main_v070\.gd/main_v073.gd/g; s/main_v072\.gd/main_v073.gd/g' \
             tests/o_ring_mixed_stability_smoke_v063.gd \
-            tests/axle_o_ring_video_stability_smoke_v064.gd || true
-          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v072.gd")/g' \
+            tests/axle_o_ring_video_stability_smoke_v064.gd \
+            tests/axle_cross_stop_roundtrip_smoke_v072.gd || true
+          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v073.gd")/g' \
             tests/rigidity_live_axle_smoke_v062.gd || true
 
       - name: Parse candidate runtime

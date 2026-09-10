@@ -160,10 +160,3 @@ func _restore_state(snapshot: Dictionary) -> void:
 		_recalculate_occupancy_from_joints()
 		_rebuild_connection_graph_v020()
 		print("LEGACY_AXLE_GEOMETRY_REPAIR_074: recovered %d AXLE connection(s) and removed their false fixed/socket records" % legacy_axle_geometry_repairs_v074)
-
-
-func _on_update_download_complete_v021(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:
-	if update_status_v021 != null and str(update_status_v021.text).contains("v%s" % VERSION_074):
-		_set_update_status_v021("Current version: v%s" % VERSION_074)
-		return
-	super._on_update_download_complete_v021(result, response_code, headers, body)

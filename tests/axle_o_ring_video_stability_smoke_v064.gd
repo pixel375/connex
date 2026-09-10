@@ -139,8 +139,9 @@ func _run() -> void:
 		return
 	var lower_limit := float(axle_joint.get("linear_limit_y/lower_distance"))
 	var upper_limit := float(axle_joint.get("linear_limit_y/upper_distance"))
-	if absf(lower_limit - (-0.49)) > 0.08:
-		_fail("video fixture lower O-Ring stop is wrong: %.3f expected≈-0.490" % lower_limit)
+	# Ring starts 0.92 below hub; guarded limit clearance is 0.70 => -0.22 travel.
+	if absf(lower_limit - (-0.22)) > 0.08:
+		_fail("video fixture guarded lower O-Ring stop is wrong: %.3f expected≈-0.220" % lower_limit)
 		return
 	if upper_limit < 100.0:
 		_fail("video fixture unexpectedly bounded the axle above the hub: %.3f" % upper_limit)
@@ -167,6 +168,7 @@ func _run() -> void:
 		var ring_along := _along(main, ring, axle)
 		var stop_clearance := hub_along - ring_along
 		min_stop_clearance = minf(min_stop_clearance, stop_clearance)
+		# This is the true physical no-cross check, not the earlier guarded limit.
 		if stop_clearance < CLEARANCE - 0.12:
 			_fail("axle hub crossed through O-Ring at frame %d: clearance=%.3f required≈%.3f" % [frame_index, stop_clearance, CLEARANCE])
 			return
@@ -189,7 +191,7 @@ func _run() -> void:
 		_fail("closed frame opened while settling on O-Ring; max socket gap=%.3f" % max_gap)
 		return
 
-	print("AXLE_ORING_VIDEO_064_SMOKE_OK: native axle stop blocks loaded hub and frame settles; min_clearance=%.3f vmax=%.2f wmax=%.2f gap=%.3f" % [min_stop_clearance, max_linear, max_angular, max_gap])
+	print("AXLE_ORING_VIDEO_064_SMOKE_OK: guarded native axle stop blocks loaded hub and frame settles; min_clearance=%.3f vmax=%.2f wmax=%.2f gap=%.3f" % [min_stop_clearance, max_linear, max_angular, max_gap])
 	main.queue_free()
 	await process_frame
 	quit(0)

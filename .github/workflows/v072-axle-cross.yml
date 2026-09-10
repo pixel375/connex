@@ -88,17 +88,77 @@ jobs:
         run: |
           if grep -Fq 'remained stuck instead of sliding' /tmp/roundtrip.log; then exit 1; fi
 
-      - name: DIAG save-load graph failure
+      - name: DIAG save bundle capture or restore failed
         if: always() && steps.roundtrip.outcome == 'failure'
         shell: bash
         run: |
-          if grep -Eq 'after save/load|save/load did not restore|named-save bundle|restored AXLE' /tmp/roundtrip.log; then exit 1; fi
+          if grep -Eq 'could not capture named-save bundle|named-save bundle restore failed' /tmp/roundtrip.log; then exit 1; fi
 
-      - name: DIAG fixture or other failure
+      - name: DIAG restored fixture UID missing
         if: always() && steps.roundtrip.outcome == 'failure'
         shell: bash
         run: |
-          if ! grep -Eq 'passed through Gray 1-way CROSS stop|remained stuck instead of sliding|after save/load|save/load did not restore|named-save bundle|restored AXLE' /tmp/roundtrip.log; then exit 1; fi
+          if grep -Fq 'save/load did not restore fixture UID' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG restored AXLE count changed
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'expected 4 authoritative AXLE connections' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG restored AXLE joint missing
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'restored AXLE has no live joint' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG restored AXLE free DOF lost
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'AXLE free Y slide/rotation was lost' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG restored AXLE lateral lock lost
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'AXLE lateral centering constraint was lost' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG restored simulation failed to start
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'after save/load: simulation did not start' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG restored AXLE can sleep
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'after save/load: AXLE hub/fixed frame can still sleep' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG restored CROSS stop collision excluded
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'after save/load: AXLE hub is collision-excluded from its ordinary CROSS stop' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG restored BUILD return failed
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'after save/load: failed to return to BUILD' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG fresh-restored contact result differs
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'save/load changed AXLE stop result' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG unclassified failure
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if ! grep -Eq 'passed through Gray 1-way CROSS stop|remained stuck instead of sliding|could not capture named-save bundle|named-save bundle restore failed|save/load did not restore fixture UID|expected 4 authoritative AXLE connections|restored AXLE has no live joint|AXLE free Y slide/rotation was lost|AXLE lateral centering constraint was lost|after save/load: simulation did not start|after save/load: AXLE hub/fixed frame can still sleep|after save/load: AXLE hub is collision-excluded from its ordinary CROSS stop|after save/load: failed to return to BUILD|save/load changed AXLE stop result' /tmp/roundtrip.log; then exit 1; fi
 
       - name: Require four-post regression success
         if: always()

@@ -96,6 +96,12 @@ func _assert_mount_constraint_state(mount: Generic6DOFJoint3D, enabled: bool, ph
 	return true
 
 
+func _sync_follower_for_measurement(main: Node) -> void:
+	# SceneTree.physics_frame resumes before the ordinary idle _process pass.
+	# Invoke the same runtime sync before evaluating the post-step mechanism.
+	main.call("_sync_o_ring_followers_v068")
+
+
 func _run() -> void:
 	var packed := load("res://Main.tscn") as PackedScene
 	if packed == null:
@@ -139,6 +145,7 @@ func _run() -> void:
 	main.call("_toggle_simulation")
 	for _i in range(12):
 		await physics_frame
+	_sync_follower_for_measurement(main)
 	if not bool(main.get("simulating")):
 		_fail("simulation did not start")
 		return
@@ -188,6 +195,7 @@ func _run() -> void:
 	const CLEARANCE := 0.43
 	for frame_index in range(720):
 		await physics_frame
+		_sync_follower_for_measurement(main)
 		for body_value in (main.get("bodies") as Array):
 			var body := body_value as RigidBody3D
 			if not is_instance_valid(body):

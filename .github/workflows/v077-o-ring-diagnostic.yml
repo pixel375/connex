@@ -1,0 +1,56 @@
+name: v0.5.16 Physical O-Ring Diagnostic
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: physical-oring-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  physical-o-ring:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Godot 4.6.3
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -fL --retry 3 -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/4.6.3-stable/Godot_v4.6.3-stable_linux.x86_64.zip"
+          mkdir -p /tmp/godot
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          GODOT_BIN="$(find /tmp/godot -maxdepth 1 -type f -name 'Godot*' | head -n 1)"
+          chmod +x "$GODOT_BIN"
+          sudo install -m 0755 "$GODOT_BIN" /usr/local/bin/godot
+          godot --version
+
+      - name: Activate simplified O-Ring runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -Ei 's#res://scripts/main_v[0-9]+\.gd#res://scripts/main_v083.gd#g' Main.tscn
+          grep -F 'res://scripts/main_v083.gd' Main.tscn
+
+      - name: Parse v083
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --editor --quit 2>&1 | tee /tmp/v083-parse.log
+          if grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script' /tmp/v083-parse.log; then exit 1; fi
+
+      - name: Run physical O-Ring smoke
+        shell: bash
+        run: |
+          set -o pipefail
+          godot --headless --path . --script res://tests/o_ring_physical_stop_smoke_v083.gd 2>&1 | tee /tmp/oring-physical.log
+          status=${PIPESTATUS[0]}
+          grep -F 'ORING_PHYSICAL_083_OK' /tmp/oring-physical.log
+          if grep -Eq 'SCRIPT ERROR|Parse Error|ORING_PHYSICAL_083_FAIL' /tmp/oring-physical.log; then exit 1; fi
+          exit "$status"

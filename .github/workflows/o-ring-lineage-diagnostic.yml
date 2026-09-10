@@ -1,0 +1,66 @@
+name: O-Ring Runtime Lineage Diagnostic
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oring-lineage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lineage:
+    name: v063 on ${{ matrix.runtime }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [main_v073, main_v074, main_v075, main_v076, main_v081]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Godot 4.6.3
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -fL --retry 3 -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/4.6.3-stable/Godot_v4.6.3-stable_linux.x86_64.zip"
+          mkdir -p /tmp/godot
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          GODOT_BIN="$(find /tmp/godot -maxdepth 1 -type f -name 'Godot*' | head -n 1)"
+          chmod +x "$GODOT_BIN"
+          sudo install -m 0755 "$GODOT_BIN" /usr/local/bin/godot
+          godot --version
+
+      - name: Activate lineage runtime
+        shell: bash
+        env:
+          RUNTIME: ${{ matrix.runtime }}
+        run: |
+          set -euo pipefail
+          sed -Ei "s#res://scripts/main_v[0-9]+\.gd#res://scripts/${RUNTIME}.gd#g" Main.tscn
+          sed -Ei "s#main_v[0-9]+\.gd#${RUNTIME}.gd#g" tests/o_ring_mixed_stability_smoke_v063.gd
+          grep -F "res://scripts/${RUNTIME}.gd" Main.tscn
+
+      - name: Parse runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --editor --quit 2>&1 | tee /tmp/parse.log
+          if grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script' /tmp/parse.log; then exit 1; fi
+
+      - name: Run long mixed O-Ring fixture
+        shell: bash
+        env:
+          RUNTIME: ${{ matrix.runtime }}
+        run: |
+          set -o pipefail
+          godot --headless --path . --script res://tests/o_ring_mixed_stability_smoke_v063.gd 2>&1 | tee "/tmp/${RUNTIME}.log"
+          status=${PIPESTATUS[0]}
+          echo "===== ${RUNTIME} SUMMARY ====="
+          grep -E 'ORING_STABILITY_063_SMOKE_(OK|FAIL)|runaway|crossed an O-Ring|artificial Y joint limit' "/tmp/${RUNTIME}.log" || true
+          exit "$status"

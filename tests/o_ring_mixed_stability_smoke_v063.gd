@@ -49,6 +49,18 @@ func _along(main: Node, body: Node3D, rod: RigidBody3D) -> float:
 	return (body.global_position - rod.global_position).dot(axis)
 
 
+func _body_debug_label(body: RigidBody3D, axle: RigidBody3D, hub_a: RigidBody3D, hub_b: RigidBody3D) -> String:
+	if not is_instance_valid(body):
+		return "<invalid>"
+	if body == axle:
+		return "axle"
+	if body == hub_a:
+		return "hub_a"
+	if body == hub_b:
+		return "hub_b"
+	return "%s(name=%s uid=%s)" % [str(body.get_meta("kind", "body")), str(body.name), str(body.get_meta("piece_uid", "?"))]
+
+
 func _assert_mount_state(mount: Generic6DOFJoint3D, attached: bool, phase: String) -> bool:
 	if not is_instance_valid(mount):
 		_fail("O-Ring mount missing during %s" % phase)
@@ -167,6 +179,10 @@ func _run() -> void:
 
 	var max_linear := 0.0
 	var max_angular := 0.0
+	var max_linear_body: RigidBody3D = null
+	var max_angular_body: RigidBody3D = null
+	var max_linear_frame := -1
+	var max_angular_frame := -1
 	var min_a_clearance := INF
 	var min_b_clearance := INF
 	var max_ring_drift := 0.0
@@ -181,8 +197,16 @@ func _run() -> void:
 			if not body.global_position.is_finite() or not body.linear_velocity.is_finite() or not body.angular_velocity.is_finite():
 				_fail("non-finite body state in mixed O-Ring fixture")
 				return
-			max_linear = maxf(max_linear, body.linear_velocity.length())
-			max_angular = maxf(max_angular, body.angular_velocity.length())
+			var linear_speed := body.linear_velocity.length()
+			var angular_speed := body.angular_velocity.length()
+			if linear_speed > max_linear:
+				max_linear = linear_speed
+				max_linear_body = body
+				max_linear_frame = frame_index
+			if angular_speed > max_angular:
+				max_angular = angular_speed
+				max_angular_body = body
+				max_angular_frame = frame_index
 
 		var low_expected: Transform3D = axle.global_transform * low_local_before
 		var high_expected: Transform3D = axle.global_transform * high_local_before
@@ -210,7 +234,7 @@ func _run() -> void:
 			return
 
 	if max_linear > 41.9 or max_angular > 54.9:
-		_fail("mixed build became unstable: vmax=%.2f wmax=%.2f" % [max_linear, max_angular])
+		_fail("mixed build became unstable: vmax=%.2f body=%s frame=%d; wmax=%.2f body=%s frame=%d; order_guard_events=%d runaway_events=%d" % [max_linear, _body_debug_label(max_linear_body, axle, hub_a, hub_b), max_linear_frame, max_angular, _body_debug_label(max_angular_body, axle, hub_a, hub_b), max_angular_frame, int(main.get("axle_order_guard_events_v073")), int(main.get("runaway_guard_events_v068"))])
 		return
 	if int(main.get("runaway_guard_events_v068")) != 0:
 		_fail("ordinary mixed fixture needed the emergency stability guard (%d events)" % int(main.get("runaway_guard_events_v068")))

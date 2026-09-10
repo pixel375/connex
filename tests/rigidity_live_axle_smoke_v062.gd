@@ -46,7 +46,7 @@ func _run() -> void:
 	await process_frame
 
 	if not str(main.get_script().resource_path).ends_with("main_v067.gd"):
-		_fail("Main is not using v0.5.12 runtime")
+		_fail("Main is not using expected runtime")
 		return
 
 	# Closed square: gives the simulation one cycle-closing SOCKET whose angular
@@ -71,15 +71,15 @@ func _run() -> void:
 		return
 	var soft_before := _find_soft_socket(main)
 	if soft_before == null:
-		_fail("closed square produced no softened cycle socket")
+		_fail("closed square produced no stabilized cycle socket")
 		return
 	var active_before: float = float(soft_before.get("angular_limit_x/upper_angle"))
-	if active_before <= 0.0:
-		_fail("default active rigidity limit is not enabled")
+	if active_before < -0.000001:
+		_fail("default active rigidity limit is invalid")
 		return
 
-	# This was the v0.5.11 device regression: touching the slider rewrote the live
-	# 6DOF limits. v0.5.12 must leave the active solver exactly unchanged.
+	# Slider changes while SIMULATE is active are next-run settings only. This is
+	# true whether the current high-end setting is exact-rigid (0°) or compliant.
 	main.call("_on_structure_rigidity_v066", 20.0)
 	var active_after_slider: float = float(soft_before.get("angular_limit_x/upper_angle"))
 	if absf(active_after_slider - active_before) > 0.000001:
@@ -92,7 +92,7 @@ func _run() -> void:
 		_fail("new rigidity value was not saved")
 		return
 
-	# Return to BUILD and start again: only now should 20% be applied.
+	# Return to BUILD and start again: only now should 20% visible flex apply.
 	main.call("_toggle_simulation")
 	await process_frame
 	if bool(main.get("simulating")):
@@ -103,10 +103,10 @@ func _run() -> void:
 		await physics_frame
 	var soft_next := _find_soft_socket(main)
 	if soft_next == null:
-		_fail("second simulation produced no softened cycle socket")
+		_fail("second simulation produced no stabilized cycle socket")
 		return
 	var next_limit: float = float(soft_next.get("angular_limit_x/upper_angle"))
-	if next_limit <= active_before + 0.01:
+	if next_limit <= maxf(active_before + 0.01, deg_to_rad(1.0)):
 		_fail("next simulation did not apply the new lower-rigidity flex range")
 		return
 	if absf(float(main.get("active_structure_rigidity_v067")) - 20.0) > 0.01:
@@ -150,7 +150,7 @@ func _run() -> void:
 		_fail("supported vertical axle did not slide downward under gravity: start=%.3f end=%.3f" % [along_start, along_end])
 		return
 
-	print("RIGIDITY_AXLE_062_SMOKE_OK: live rigidity unchanged until next run + supported axle slides under gravity")
+	print("RIGIDITY_AXLE_062_SMOKE_OK: high-end rigid live setting stays unchanged; lower rigidity applies next run + supported axle slides under gravity")
 	main.queue_free()
 	await process_frame
 	quit(0)

@@ -1,0 +1,63 @@
+name: v0.5.16 v077 O-Ring Diagnostic
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v077-oring-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  o-ring-v077:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Godot 4.6.3
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -fL --retry 3 -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/4.6.3-stable/Godot_v4.6.3-stable_linux.x86_64.zip"
+          mkdir -p /tmp/godot
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          GODOT_BIN="$(find /tmp/godot -maxdepth 1 -type f -name 'Godot*' | head -n 1)"
+          chmod +x "$GODOT_BIN"
+          sudo install -m 0755 "$GODOT_BIN" /usr/local/bin/godot
+          godot --version
+
+      - name: Activate v077 only for diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i 's#res://scripts/main_v076.gd#res://scripts/main_v077.gd#g' Main.tscn
+          sed -Ei 's/main_v[0-9]+\.gd/main_v077.gd/g' \
+            tests/o_ring_mixed_stability_smoke_v063.gd \
+            tests/axle_o_ring_video_stability_smoke_v064.gd || true
+          grep -F 'res://scripts/main_v077.gd' Main.tscn
+
+      - name: Parse v077
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --editor --quit 2>&1 | tee /tmp/v077-parse.log
+          if grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script' /tmp/v077-parse.log; then exit 1; fi
+
+      - name: Run v077 O-Ring gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_smoke() {
+            local script="$1" marker="$2" fail="$3" slug="$4"
+            godot --headless --path . --script "res://tests/${script}" 2>&1 | tee "/tmp/${slug}.log"
+            grep -F "$marker" "/tmp/${slug}.log"
+            if grep -Eq "SCRIPT ERROR|Parse Error|${fail}" "/tmp/${slug}.log"; then exit 1; fi
+          }
+          run_smoke o_ring_pair_diagnostic_v074.gd ORING_PAIR_DIAG_074_OK ORING_PAIR_DIAG_074_FAIL pair
+          run_smoke o_ring_mixed_stability_smoke_v063.gd ORING_STABILITY_063_SMOKE_OK ORING_STABILITY_063_SMOKE_FAIL mixed
+          run_smoke axle_o_ring_video_stability_smoke_v064.gd AXLE_ORING_VIDEO_064_SMOKE_OK AXLE_ORING_VIDEO_064_SMOKE_FAIL video

@@ -3,7 +3,8 @@ extends "res://scripts/main_v073.gd"
 const VERSION_074 := "0.5.16"
 const AXLE_HUB_CCD_SPACING_V074 := 0.62
 const AXLE_HUB_CCD_EPS_V074 := 0.0001
-const AXLE_HUB_CCD_MAX_PASSES_V074 := 4
+const AXLE_HUB_CCD_PAIR_PASSES_V074 := 4
+const AXLE_HUB_CCD_COUPLED_PASSES_V074 := 8
 
 var axle_hub_ccd_events_v074: int = 0
 
@@ -92,9 +93,8 @@ func _resolve_axle_hub_pair_v074(low: Dictionary, high: Dictionary, rod: RigidBo
 	var low_along: float = _rod_local_along_v070(low_body, rod)
 	var high_along: float = _rod_local_along_v070(high_body, rod)
 	var gap: float = high_along - low_along
-	# If a previous physics step already produced a small penetration, do not
-	# teleport either body. We only stop further closing; Jolt can separate the
-	# existing overlap through its normal connector collision response.
+	# Existing tiny overlap is left to Jolt's normal contact separation. This pass
+	# only removes additional closing motion; it never teleports either assembly.
 	var allowed_closing: float = maxf(0.0, (gap - AXLE_HUB_CCD_SPACING_V074) / delta)
 	var low_speed: float = _ccd_hub_axis_speed_v074(low, axis, rod)
 	var high_speed: float = _ccd_hub_axis_speed_v074(high, axis, rod)
@@ -109,17 +109,16 @@ func _resolve_axle_hub_pair_v074(low: Dictionary, high: Dictionary, rod: RigidBo
 
 	var remove_relative: float = closing_speed - allowed_closing
 	var impulse: float = remove_relative / (1.0 / low_mass + 1.0 / high_mass)
-	var low_delta: float = -impulse / low_mass
-	var high_delta: float = impulse / high_mass
-	_ccd_apply_velocity_delta_v074(low, axis * low_delta)
-	_ccd_apply_velocity_delta_v074(high, axis * high_delta)
+	_ccd_apply_velocity_delta_v074(low, axis * (-impulse / low_mass))
+	_ccd_apply_velocity_delta_v074(high, axis * (impulse / high_mass))
 	axle_hub_ccd_events_v074 += 1
 	return true
 
 
-func _predict_axle_hub_ccd_v074(delta: float) -> void:
+func _predict_axle_hub_ccd_v074(delta: float) -> bool:
 	if not simulating or delta <= 0.000001:
-		return
+		return false
+	var any_changed := false
 	for group_value in axle_order_groups_v073:
 		var group := group_value as Dictionary
 		var rod := group.get("rod") as RigidBody3D
@@ -129,17 +128,16 @@ func _predict_axle_hub_ccd_v074(delta: float) -> void:
 		if hubs.size() < 2:
 			continue
 		var axis: Vector3 = _rod_axis_v020(rod).normalized()
-		# A few projected Gauss-Seidel passes are enough for a short hub stack.
-		# Every pair update is momentum-conserving, and normally no pass fires at
-		# all until two hubs are genuinely on course to overlap next frame.
-		var pass_count: int = mini(AXLE_HUB_CCD_MAX_PASSES_V074, hubs.size() + 1)
+		var pass_count: int = mini(AXLE_HUB_CCD_PAIR_PASSES_V074, hubs.size() + 1)
 		for _pass in range(pass_count):
 			var changed := false
 			for i in range(hubs.size() - 1):
 				if _resolve_axle_hub_pair_v074(hubs[i] as Dictionary, hubs[i + 1] as Dictionary, rod, axis, delta):
 					changed = true
+					any_changed = true
 			if not changed:
 				break
+	return any_changed
 
 
 # Disable v0.5.16's experimental ownership-swap path. Boundary ownership stays
@@ -153,9 +151,16 @@ func _correct_axle_order_v073() -> bool:
 
 
 func _predict_axle_stops_v071(delta: float) -> void:
-	# Prevent adjacent AXLE hubs from tunnelling first, then run the proven
-	# v0.5.15 O-Ring / rod-end predictive stop on the unchanged boundary owner.
-	_predict_axle_hub_ccd_v074(delta)
+	# The O-Ring stop can slow an outer hub, which may make the next hub catch it
+	# during the same integration step. Conversely, the momentum-conserving hub
+	# contact can slightly change the outer hub speed. Alternate both unilateral
+	# constraints until a pass needs no hub correction. This is a short 1-D PGS
+	# solve and only becomes active when hubs are actually about to stack.
+	for _pass in range(AXLE_HUB_CCD_COUPLED_PASSES_V074):
+		super._predict_axle_stops_v071(delta)
+		if not _predict_axle_hub_ccd_v074(delta):
+			return
+	# Finish on the physical O-Ring / rod-end boundary after the bounded solve.
 	super._predict_axle_stops_v071(delta)
 
 

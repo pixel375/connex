@@ -69,9 +69,44 @@ jobs:
           if grep -Eq "SCRIPT ERROR|Parse Error|AXLE_ORING_VIDEO_064_SMOKE_FAIL" /tmp/oring2.log; then exit 1; fi
 
       - name: Run four-post CROSS-stop save-load regression
+        id: roundtrip
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
+          set -o pipefail
           godot --headless --path . --script res://tests/axle_cross_stop_roundtrip_smoke_v072.gd 2>&1 | tee /tmp/roundtrip.log
+
+      - name: DIAG phase-through collision failure
+        if: always() && steps.roundtrip.outcome == 'failure'
+        continue-on-error: true
+        shell: bash
+        run: |
+          if grep -Fq 'passed through Gray 1-way CROSS stop' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG stuck AXLE failure
+        if: always() && steps.roundtrip.outcome == 'failure'
+        continue-on-error: true
+        shell: bash
+        run: |
+          if grep -Fq 'remained stuck instead of sliding' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG save-load graph failure
+        if: always() && steps.roundtrip.outcome == 'failure'
+        continue-on-error: true
+        shell: bash
+        run: |
+          if grep -Eq 'after save/load|save/load did not restore|named-save bundle|restored AXLE' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG fixture or other failure
+        if: always() && steps.roundtrip.outcome == 'failure'
+        continue-on-error: true
+        shell: bash
+        run: |
+          if ! grep -Eq 'passed through Gray 1-way CROSS stop|remained stuck instead of sliding|after save/load|save/load did not restore|named-save bundle|restored AXLE' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: Require four-post regression success
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.roundtrip.outcome }}" = "success"
           grep -F AXLE_CROSS_ROUNDTRIP_072_SMOKE_OK /tmp/roundtrip.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|AXLE_CROSS_ROUNDTRIP_072_SMOKE_FAIL" /tmp/roundtrip.log; then exit 1; fi

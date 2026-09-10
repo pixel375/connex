@@ -10,7 +10,7 @@ v0.5.14 removes both the v0.5.13 host-rod collision proxy and the experimental m
 This means an O-Ring stopper no longer depends on connector-vs-rod collision, adds no extra rigid/animatable physics body, and cannot become a drifting/world-anchored collision source.
 
 ### Impact stability
-The Jolt positional solve count is increased from 4 to 8 so heavily loaded axle limits hold more accurately during asymmetric impacts. The existing 20 velocity steps, CCD, rigid-loop behavior and emergency runaway guard remain in place.
+Hard Generic6DOF limits can briefly overshoot their exact coordinate during a heavily asymmetric impact. The stopper therefore arms the native axle limit slightly before the true connector/O-Ring contact point using a measured solver guard band. The O-Ring itself is not moved and the validation still measures the real connector-to-ring clearance on every physics frame. This avoids both visible crossing and the extra collision body that caused the v0.5.13 runaway behavior, while retaining the existing mobile solver settings, CCD and emergency runaway guard.
 
 ### Validation
 The regression suite covers all retained behavior from v0.5.2 onward plus two O-Ring-specific stress fixtures:

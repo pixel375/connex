@@ -34,8 +34,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -F 'res://scripts/main_v076.gd' Main.tscn
-          grep -F 'const VERSION_076 := "0.5.16"' scripts/main_v076.gd
+          grep -F 'res://scripts/main_v083.gd' Main.tscn
+          grep -F 'const VERSION_083 := "0.5.16"' scripts/main_v083.gd
+          grep -F 'extends "res://scripts/main_v074.gd"' scripts/main_v083.gd
           grep -F 'boot_splash/show_image=false' project.godot
           grep -F '3d/physics_engine="JoltPhysics3D"' project.godot
           grep -F 'export_path="build/Connex-v0.5.16.apk"' export_presets.cfg
@@ -133,10 +134,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed -Ei 's/main_v[0-9]+\.gd/main_v076.gd/g' \
+          sed -Ei 's/main_v[0-9]+\.gd/main_v083.gd/g' \
             tests/editor_chunk2_smoke_v050.gd \
             tests/editor_correctness_smoke_v051.gd || true
-          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v076.gd")/g' \
+          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v083.gd")/g' \
             tests/editor_reliability_smoke_v052.gd \
             tests/editor_touch_attach_smoke_v053.gd \
             tests/editor_autoattach_selection_smoke_v054.gd \
@@ -150,7 +151,7 @@ jobs:
             tests/structure_rigidity_smoke_v061.gd \
             tests/rigidity_live_axle_smoke_v062.gd \
             tests/followup_regression_smoke_v074.gd || true
-          sed -Ei 's/main_v(069|070|071|072|073|074|075)\.gd/main_v076.gd/g' \
+          sed -Ei 's/main_v[0-9]+\.gd/main_v083.gd/g' \
             tests/o_ring_mixed_stability_smoke_v063.gd \
             tests/axle_o_ring_video_stability_smoke_v064.gd \
             tests/editor_socket_workflows_smoke_v070.gd || true
@@ -193,6 +194,9 @@ jobs:
           run_smoke strict_autoconnect_no_warp_smoke_v510.gd STRICT_510_SMOKE_OK STRICT_510_SMOKE_FAIL strict-510
           run_smoke structure_rigidity_smoke_v061.gd RIGIDITY_061_SMOKE_OK RIGIDITY_061_SMOKE_FAIL rigidity-061
           run_smoke rigidity_live_axle_smoke_v062.gd RIGIDITY_AXLE_062_SMOKE_OK RIGIDITY_AXLE_062_SMOKE_FAIL rigidity-axle-062
+          run_smoke o_ring_tunnel_guard_smoke_v083.gd ORING_TUNNEL_083_SMOKE_OK ORING_TUNNEL_083_SMOKE_FAIL oring-tunnel-083
+          run_smoke o_ring_pair_diagnostic_v074.gd ORING_PAIR_DIAG_074_OK ORING_PAIR_DIAG_074_FAIL oring-pair-diag-074
+          grep -F 'no inversion/boundary event in 360 frames' /tmp/oring-pair-diag-074.log
           run_smoke o_ring_mixed_stability_smoke_v063.gd ORING_STABILITY_063_SMOKE_OK ORING_STABILITY_063_SMOKE_FAIL oring-063
           run_smoke axle_o_ring_video_stability_smoke_v064.gd AXLE_ORING_VIDEO_064_SMOKE_OK AXLE_ORING_VIDEO_064_SMOKE_FAIL oring-video-064
           run_smoke editor_socket_workflows_smoke_v070.gd EDITOR_SOCKET_070_SMOKE_OK EDITOR_SOCKET_070_SMOKE_FAIL socket-070

@@ -3,6 +3,7 @@ extends "res://scripts/main_v070.gd"
 const VERSION_071 := "0.5.15"
 const AXLE_STOP_PREDICT_MARGIN_V071 := 0.012
 const AXLE_STOP_POSITION_EPS_V071 := 0.001
+const SOCKET_PICK_TIE_PX_V071 := 0.50
 
 
 func _ready() -> void:
@@ -15,6 +16,50 @@ func _ready() -> void:
 func _status(text: String) -> void:
 	if status_label != null:
 		status_label.text = "Connex Lab v%s  •  %s" % [VERSION_071, text]
+
+
+# The 11/14-point connectors have opposite planar jaws that can project onto the
+# same screen segment when viewed near the socket axis. v0.5.15's first picker
+# used only 2-D distance, so the later opposite slot could win an exact tie.
+# Preserve whole-jaw picking, but resolve sub-pixel ties by camera depth so the
+# visible/front socket is selected instead of the hidden socket behind it.
+func _pick_socket_on_connector_v070(connector: RigidBody3D, screen_pos: Vector2, max_distance: float = SOCKET_JAW_PICK_RADIUS_V070, free_only: bool = false, source: Dictionary = {}) -> Dictionary:
+	if not is_instance_valid(connector):
+		return {}
+	_rebuild_connection_graph_v020()
+	var def_index: int = int(connector.get_meta("connector_type", -1))
+	if def_index < 0 or def_index >= connector_defs.size():
+		return {}
+	var occupied: Dictionary = connector.get_meta("occupied", {}) as Dictionary
+	var best: Dictionary = {}
+	var best_distance: float = max_distance + 0.001
+	var best_depth: float = INF
+	for slot_value in connector_defs[def_index]["slots"]:
+		var slot: int = int(slot_value)
+		if free_only and occupied.has(slot):
+			continue
+		var world_dir: Vector3 = (connector.global_transform.basis * _slot_dir(slot)).normalized()
+		var world_a: Vector3 = connector.global_position + world_dir * SOCKET_JAW_INNER_V070
+		var world_b: Vector3 = connector.global_position + world_dir * SOCKET_JAW_OUTER_V070
+		var distance: float = _screen_segment_distance_v070(screen_pos, world_a, world_b)
+		if distance > max_distance:
+			continue
+		var socket: Dictionary = _socket_world_v020(connector, slot)
+		var candidate := {"type": "socket", "body": connector, "slot": slot, "point": socket.get("point", connector.global_position)}
+		if not source.is_empty() and not _attach_target_is_available_v040(source, candidate):
+			continue
+		var jaw_midpoint: Vector3 = (world_a + world_b) * 0.5
+		var depth: float = camera.global_position.distance_to(jaw_midpoint)
+		var better_screen: bool = distance < best_distance - SOCKET_PICK_TIE_PX_V071
+		var screen_tie: bool = absf(distance - best_distance) <= SOCKET_PICK_TIE_PX_V071
+		if not better_screen and not (screen_tie and depth < best_depth):
+			continue
+		best_distance = distance
+		best_depth = depth
+		best = candidate
+		best["pick_distance_v070"] = distance
+		best["pick_depth_v071"] = depth
+	return best
 
 
 # v0.5.15's first deterministic pass projected every axle hub toward the same

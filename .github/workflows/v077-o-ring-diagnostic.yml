@@ -1,4 +1,4 @@
-name: v0.5.16 v078 O-Ring Diagnostic
+name: v0.5.16 v079 O-Ring Diagnostic
 
 on:
   pull_request:
@@ -8,11 +8,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: v078-oring-${{ github.ref }}
+  group: v079-oring-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  o-ring-v078:
+  o-ring-v079:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -31,24 +31,24 @@ jobs:
           sudo install -m 0755 "$GODOT_BIN" /usr/local/bin/godot
           godot --version
 
-      - name: Activate v078 only for diagnostic
+      - name: Activate v079 only for diagnostic
         shell: bash
         run: |
           set -euo pipefail
-          sed -i 's#res://scripts/main_v076.gd#res://scripts/main_v078.gd#g' Main.tscn
-          sed -Ei 's/main_v[0-9]+\.gd/main_v078.gd/g' \
+          sed -i 's#res://scripts/main_v076.gd#res://scripts/main_v079.gd#g' Main.tscn
+          sed -Ei 's/main_v[0-9]+\.gd/main_v079.gd/g' \
             tests/o_ring_mixed_stability_smoke_v063.gd \
             tests/axle_o_ring_video_stability_smoke_v064.gd || true
-          grep -F 'res://scripts/main_v078.gd' Main.tscn
+          grep -F 'res://scripts/main_v079.gd' Main.tscn
 
-      - name: Parse v078
+      - name: Parse v079
         shell: bash
         run: |
           set -euo pipefail
-          godot --headless --path . --editor --quit 2>&1 | tee /tmp/v078-parse.log
-          if grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script' /tmp/v078-parse.log; then exit 1; fi
+          godot --headless --path . --editor --quit 2>&1 | tee /tmp/v079-parse.log
+          if grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script' /tmp/v079-parse.log; then exit 1; fi
 
-      - name: Run v078 O-Ring gates
+      - name: Run v079 O-Ring gates
         shell: bash
         run: |
           set -euo pipefail

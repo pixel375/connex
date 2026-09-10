@@ -53,8 +53,9 @@ func _run() -> void:
 
 	# ------------------------------------------------------------------
 	# O-Ring durability: three hubs share one segment. The nearest hubs own the
-	# actual ring/rod-end boundaries, while a topology guard prevents an interior
-	# hub from tunnelling through its neighbor and thereby bypassing the O-Ring.
+	# actual ring/rod-end boundaries. If Jolt tunnels hubs through one another,
+	# ownership transfers to the hubs that are physically outermost now. The
+	# handoff itself must not move bodies or alter velocity.
 	# ------------------------------------------------------------------
 	var main := packed.instantiate()
 	root.add_child(main)
@@ -99,7 +100,7 @@ func _run() -> void:
 		_fail("multi-hub axle did not produce three tracked stop records")
 		return
 	if (main.get("axle_order_groups_v073") as Array).is_empty():
-		_fail("multi-hub segment did not create an axle order guard")
+		_fail("multi-hub segment did not create O-Ring ownership tracking")
 		return
 	var lower_owners := 0
 	var upper_owners := 0
@@ -117,30 +118,60 @@ func _run() -> void:
 		_fail("three-hub segment should have exactly one physical owner per boundary; lower=%d upper=%d" % [lower_owners, upper_owners])
 		return
 
-	# Emulate a missed/tunnelled hub-vs-hub collision directly. The middle hub is
-	# placed just below the lower hub while remaining above the O-Ring. Post-step
-	# correction must restore its original order instead of letting it become a
-	# non-owner below the stop owner.
+	# Emulate a missed/tunnelled hub-vs-hub collision directly. Put the middle hub
+	# just below the old lower owner while still comfortably above the O-Ring. The
+	# handoff should leave that physical state untouched and only transfer the lower
+	# O-Ring bound to the newly outermost middle hub.
 	var lower_hub := hubs[0] as RigidBody3D
 	var middle_hub := hubs[1] as RigidBody3D
 	var current_axis := (main.call("_rod_axis_v020", axle) as Vector3).normalized()
 	var lower_along_before: float = (lower_hub.global_position - axle.global_position).dot(current_axis)
+	var lower_tf_before := lower_hub.global_transform
 	var middle_tf := middle_hub.global_transform
 	middle_tf.origin = axle.global_position + current_axis * (lower_along_before - 0.18)
 	middle_hub.global_transform = middle_tf
+	middle_hub.linear_velocity = Vector3(0.25, -0.75, 0.1)
+	middle_hub.angular_velocity = Vector3(0.1, 0.2, -0.1)
+	var middle_tf_before := middle_hub.global_transform
+	var middle_lv_before := middle_hub.linear_velocity
+	var middle_av_before := middle_hub.angular_velocity
 	main.call("_correct_axle_stop_positions_v071")
 	var lower_after: float = (lower_hub.global_position - axle.global_position).dot(current_axis)
 	var middle_after: float = (middle_hub.global_position - axle.global_position).dot(current_axis)
-	if middle_after <= lower_after:
-		_fail("hub-order guard did not restore an interior hub after simulated tunnelling")
+	if middle_after >= lower_after:
+		_fail("ownership handoff physically restored hub order instead of leaving the tunnelled state untouched")
+		return
+	if lower_hub.global_transform.origin.distance_to(lower_tf_before.origin) > 0.0001:
+		_fail("ownership handoff moved the previous lower boundary owner")
+		return
+	if middle_hub.global_transform.origin.distance_to(middle_tf_before.origin) > 0.0001:
+		_fail("ownership handoff moved the newly outer hub")
+		return
+	if middle_hub.linear_velocity.distance_to(middle_lv_before) > 0.0001 or middle_hub.angular_velocity.distance_to(middle_av_before) > 0.0001:
+		_fail("ownership handoff injected velocity into the newly outer hub")
 		return
 	if int(main.get("axle_order_guard_events_v073")) < 1:
-		_fail("hub-order tunnelling correction did not register")
+		_fail("hub-order change did not register an O-Ring ownership handoff")
+		return
+
+	var middle_has_lower := false
+	var old_lower_has_lower := false
+	for stop_value in (main.get("axle_stop_ranges_v070") as Array):
+		var stop := stop_value as Dictionary
+		if stop.get("rod") != axle:
+			continue
+		if stop.get("connector") == middle_hub:
+			middle_has_lower = float(stop.get("lower", -INF)) > -INF
+		elif stop.get("connector") == lower_hub:
+			old_lower_has_lower = float(stop.get("lower", -INF)) > -INF
+	if not middle_has_lower or old_lower_has_lower:
+		_fail("lower O-Ring boundary ownership did not transfer to the newly outer hub")
 		return
 
 	for hub_value in hubs:
 		var hub := hub_value as RigidBody3D
 		hub.linear_velocity = Vector3(0, -18.0, 0)
+		hub.angular_velocity = Vector3.ZERO
 	var min_ring_gap := INF
 	for _frame in range(420):
 		await physics_frame
@@ -251,7 +282,7 @@ func _run() -> void:
 		_fail("second rod did not remap from socket 90 to socket 45")
 		return
 
-	print("FOLLOWUP_072_SMOKE_OK: multi-hub O-Ring tunnelling guard + large ring touch target + reconnect auto-resnap + fixed-rod multi-socket re-seat")
+	print("FOLLOWUP_072_SMOKE_OK: event-driven O-Ring ownership handoff + large ring touch target + reconnect auto-resnap + fixed-rod multi-socket re-seat")
 	main.queue_free()
 	await process_frame
 	quit(0)

@@ -1,0 +1,182 @@
+name: v0.5.17 AXLE CROSS Stop Validation
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/main_v072.gd'
+      - 'scripts/main_v073.gd'
+      - 'tests/axle_cross_stop_roundtrip_smoke_v072.gd'
+      - '.github/workflows/v072-axle-cross.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  axle-cross-roundtrip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Godot 4.6.3
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -fL --retry 3 -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/4.6.3-stable/Godot_v4.6.3-stable_linux.x86_64.zip"
+          mkdir -p /tmp/godot
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          GODOT_BIN="$(find /tmp/godot -maxdepth 1 -type f -name 'Godot*' | head -n 1)"
+          chmod +x "$GODOT_BIN"
+          sudo install -m 0755 "$GODOT_BIN" /usr/local/bin/godot
+          godot --version
+
+      - name: Activate candidate runtime for tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i 's/main_v071.gd/main_v073.gd/g; s/main_v072.gd/main_v073.gd/g' Main.tscn
+          sed -Ei 's/main_v071\.gd/main_v073.gd/g; s/main_v070\.gd/main_v073.gd/g; s/main_v072\.gd/main_v073.gd/g' \
+            tests/o_ring_mixed_stability_smoke_v063.gd \
+            tests/axle_o_ring_video_stability_smoke_v064.gd \
+            tests/axle_cross_stop_roundtrip_smoke_v072.gd || true
+          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v073.gd")/g' \
+            tests/rigidity_live_axle_smoke_v062.gd || true
+
+      - name: Parse candidate runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --editor --quit 2>&1 | tee /tmp/parse.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|Failed to load script" /tmp/parse.log; then exit 1; fi
+
+      - name: Run inverse AXLE wake regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/rigidity_live_axle_smoke_v062.gd 2>&1 | tee /tmp/axle.log
+          grep -F RIGIDITY_AXLE_062_SMOKE_OK /tmp/axle.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|RIGIDITY_AXLE_062_SMOKE_FAIL" /tmp/axle.log; then exit 1; fi
+
+      - name: Run O-Ring regressions on candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/o_ring_mixed_stability_smoke_v063.gd 2>&1 | tee /tmp/oring1.log
+          grep -F ORING_STABILITY_063_SMOKE_OK /tmp/oring1.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|ORING_STABILITY_063_SMOKE_FAIL" /tmp/oring1.log; then exit 1; fi
+          godot --headless --path . --script res://tests/axle_o_ring_video_stability_smoke_v064.gd 2>&1 | tee /tmp/oring2.log
+          grep -F AXLE_ORING_VIDEO_064_SMOKE_OK /tmp/oring2.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|AXLE_ORING_VIDEO_064_SMOKE_FAIL" /tmp/oring2.log; then exit 1; fi
+
+      - name: Run four-post CROSS-stop save-load regression
+        id: roundtrip
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          godot --headless --path . --script res://tests/axle_cross_stop_roundtrip_smoke_v072.gd 2>&1 | tee /tmp/roundtrip.log
+
+      - name: DIAG fresh phase-through collision failure
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'fresh build: AXLE hub' /tmp/roundtrip.log && grep -Fq 'passed through Gray 1-way CROSS stop' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG restored phase-through collision failure
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'after save/load: AXLE hub' /tmp/roundtrip.log && grep -Fq 'passed through Gray 1-way CROSS stop' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG fresh stuck AXLE failure
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'fresh build: AXLE hub' /tmp/roundtrip.log && grep -Fq 'remained stuck instead of sliding' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG restored stuck AXLE failure
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'after save/load: AXLE hub' /tmp/roundtrip.log && grep -Fq 'remained stuck instead of sliding' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG save bundle capture or restore failed
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Eq 'could not capture named-save bundle|named-save bundle restore failed' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG restored fixture UID missing
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'save/load did not restore fixture UID' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG restored AXLE count changed
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'expected 4 authoritative AXLE connections' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG restored AXLE joint missing
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'restored AXLE has no live joint' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG restored AXLE free DOF lost
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'AXLE free Y slide/rotation was lost' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG restored AXLE lateral lock lost
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'AXLE lateral centering constraint was lost' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG restored simulation failed to start
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'after save/load: simulation did not start' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG restored AXLE can sleep
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'after save/load: AXLE hub/fixed frame can still sleep' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG restored CROSS stop collision excluded
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'after save/load: AXLE hub is collision-excluded from its ordinary CROSS stop' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG restored BUILD return failed
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'after save/load: failed to return to BUILD' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG fresh-restored contact result differs
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if grep -Fq 'save/load changed AXLE stop result' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: DIAG unclassified failure
+        if: always() && steps.roundtrip.outcome == 'failure'
+        shell: bash
+        run: |
+          if ! grep -Eq 'passed through Gray 1-way CROSS stop|remained stuck instead of sliding|could not capture named-save bundle|named-save bundle restore failed|save/load did not restore fixture UID|expected 4 authoritative AXLE connections|restored AXLE has no live joint|AXLE free Y slide/rotation was lost|AXLE lateral centering constraint was lost|after save/load: simulation did not start|after save/load: AXLE hub/fixed frame can still sleep|after save/load: AXLE hub is collision-excluded from its ordinary CROSS stop|after save/load: failed to return to BUILD|save/load changed AXLE stop result' /tmp/roundtrip.log; then exit 1; fi
+
+      - name: Require four-post regression success
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.roundtrip.outcome }}" = "success"
+          grep -F AXLE_CROSS_ROUNDTRIP_072_SMOKE_OK /tmp/roundtrip.log

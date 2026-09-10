@@ -28,30 +28,33 @@ func _add_exact_socket_rod(main: Node, a: RigidBody3D, slot_a: int, b: RigidBody
 	return rod
 
 
-func _assert_all_structure_flex(main: Node, expected: float, label: String) -> bool:
-	var count := 0
+func _assert_structure_flex(main: Node, ordinary_expected: float, cycle_expected: float, label: String) -> bool:
 	var ordinary_count := 0
+	var cycle_count := 0
 	for joint_value in (main.get("joints") as Array):
 		var joint := joint_value as Generic6DOFJoint3D
 		if not is_instance_valid(joint) or str(joint.get_meta("connection_kind_v020", "")) not in ["socket", "cross"]:
 			continue
-		count += 1
-		if not bool(joint.get_meta("sim_soft_socket_cycle_v064", false)):
+		var is_cycle := bool(joint.get_meta("sim_soft_socket_cycle_v064", false))
+		if is_cycle:
+			cycle_count += 1
+		else:
 			ordinary_count += 1
 		if not bool(joint.get_meta("sim_rigidity_all_v072", false)):
 			_fail("%s did not mark every SOCKET/CROSS structure joint" % label)
 			return false
+		var expected := cycle_expected if is_cycle else ordinary_expected
 		for axis_name in ["x", "y", "z"]:
 			if not bool(joint.get("angular_limit_%s/enabled" % axis_name)):
-				_fail("%s disabled an angular limit instead of using bounded flex" % label)
+				_fail("%s disabled an angular limit" % label)
 				return false
 			var lower: float = float(joint.get("angular_limit_%s/lower_angle" % axis_name))
 			var upper: float = float(joint.get("angular_limit_%s/upper_angle" % axis_name))
 			if absf(lower + expected) > 0.0006 or absf(upper - expected) > 0.0006:
-				_fail("%s flex mismatch on %s: [%.5f, %.5f] expected ±%.5f" % [label, axis_name, lower, upper, expected])
+				_fail("%s %s flex mismatch on %s: [%.5f, %.5f] expected ±%.5f" % [label, "cycle" if is_cycle else "ordinary", axis_name, lower, upper, expected])
 				return false
-	if count < 1 or ordinary_count < 1:
-		_fail("%s did not include an ordinary non-cycle socket joint" % label)
+	if ordinary_count < 1 or cycle_count < 1:
+		_fail("%s did not exercise both ordinary and redundant-cycle SOCKETs" % label)
 		return false
 	return true
 
@@ -92,22 +95,25 @@ func _run() -> void:
 		_fail("closed square did not produce a stabilized redundant SOCKET")
 		return
 
-	# Upper slider range is intentionally exact-fixed. This avoids Jolt's very
-	# different behavior for tiny non-zero angular limits in heavily loaded builds.
-	var expected_default: float = float(main.call("_structure_flex_angle_rad_v066"))
-	if absf(expected_default) > 0.000001:
-		_fail("default 92% rigidity is not exactly rigid")
+	# At the normal/high end, ordinary connections are exactly rigid while the one
+	# redundant loop-closing edge retains the proven tiny v0.5.11 solver relief.
+	var default_visible: float = float(main.call("_structure_flex_angle_rad_v066"))
+	var default_cycle: float = float(main.call("_cycle_solver_relief_rad_v073"))
+	if absf(default_visible) > 0.000001 or rad_to_deg(default_cycle) < 0.35 or rad_to_deg(default_cycle) > 1.2:
+		_fail("92% high-end/cycle relief values are invalid: visible=%.3f° cycle=%.3f°" % [rad_to_deg(default_visible), rad_to_deg(default_cycle)])
 		return
-	if not _assert_all_structure_flex(main, 0.0, "92% rigidity"):
+	if not _assert_structure_flex(main, 0.0, default_cycle, "92% rigidity"):
 		return
 
+	# Below 90%, the requested visible bounded flex applies across all structure
+	# joints, including the redundant cycle edge.
 	main.set("physics_structure_rigidity_v066", 50.0)
 	var mid_expected: float = float(main.call("_structure_flex_angle_rad_v066"))
 	if rad_to_deg(mid_expected) < 2.6 or rad_to_deg(mid_expected) > 3.2:
 		_fail("50% rigidity does not provide visible bounded flex: %.3f°" % rad_to_deg(mid_expected))
 		return
 	main.call("_apply_structure_flex_all_v072")
-	if not _assert_all_structure_flex(main, mid_expected, "50% rigidity"):
+	if not _assert_structure_flex(main, mid_expected, mid_expected, "50% rigidity"):
 		return
 
 	main.set("physics_structure_rigidity_v066", 0.0)
@@ -116,18 +122,19 @@ func _run() -> void:
 		_fail("0% rigidity is not the intended bounded ±12° flex")
 		return
 	main.call("_apply_structure_flex_all_v072")
-	if not _assert_all_structure_flex(main, zero_expected, "0% rigidity"):
+	if not _assert_structure_flex(main, zero_expected, zero_expected, "0% rigidity"):
 		return
 
 	main.set("physics_structure_rigidity_v066", 100.0)
-	var rigid_expected: float = float(main.call("_structure_flex_angle_rad_v066"))
-	if absf(rigid_expected) > 0.000001:
-		_fail("100% rigidity is not exactly rigid")
-		return
+	var max_cycle: float = float(main.call("_cycle_solver_relief_rad_v073"))
 	main.call("_apply_structure_flex_all_v072")
-	if not _assert_all_structure_flex(main, 0.0, "100% rigidity"):
+	if absf(rad_to_deg(max_cycle) - 0.35) > 0.02:
+		_fail("100% closed-loop solver relief is not the intended tiny 0.35°")
+		return
+	if not _assert_structure_flex(main, 0.0, max_cycle, "100% rigidity"):
 		return
 
+	# Shipping default must survive the old delayed closed-loop energy buildup.
 	main.set("physics_structure_rigidity_v066", 92.0)
 	main.call("_restore_simulation_joint_graph")
 	main.call("_toggle_simulation")
@@ -141,13 +148,13 @@ func _run() -> void:
 				max_linear = maxf(max_linear, body.linear_velocity.length())
 				max_angular = maxf(max_angular, body.angular_velocity.length())
 	if max_linear > 50.0:
-		_fail("runaway linear velocity after whole-structure rigidity: %.2f" % max_linear)
+		_fail("runaway linear velocity after hybrid rigidity: %.2f" % max_linear)
 		return
 	if max_angular > 75.0:
-		_fail("runaway angular velocity after whole-structure rigidity: %.2f" % max_angular)
+		_fail("runaway angular velocity after hybrid rigidity: %.2f" % max_angular)
 		return
 
-	print("RIGIDITY_061_SMOKE_OK: all SOCKET/CROSS joints respond to rigidity; 92-100%% exact-rigid, 50%%=±%.2f°, 0%%=±12°, 600-frame stability retained" % rad_to_deg(mid_expected))
+	print("RIGIDITY_061_SMOKE_OK: high-end ordinary joints rigid + tiny cycle relief (92%%=±%.2f° cycle, 100%%=±%.2f° cycle); 50%%=±%.2f°, 0%%=±12°, stable 600 frames" % [rad_to_deg(default_cycle), rad_to_deg(max_cycle), rad_to_deg(mid_expected)])
 	main.queue_free()
 	await process_frame
 	quit(0)

@@ -1,22 +1,19 @@
-extends "res://scripts/main_v074.gd"
+extends "res://scripts/main_v072.gd"
 
 const VERSION_083 := "0.5.16"
-# This is deliberately far below the ~0.53 natural resting center gap observed
-# for two colliding axle hubs. It is an order/tunnelling guard, not a substitute
-# contact solver.
-const AXLE_PAIR_TUNNEL_GUARD_V083 := 0.080
-const AXLE_PAIR_SUPPORT_EPS_V083 := 0.020
-const AXLE_PAIR_SPEED_EPS_V083 := 0.0005
+const O_RING_SIM_LAYER_V083 := 8
+const O_RING_CONNECTOR_LAYER_V083 := 16
+const O_RING_SIM_HITBOX_HEIGHT_V083 := 0.42
 
-var axle_pair_guard_events_v083: int = 0
-var axle_pair_supported_events_v083: int = 0
+var o_ring_connector_state_v083: Array = []
+var o_ring_sim_hitboxes_v083: Array = []
 
 
 func _ready() -> void:
 	super._ready()
 	if update_status_v021 != null:
 		_set_update_status_v021("Current version: v%s" % VERSION_083)
-	_status("v0.5.16 candidate — stable v074 O-Ring physics with a sparse would-cross velocity guard only.")
+	_status("v0.5.16 candidate — O-Rings are simple rod-pinned physical collider stops.")
 
 
 func _status(text: String) -> void:
@@ -24,110 +21,165 @@ func _status(text: String) -> void:
 		status_label.text = "Connex Lab v%s  •  %s" % [VERSION_083, text]
 
 
-func _component_mass_for_stop_v083(stop: Dictionary) -> float:
-	var total := 0.0
-	for value in _stop_component_v071(stop):
-		var body := value as RigidBody3D
-		if is_instance_valid(body):
-			total += maxf(body.mass, 0.001)
-	return maxf(total, 0.001)
+# O-Rings are ordinary physical stops. Disable the special scripted axle-stop
+# system completely in this runtime.
+func _build_axle_stop_ranges_v070() -> void:
+	axle_stop_ranges_v070.clear()
 
 
-func _lower_boundary_support_v083(stop: Dictionary, along: float) -> bool:
-	var lower: float = float(stop.get("lower", -INF))
-	return lower > -INF and along <= lower + AXLE_PAIR_SUPPORT_EPS_V083
+func _predict_axle_stops_v071(_delta: float) -> void:
+	pass
 
 
-func _upper_boundary_support_v083(stop: Dictionary, along: float) -> bool:
-	var upper: float = float(stop.get("upper", INF))
-	return upper < INF and along >= upper - AXLE_PAIR_SUPPORT_EPS_V083
+func _correct_axle_stop_positions_v071() -> void:
+	pass
 
 
-func _set_component_axial_speed_v083(stop: Dictionary, axis: Vector3, current_speed: float, target_speed: float) -> void:
-	var delta_speed := target_speed - current_speed
-	if absf(delta_speed) <= AXLE_PAIR_SPEED_EPS_V083:
-		return
-	_shift_component_velocity_v071(stop, axis * delta_speed)
-
-
-func _predict_axle_order_v073(delta: float) -> void:
-	if not simulating or delta <= 0.000001:
-		return
-	for group_value in axle_order_groups_v073:
-		var group := group_value as Dictionary
-		var rod := group.get("rod") as RigidBody3D
-		var hubs: Array = group.get("hubs", []) as Array
-		if not is_instance_valid(rod) or hubs.size() <= 1 or not _group_has_o_ring_v074(group):
+func _restore_connector_collision_v083() -> void:
+	for value in o_ring_connector_state_v083:
+		var state := value as Dictionary
+		var connector := state.get("connector") as RigidBody3D
+		if not is_instance_valid(connector):
 			continue
-		var axis: Vector3 = _rod_axis_v020(rod).normalized()
-		if axis.length_squared() < 0.5:
+		connector.collision_layer = int(state.get("layer", connector.collision_layer))
+		connector.collision_mask = int(state.get("mask", connector.collision_mask))
+	o_ring_connector_state_v083.clear()
+
+
+func _enable_connector_collision_v083() -> void:
+	_restore_connector_collision_v083()
+	for body_value in bodies:
+		var connector := body_value as RigidBody3D
+		if not is_instance_valid(connector) or str(connector.get_meta("kind", "")) != "connector":
 			continue
-		var rod_speed: float = rod.linear_velocity.dot(axis)
-		var segment: int = int(group.get("segment", 0))
-
-		for i in range(hubs.size() - 1):
-			var lower_hub := (hubs[i] as Dictionary).get("connector") as RigidBody3D
-			var upper_hub := (hubs[i + 1] as Dictionary).get("connector") as RigidBody3D
-			if not is_instance_valid(lower_hub) or not is_instance_valid(upper_hub):
-				continue
-			var lower_stop: Dictionary = _find_stop_v074(rod, lower_hub, segment)
-			var upper_stop: Dictionary = _find_stop_v074(rod, upper_hub, segment)
-			if lower_stop.is_empty() or upper_stop.is_empty():
-				continue
-
-			var lower_along: float = _rod_local_along_v070(lower_hub, rod)
-			var upper_along: float = _rod_local_along_v070(upper_hub, rod)
-			var gap: float = upper_along - lower_along
-			var lower_speed: float = lower_hub.linear_velocity.dot(axis)
-			var upper_speed: float = upper_hub.linear_velocity.dot(axis)
-			var closing_speed: float = upper_speed - lower_speed
-			if closing_speed >= -AXLE_PAIR_SPEED_EPS_V083:
-				continue
-
-			# Normal collision owns the entire physical contact region. Intervene only
-			# if current velocity would put the BUILD-order pair at/through the tiny
-			# order guard on the next step.
-			if gap + closing_speed * delta >= AXLE_PAIR_TUNNEL_GUARD_V083:
-				continue
-
-			var lower_mass: float = _component_mass_for_stop_v083(lower_stop)
-			var upper_mass: float = _component_mass_for_stop_v083(upper_stop)
-			var common_speed: float = (lower_speed * lower_mass + upper_speed * upper_mass) / (lower_mass + upper_mass)
-			var common_relative: float = common_speed - rod_speed
-			var lower_supported: bool = _lower_boundary_support_v083(lower_stop, lower_along)
-			var upper_supported: bool = _upper_boundary_support_v083(upper_stop, upper_along)
-
-			# A finite stop can absorb forbidden axial momentum. Never feed an incoming
-			# hub's outward velocity back into a hub already supported by its O-Ring or
-			# rod end.
-			if lower_supported and common_relative < 0.0:
-				common_speed = rod_speed
-				axle_pair_supported_events_v083 += 1
-			elif upper_supported and common_relative > 0.0:
-				common_speed = rod_speed
-				axle_pair_supported_events_v083 += 1
-
-			_set_component_axial_speed_v083(lower_stop, axis, lower_speed, common_speed)
-			_set_component_axial_speed_v083(upper_stop, axis, upper_speed, common_speed)
-			axle_pair_guard_events_v083 += 1
-			axle_pair_guard_events_v074 += 1
+		o_ring_connector_state_v083.append({
+			"connector": connector,
+			"layer": connector.collision_layer,
+			"mask": connector.collision_mask,
+		})
+		connector.collision_layer |= O_RING_CONNECTOR_LAYER_V083
+		connector.collision_mask |= O_RING_SIM_LAYER_V083
 
 
-func _prepare_stable_simulation_graph() -> void:
-	axle_pair_guard_events_v083 = 0
-	axle_pair_supported_events_v083 = 0
-	axle_pair_guard_events_v074 = 0
-	super._prepare_stable_simulation_graph()
+func _add_sim_hitbox_v083(ring: RigidBody3D) -> void:
+	var collision := CollisionShape3D.new()
+	collision.name = "O_Ring_Sim_Hitbox_v083"
+	var cylinder := CylinderShape3D.new()
+	cylinder.radius = O_RING_RADIUS
+	cylinder.height = O_RING_SIM_HITBOX_HEIGHT_V083
+	collision.shape = cylinder
+	collision.set_meta("o_ring_sim_hitbox_v083", true)
+	ring.add_child(collision)
+	o_ring_sim_hitboxes_v083.append(collision)
+
+
+# Keep the O-Ring's existing fixed mount to its rod alive during SIMULATE. The
+# ring remains a separate physics body, so the AXLE connector's rod collision
+# exception cannot suppress connector-vs-O-Ring contact.
+func _prepare_o_ring_followers_v068() -> int:
+	_restore_o_ring_followers_v068(false)
+	_rebuild_connection_graph_v020()
+	var prepared := 0
+	for record_value in connections_v020:
+		var record := record_value as Dictionary
+		if str(record.get("kind", "")) != "o_ring":
+			continue
+		var joint := record.get("joint") as Joint3D
+		var ring := record.get("ring") as RigidBody3D
+		var rod := record.get("rod") as RigidBody3D
+		if not is_instance_valid(joint) or not is_instance_valid(ring) or not is_instance_valid(rod):
+			continue
+
+		# Defensive recovery from any previous experimental detached-follower state.
+		_restore_o_ring_joint_v068(joint)
+		o_ring_followers_v068.append({
+			"ring": ring,
+			"rod": rod,
+			"joint": joint,
+			"collision_layer": ring.collision_layer,
+			"collision_mask": ring.collision_mask,
+			"continuous_cd": ring.continuous_cd,
+			"freeze_mode": ring.freeze_mode,
+			"can_sleep": ring.can_sleep,
+		})
+
+		# Dedicated connector-only collision. Rods never receive layer 16, so the
+		# O-Ring cannot collide with its host axle or any other rod.
+		ring.collision_layer = O_RING_SIM_LAYER_V083
+		ring.collision_mask = O_RING_CONNECTOR_LAYER_V083
+		ring.continuous_cd = true
+		ring.can_sleep = false
+		ring.freeze = false
+		ring.sleeping = false
+		ring.linear_velocity = rod.linear_velocity
+		ring.angular_velocity = rod.angular_velocity
+		_add_sim_hitbox_v083(ring)
+		prepared += 1
+
+	if prepared > 0:
+		_enable_connector_collision_v083()
+	return prepared
+
+
+# The fixed joint owns the O-Ring transform. No manual follower teleporting.
+func _sync_o_ring_followers_v068() -> void:
+	pass
 
 
 func _restore_o_ring_followers_v068(restore_build_pose: bool = true) -> void:
-	axle_pair_guard_events_v083 = 0
-	axle_pair_supported_events_v083 = 0
-	super._restore_o_ring_followers_v068(restore_build_pose)
+	_restore_connector_collision_v083()
+	for shape_value in o_ring_sim_hitboxes_v083:
+		var collision := shape_value as CollisionShape3D
+		if is_instance_valid(collision):
+			collision.queue_free()
+	o_ring_sim_hitboxes_v083.clear()
+
+	for follower_value in o_ring_followers_v068:
+		var follower := follower_value as Dictionary
+		var ring := follower.get("ring") as RigidBody3D
+		var joint := follower.get("joint") as Joint3D
+		_restore_o_ring_joint_v068(joint)
+		if not is_instance_valid(ring):
+			continue
+		ring.collision_layer = int(follower.get("collision_layer", ring.collision_layer))
+		ring.collision_mask = int(follower.get("collision_mask", ring.collision_mask))
+		ring.continuous_cd = bool(follower.get("continuous_cd", false))
+		ring.freeze_mode = int(follower.get("freeze_mode", RigidBody3D.FREEZE_MODE_STATIC))
+		ring.can_sleep = bool(follower.get("can_sleep", true))
+		ring.freeze = true
+		ring.sleeping = false
+		ring.linear_velocity = Vector3.ZERO
+		ring.angular_velocity = Vector3.ZERO
+		if restore_build_pose and ring.has_meta("build_transform"):
+			ring.global_transform = ring.get_meta("build_transform") as Transform3D
+	o_ring_followers_v068.clear()
 
 
 func _release_physics() -> void:
 	await super._release_physics()
 	if not simulating:
 		return
-	_status("Physics running — ordinary AXLE hub collision is untouched; a sparse velocity-only guard acts only on imminent hub order crossing.")
+	for follower_value in o_ring_followers_v068:
+		var follower := follower_value as Dictionary
+		var ring := follower.get("ring") as RigidBody3D
+		var rod := follower.get("rod") as RigidBody3D
+		if not is_instance_valid(ring) or not is_instance_valid(rod):
+			continue
+		ring.freeze = false
+		ring.sleeping = false
+		ring.linear_velocity = rod.linear_velocity
+		ring.angular_velocity = rod.angular_velocity
+	_status("Physics running — %d physical O-Ring stop%s pinned to rod%s; AXLE connectors stop by collider contact." % [
+		o_ring_followers_v068.size(),
+		"" if o_ring_followers_v068.size() == 1 else "s",
+		"" if o_ring_followers_v068.size() == 1 else "s"
+	])
+
+
+func _update_help_text_v030() -> void:
+	super._update_help_text_v030()
+	if help_panel == null:
+		return
+	var label: Label = _find_label_v030(help_panel)
+	if label != null:
+		label.text += "\n\nv0.5.16 O-RING: the O-Ring is a normal rod-mounted physical stopper. Its existing fixed mount stays active in SIMULATE and its own connector-only collider stops AXLE connectors. Rods are excluded by collision layer, so the stop never collides with its host axle. No ownership/rank solver, scripted axle travel clamp, extra AXLE joint, hub-order guard, or manual follower transform is used. BUILD selection/movement remains unchanged."

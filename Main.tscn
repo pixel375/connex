@@ -1,8 +1,8 @@
 [gd_scene load_steps=3 format=3]
 
-; v0.5.16 stabilized follow-up runtime: res://scripts/main_v073.gd
+; v0.5.16 stabilized follow-up runtime: res://scripts/main_v074.gd
 ; v0.5.15 stable lineage marker: res://scripts/main_v071.gd
-[ext_resource type="Script" path="res://scripts/main_v073.gd" id="1_main"]
+[ext_resource type="Script" path="res://scripts/main_v074.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/physics_slider_fix_v052.gd" id="2_physics_fix"]
 
 [node name="Main" type="Node3D"]

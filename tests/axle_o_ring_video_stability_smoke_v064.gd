@@ -109,6 +109,7 @@ func _run() -> void:
 	var ring_mount := ring_info.get("joint") as Generic6DOFJoint3D
 	main.call("_rebuild_connection_graph_v020")
 
+	var ring_parent_before := ring.get_parent()
 	var ring_local_before: Transform3D = axle.global_transform.affine_inverse() * ring.global_transform
 	var ring_start_along := _along(main, ring, axle)
 	if hub_start_along <= ring_start_along:
@@ -140,8 +141,8 @@ func _run() -> void:
 	if not ring.freeze or ring.freeze_mode != RigidBody3D.FREEZE_MODE_KINEMATIC:
 		_fail("video O-Ring is not an exact kinematic follower")
 		return
-	if ring.get_parent() != axle:
-		_fail("video O-Ring is not parented to its axle rod")
+	if ring.get_parent() != ring_parent_before or ring.get_parent() == axle:
+		_fail("video O-Ring was reparented under a physics body")
 		return
 	if ring.collision_layer != 2 or ring.collision_mask != 3:
 		_fail("video O-Ring lost construction collision policy; layer=%d mask=%d" % [ring.collision_layer, ring.collision_mask])
@@ -221,14 +222,14 @@ func _run() -> void:
 	if not (main.get("o_ring_followers_v068") as Array).is_empty():
 		_fail("O-Ring follower state leaked into BUILD")
 		return
-	if not ring.freeze or ring.get_parent() == axle or ring.collision_layer != 2 or ring.collision_mask != 3:
+	if not ring.freeze or ring.get_parent() != ring_parent_before or ring.collision_layer != 2 or ring.collision_mask != 3:
 		_fail("physical O-Ring did not return to editable BUILD state")
 		return
 	if ring.get_collision_exceptions().has(axle):
 		_fail("temporary host collision exception leaked into BUILD")
 		return
 
-	print("AXLE_ORING_VIDEO_064_SMOKE_OK: exact collidable rod-relative O-Ring blocks loaded axle hub and closed frame settles; min_clearance=%.3f max_drift=%.4f vmax=%.2f wmax=%.2f gap=%.3f" % [min_stop_clearance, max_ring_drift, max_linear, max_angular, max_gap])
+	print("AXLE_ORING_VIDEO_064_SMOKE_OK: exact collidable world-space O-Ring follower blocks loaded axle hub and closed frame settles; min_clearance=%.3f max_drift=%.4f vmax=%.2f wmax=%.2f gap=%.3f" % [min_stop_clearance, max_ring_drift, max_linear, max_angular, max_gap])
 	main.queue_free()
 	await process_frame
 	quit(0)

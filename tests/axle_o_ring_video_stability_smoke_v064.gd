@@ -56,6 +56,14 @@ func _along(main: Node, body: Node3D, rod: RigidBody3D) -> float:
 	return (body.global_position - rod.global_position).dot(axis)
 
 
+func _replacement_for(main: Node, original: Generic6DOFJoint3D) -> Generic6DOFJoint3D:
+	for value in (main.get("o_ring_axle_replacements_v069") as Array):
+		var state := value as Dictionary
+		if state.get("original") == original:
+			return state.get("replacement") as Generic6DOFJoint3D
+	return null
+
+
 func _max_socket_gap(main: Node) -> float:
 	var max_gap := 0.0
 	main.call("_rebuild_connection_graph_v020")
@@ -134,14 +142,24 @@ func _run() -> void:
 	if not ring.freeze or ring.collision_layer != 0 or ring.collision_mask != 0:
 		_fail("visible video-fixture O-Ring was left active in collision physics")
 		return
-	if not bool(axle_joint.get("linear_limit_y/enabled")):
-		_fail("video fixture axle slide was not bounded by the O-Ring")
+
+	var bounded_axle := _replacement_for(main, axle_joint)
+	if not is_instance_valid(bounded_axle):
+		_fail("video fixture did not replace the free BUILD axle with a bounded SIMULATE axle")
 		return
-	var lower_limit := float(axle_joint.get("linear_limit_y/lower_distance"))
-	var upper_limit := float(axle_joint.get("linear_limit_y/upper_distance"))
-	# Ring starts 0.92 below hub; guarded limit clearance is 0.70 => -0.22 travel.
-	if absf(lower_limit - (-0.22)) > 0.08:
-		_fail("video fixture guarded lower O-Ring stop is wrong: %.3f expected≈-0.220" % lower_limit)
+	if not axle_joint.node_a.is_empty() or not axle_joint.node_b.is_empty():
+		_fail("original free axle remained live beside video-fixture bounded axle")
+		return
+	if not bool(bounded_axle.get("linear_limit_y/enabled")):
+		_fail("video fixture bounded axle did not enable Y travel limits")
+		return
+	if bool(bounded_axle.get("angular_limit_y/enabled")):
+		_fail("video fixture bounded axle accidentally locked axle rotation")
+		return
+	var lower_limit := float(bounded_axle.get("linear_limit_y/lower_distance"))
+	var upper_limit := float(bounded_axle.get("linear_limit_y/upper_distance"))
+	if absf(lower_limit - (-0.49)) > 0.08:
+		_fail("video fixture lower O-Ring stop is wrong: %.3f expected≈-0.490" % lower_limit)
 		return
 	if upper_limit < 100.0:
 		_fail("video fixture unexpectedly bounded the axle above the hub: %.3f" % upper_limit)
@@ -168,7 +186,6 @@ func _run() -> void:
 		var ring_along := _along(main, ring, axle)
 		var stop_clearance := hub_along - ring_along
 		min_stop_clearance = minf(min_stop_clearance, stop_clearance)
-		# This is the true physical no-cross check, not the earlier guarded limit.
 		if stop_clearance < CLEARANCE - 0.12:
 			_fail("axle hub crossed through O-Ring at frame %d: clearance=%.3f required≈%.3f" % [frame_index, stop_clearance, CLEARANCE])
 			return
@@ -191,7 +208,17 @@ func _run() -> void:
 		_fail("closed frame opened while settling on O-Ring; max socket gap=%.3f" % max_gap)
 		return
 
-	print("AXLE_ORING_VIDEO_064_SMOKE_OK: guarded native axle stop blocks loaded hub and frame settles; min_clearance=%.3f vmax=%.2f wmax=%.2f gap=%.3f" % [min_stop_clearance, max_linear, max_angular, max_gap])
+	main.call("_toggle_simulation")
+	for _i in range(4):
+		await physics_frame
+	if not (main.get("o_ring_axle_replacements_v069") as Array).is_empty():
+		_fail("video bounded axle survived return to BUILD")
+		return
+	if axle_joint.node_a.is_empty() or axle_joint.node_b.is_empty() or bool(axle_joint.get("linear_limit_y/enabled")):
+		_fail("video fixture original free axle was not restored for BUILD")
+		return
+
+	print("AXLE_ORING_VIDEO_064_SMOKE_OK: one bounded axle constraint blocks loaded hub and frame settles; min_clearance=%.3f vmax=%.2f wmax=%.2f gap=%.3f" % [min_stop_clearance, max_linear, max_angular, max_gap])
 	main.queue_free()
 	await process_frame
 	quit(0)

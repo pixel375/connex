@@ -49,6 +49,14 @@ jobs:
           grep -F 'LEGACY_AXLE_REPAIR_074_SMOKE_OK' /tmp/legacy-axle-074.log
           if grep -Eq "SCRIPT ERROR|Parse Error|LEGACY_AXLE_REPAIR_074_SMOKE_FAIL" /tmp/legacy-axle-074.log; then exit 1; fi
 
+      - name: Verify CROSS socket midpoint rod and slide gizmo
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/cross_socket_midpoint_slide_smoke_v074.gd 2>&1 | tee /tmp/cross-socket-slide-074.log
+          grep -F 'CROSS_SOCKET_SLIDE_074_SMOKE_OK' /tmp/cross-socket-slide-074.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|CROSS_SOCKET_SLIDE_074_SMOKE_FAIL" /tmp/cross-socket-slide-074.log; then exit 1; fi
+
       - name: Re-run four-post AXLE CROSS stop roundtrip
         shell: bash
         run: |

@@ -42,11 +42,13 @@ func _assert_all_spatial_sockets_pick(main: Node, def_index: int, expected_count
 		return false
 	for slot_value in slots:
 		var slot := int(slot_value)
+		# Probe immediately after aiming. Waiting a process frame here would invoke
+		# Main._update_camera(), move the camera back to its orbit state, and make
+		# this synthetic tap coordinate belong to a different camera pose.
 		var screen_pos: Vector2 = _aim_camera_at_socket(main, connector, slot)
-		await process_frame
 		var picked := main.call("_pick_socket_on_connector_v070", connector, screen_pos, 108.0, false, {}) as Dictionary
 		if picked.is_empty() or int(picked.get("slot", -9999)) != slot:
-			_fail("%s socket %s was not selectable from its visible jaw" % [str((main.get("connector_defs") as Array)[def_index]["name"]), str(slot)])
+			_fail("%s socket %s was not selectable from its visible jaw; picked=%s" % [str((main.get("connector_defs") as Array)[def_index]["name"]), str(slot), str(picked.get("slot", "none"))])
 			return false
 	return true
 
@@ -91,7 +93,6 @@ func _run() -> void:
 	main.call("_set_editor_mode_v032", 0, false)
 	await physics_frame
 	var cross_screen: Vector2 = _aim_camera_at_socket(main, cross_connector, 0)
-	await process_frame
 	var body_count_before := (main.get("bodies") as Array).size()
 	if not bool(main.call("_try_socket_create_tap_v054", cross_screen)):
 		_fail("CROSS mode did not accept a connector socket create tap")

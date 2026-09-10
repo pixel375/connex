@@ -149,6 +149,13 @@ func _configure_o_ring_stoppers_v069() -> int:
 		connector.sleeping = false
 		rod.sleeping = false
 
+	# v0.5.13 rebounded the graph after removing O-Ring joints. With Jolt, changing
+	# Generic6DOF limit properties on that already-created constraint updates the
+	# node but does not reliably rebuild the native constraint mode. Rebind once
+	# after all bounds are set so the solver is created with the O-Ring limits.
+	if configured_pairs > 0:
+		_rebind_all_joints()
+
 	o_ring_stop_pair_count_v069 = configured_pairs
 	return configured_pairs
 
@@ -189,7 +196,7 @@ func _update_help_text_v030() -> void:
 		return
 	var label: Label = _find_label_v030(help_panel)
 	if label != null:
-		label.text += "\n\nv0.5.14 O-RING STOPPER: the broken v0.5.13 host-rod collision proxy and the experimental moving proxy body are both removed. The visible O-Ring remains a collisionless follower of its axle during SIMULATE. Each connector already mounted as AXLE on that rod gets a temporary lower/upper bound on the same Generic6DOF Y slide it already uses, calculated from the nearest O-Ring positions and physical hub clearance. A small measured solver guard band arms the hard stop before contact so Jolt's transient impact slop cannot let the hub visibly cross the ring. No collision mass, world-following collider, second joint, frame correction, or over-constrained solver loop is added. BUILD/Restore returns the axle joint to its original free-slide state."
+		label.text += "\n\nv0.5.14 O-RING STOPPER: the broken v0.5.13 host-rod collision proxy and the experimental moving proxy body are both removed. The visible O-Ring remains a collisionless follower of its axle during SIMULATE. Each connector already mounted as AXLE on that rod gets a temporary lower/upper bound on the same Generic6DOF Y slide it already uses, calculated from the nearest O-Ring positions and physical hub clearance. The joint graph is rebound once after those limits are configured so Jolt creates the live constraint with the stop active. A small measured solver guard band arms the hard stop before contact so transient impact slop cannot let the hub visibly cross the ring. No collision mass, world-following collider, second joint, frame correction, or over-constrained solver loop is added. BUILD/Restore returns the axle joint to its original free-slide state."
 
 
 func _on_update_request_completed_v021(result: int, response_code: int, headers: PackedStringArray, body: PackedByteArray) -> void:

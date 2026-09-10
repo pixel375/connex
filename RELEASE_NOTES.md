@@ -1,30 +1,39 @@
-# Connex Lab v0.5.14
+# Connex Lab v0.5.15
 
-Focused corrective release for the O-Ring Stop regression introduced in v0.5.13. Camera and editor geometry behavior are intentionally unchanged.
+This release fixes the O-Ring axle-stop regression and adds the requested construction/editor workflow improvements.
 
-### O-Ring Stops are exact rod-relative physical stops
-v0.5.13 made O-Rings follow their host rod visually, but copied their stopper collision onto that same rod. AXLE joints intentionally exclude collision between the mounted connector and its axle rod, so an axle connector could pass through the copied stopper. Other attached pieces could still strike the proxy shape, which could inject the violent impulses seen in the device video.
+### O-Ring axle stops
+O-Rings now use simple rod-relative stop semantics during SIMULATE. The visible O-Ring follows its host rod exactly and does not participate as an independent collision body or host-rod proxy.
 
-v0.5.14 removes that proxy system. During SIMULATE, the real O-Ring body itself remains the collider and becomes a frozen kinematic stop whose world transform is synchronized from its host rod every physics tick. This keeps the O-Ring exactly rod-relative while avoiding a separately solved tiny rigid-body weld that can stretch under repeated loaded impacts.
+AXLE connectors retain their normal free slide and free rotation around the axle. The runtime constrains only longitudinal travel: an O-Ring becomes a stop coordinate on the rod, and the physical rod ends are also travel limits. This works from relative motion, so it prevents both a connector falling/sliding off the rod and a moving/falling rod passing through the connector beyond an O-Ring.
 
-The existing O-Ring mount remains bound during SIMULATE only to preserve O-Ring-versus-host-rod collision exclusion. All six of that mount's linear/angular constraints are temporarily disabled, so it contributes no weld force and cannot pull on the mechanism. Its original fixed constraints are restored when returning to BUILD.
+When several axle connectors share the same segment, only the connector nearest each O-Ring or rod end owns that boundary. Other axle connectors remain freely sliding and can stack through ordinary connector contact. Predictive relative-velocity limiting prevents crossings without turning the O-Ring into a high-energy physics contact, and any residual boundary correction is applied only to the connector-side rigid assembly. The host rod is never teleported by an O-Ring stop.
 
-The O-Ring is not reparented beneath its host RigidBody3D. The normal AXLE joint is left completely unchanged: longitudinal sliding and axle rotation remain free until the connector physically reaches the O-Ring. In BUILD/Restore, the O-Ring returns to its ordinary editable frozen state and fully constrained mount.
+The original v0.5.13 host-rod proxy collision system is disabled. No moving proxy body or replacement AXLE joint is used.
 
-No host-rod collision proxy, moving proxy body, replacement AXLE joint, rewritten AXLE travel limit, enlarged O-Ring collider, nested physics-body parenting, or O-Ring-specific CCD is used.
+### CROSS creation
+In CREATE + CROSS mode, a connector socket can now be tapped to grow a rod directly from that socket. Tapping a rod body still performs normal CROSS connector placement.
 
-### Impact stability
-The stopper no longer depends on a separately simulated tiny rigid-body weld during SIMULATE. The ring stays locked to the host rod transform while retaining ordinary construction collision against axle connectors and other pieces. Existing global construction physics settings and the emergency runaway guard remain unchanged.
+### New free parts
+CREATE mode now includes **New Rod** and **New Connector** actions. Arm one, then tap empty workspace to create the currently selected rod or connector as a free/unattached part.
+
+### 11-point / 14-point socket selection
+All sockets on the 11-point and 14-point 3D connectors are now selectable, including the eight surrounding planar sockets. Socket picking uses the visible jaw instead of relying on one tiny projected mouth point, and overlapping front/back jaws are disambiguated by camera depth.
+
+### Change an existing connector socket
+ATTACH now supports re-seating an existing socket connection. Select the connector socket you want to use, then select the rod that is already attached to that connector. If the change is geometrically valid, Connex rotates/re-seats the connector-side structure onto that socket while keeping the target rod in place. Invalid changes are rejected without altering the construction.
 
 ### Validation
-The regression suite covers retained behavior from v0.5.2 onward plus two O-Ring-specific stress fixtures:
-- a long axle with two independently sliding hubs, asymmetric spokes and O-Rings above/below;
-- the device-video topology: a closed rectangular frame riding a vertical axle with an O-Ring immediately below the loaded hub, followed through an extended ground-impact run.
+The complete regression suite includes all retained editor/physics tests plus dedicated v0.5.15 coverage for:
+- mixed multi-hub O-Ring axle behavior;
+- the reported closed-frame + axle + O-Ring device-video topology;
+- 11-point and 14-point socket picking;
+- CROSS socket-to-rod creation;
+- free rod and connector creation;
+- validated socket-to-existing-rod re-seat without moving the target rod.
 
-The v0.5.14 tests require that the ordinary AXLE joint stays live with free Y slide and free Y rotation, the O-Ring remains collidable and essentially drift-free relative to its host rod, its mount remains bound but has all six constraints disabled only during SIMULATE, the original fixed mount is restored in BUILD, no proxy or replacement AXLE system exists, no connector crosses the physical 0.43 contact clearance, closed SOCKET geometry stays intact, all body states remain finite, and the emergency runaway guard is never needed during the normal fixtures.
-
-### Signing / update compatibility
-- Android versionCode is 38;
-- Android versionName is `0.5.14`;
-- package ID remains `com.pixel375.connex`;
-- the permanent Connex signing certificate is retained so the APK installs as an in-place update over v0.5.13.
+### Android / update compatibility
+- Android versionCode: 39
+- Android versionName: `0.5.15`
+- package ID: `com.pixel375.connex`
+- permanent Connex signing certificate retained for in-place update compatibility.

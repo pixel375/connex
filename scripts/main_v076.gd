@@ -18,13 +18,25 @@ func _status(text: String) -> void:
 		status_label.text = "Connex Lab v%s  •  %s" % [VERSION_076, text]
 
 
+# v0.5.19 dirtied the cached overlay but its old child handles remained queued
+# until the end of the frame. When a whole build pose jumped back, those stale
+# markers could therefore still be rendered at the old coordinates. Detach them
+# from the overlay tree immediately, then rebuild from authoritative body poses.
+func _invalidate_attach_overlay_v075() -> void:
+	attach_spatial_dirty_v050 = true
+	attach_overlay_dirty_v050 = true
+	last_overlay_visibility_signature_v050 = ""
+	if attach_points_root_v032 == null:
+		return
+	for child_value in attach_points_root_v032.get_children():
+		var child: Node = child_value as Node
+		attach_points_root_v032.remove_child(child)
+		child.queue_free()
+	_refresh_attach_points_v032()
+
+
 # -----------------------------------------------------------------------------
 # ATTACH piece selection + O-Ring create behavior.
-#
-# ATTACH owns normal taps, so the inherited one-shot Select action never reached
-# the piece picker. Honor Select before the attachment-point state machine. Also
-# keep SOCKET rod creation authoritative even while O-Ring Stop is the current
-# connector-palette choice; tapping a rod still follows the normal O-Ring path.
 # -----------------------------------------------------------------------------
 
 func _select_piece_in_attach_v076(screen_pos: Vector2) -> bool:
@@ -61,11 +73,6 @@ func _handle_tap(screen_pos: Vector2) -> void:
 
 # -----------------------------------------------------------------------------
 # Live ATTACH marker tracking.
-#
-# v0.5.19 invalidated markers after snapshot restore/Undo/Redo, but Restore and
-# other direct transform paths can move pieces without touching those caches.
-# Track actual build transforms while ATTACH is visible and rebuild only when a
-# piece really moved/appeared/disappeared.
 # -----------------------------------------------------------------------------
 
 func _attach_pose_snapshot_v076() -> Dictionary:
@@ -125,14 +132,6 @@ func _toggle_simulation() -> void:
 
 # -----------------------------------------------------------------------------
 # Explicit SOCKET reconnect releases the whole connector from Detach quarantine.
-#
-# Disconnect Selected intentionally blocks every former pair so touching pieces
-# do not instantly re-fuse. Previously an explicit reconnect cleared only the one
-# pair clicked. For a connector that had two rods, the second pair therefore
-# stayed blocked forever. Once the user explicitly SOCKET-reconnects a connector,
-# release that connector's old pair blocks before the single commit. The existing
-# commit-time auto-connect then restores every other still-aligned free rod/socket
-# in the same operation and Undo remains one step.
 # -----------------------------------------------------------------------------
 
 func _release_detach_blocks_for_piece_v076(piece: RigidBody3D) -> int:

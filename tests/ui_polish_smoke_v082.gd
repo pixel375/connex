@@ -104,8 +104,8 @@ func _run() -> void:
 
 	if app.status_label != null and app.status_label.visible:
 		_fail("status text is still visible")
-	var status_panel := app._nearest_panel_ancestor_v082(app.status_label)
-	var toolbar_panel := app._nearest_panel_ancestor_v082(app.select_button_v020)
+	var status_panel: PanelContainer = app._nearest_panel_ancestor_v082(app.status_label)
+	var toolbar_panel: PanelContainer = app._nearest_panel_ancestor_v082(app.select_button_v020)
 	if status_panel != null and status_panel != toolbar_panel and status_panel.visible:
 		_fail("obsolete status frame is still visible")
 

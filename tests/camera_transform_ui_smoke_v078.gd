@@ -1,6 +1,6 @@
 extends SceneTree
 
-const MAIN := preload("res://scripts/main_v078.gd")
+const MAIN := preload("res://scripts/main_v079.gd")
 
 var app: Node
 var failed := false
@@ -18,8 +18,8 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 
-	if app.get_script() == null or not str(app.get_script().resource_path).ends_with("main_v078.gd"):
-		_fail("stabilized v0.5.21 runtime is not active")
+	if app.get_script() == null or not str(app.get_script().resource_path).ends_with("main_v079.gd"):
+		_fail("final v0.5.21 runtime is not active")
 	if app.rotate_button_v032 == null or "TRANSFORM" not in app.rotate_button_v032.text:
 		_fail("ROTATE button was not replaced by TRANSFORM")
 	if app.move_mode_button_v042 == null or app.move_mode_button_v042.visible:

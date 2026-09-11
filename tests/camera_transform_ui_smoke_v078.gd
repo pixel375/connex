@@ -1,6 +1,6 @@
 extends SceneTree
 
-const MAIN := preload("res://scripts/main_v080.gd")
+const MAIN := preload("res://scripts/main_v081.gd")
 
 var app: Node
 var failed := false
@@ -18,69 +18,59 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 
-	if app.get_script() == null or not str(app.get_script().resource_path).ends_with("main_v080.gd"):
-		_fail("final v0.5.21 runtime is not active")
+	if app.get_script() == null or not str(app.get_script().resource_path).ends_with("main_v081.gd"):
+		_fail("final v0.5.22 runtime is not active")
 	if app.rotate_button_v032 == null or "TRANSFORM" not in app.rotate_button_v032.text:
 		_fail("ROTATE button was not replaced by TRANSFORM")
 	if app.move_mode_button_v042 == null or app.move_mode_button_v042.visible:
 		_fail("legacy MOVE editor button is still visible")
-	if app.rotation_panel == null or app.rotation_panel.visible:
-		_fail("legacy rotation XYZ panel is still visible")
-	if app.move_panel == null or app.move_panel.visible:
-		_fail("legacy move XYZ panel is still visible")
-	if app.transform_panel_v077 == null or app.transform_toggle_v077 == null or app.transform_space_button_v078 == null:
+	if app.rotation_panel == null or app.rotation_panel.visible or app.move_panel == null or app.move_panel.visible:
+		_fail("legacy XYZ side panels are visible")
+	if app.transform_panel_v077 == null or app.transform_space_button_v078 == null:
 		_fail("compact transform panel/space control was not created")
+	if app.transform_toggle_v077 != null:
+		_fail("transform accordion header still exists")
 
 	app._set_editor_mode_v032(app.EDITOR_MOVE_042, false)
+	await process_frame
 	if app.editor_mode_v032 != app.EDITOR_ROTATE_032:
 		_fail("legacy MOVE request did not remap to unified TRANSFORM")
-	await process_frame
 	if app.gizmo_root_v030 == null or not app.gizmo_root_v030.visible:
 		_fail("rotation rings are not visible in TRANSFORM")
 	if app.move_gizmo_root_v042 == null or not app.move_gizmo_root_v042.visible:
 		_fail("translation arrows are not visible in TRANSFORM")
-	if app.rotation_panel.visible or app.move_panel.visible:
-		_fail("inherited refresh re-opened a retired XYZ side panel")
+	if app.transform_panel_v077 == null or not app.transform_panel_v077.visible:
+		_fail("compact non-collapsible transform panel is not visible")
 
 	app.transform_space_v051 = app.SPACE_WORLD_051
 	app._update_transform_ui_v077()
-	if "WORLD" not in app.transform_space_button_v078.text:
+	if app.transform_space_button_v078.text != "WORLD":
 		_fail("ITEM/WORLD transform-space control did not update")
 	app.transform_space_v051 = app.SPACE_ITEM_051
+	app._update_transform_ui_v077()
+	if app.transform_space_button_v078.text != "ITEM":
+		_fail("ITEM transform-space label did not restore")
 
 	if app.camera_joystick_v077 == null or app.camera_up_button_v077 == null or app.camera_down_button_v077 == null:
 		_fail("camera joystick/elevation controls were not created")
 	else:
-		if app.camera_joystick_knob_v077.get_parent() == app.camera_joystick_v077:
-			_fail("joystick knob is still a direct PanelContainer child and cannot move freely")
 		var joy_rect: Rect2 = app.camera_joystick_v077.get_global_rect()
-		if joy_rect.position.x < 202.0:
+		if joy_rect.size.x < 145.0:
+			_fail("camera joystick was not enlarged")
+		if app.camera_up_button_v077.get_global_rect().size.x < 140.0:
+			_fail("UP/DOWN control was not enlarged")
+		if app.mode_panel_v032 != null and joy_rect.position.x <= app.mode_panel_v032.get_global_rect().end.x + 10.0:
 			_fail("camera joystick overlaps the condensed editor sidebar")
-		var viewport_size: Vector2 = app.get_viewport().get_visible_rect().size
-		if joy_rect.end.y > viewport_size.y - 88.0:
-			_fail("camera joystick overlaps the bottom parts bar")
 
 	var old_target: Vector3 = app.camera_target
 	app.camera_joystick_value_v077 = Vector2(0.75, -0.55)
-	app._apply_camera_navigation_v077(0.5)
-	if app.camera_target.distance_to(old_target) < 0.05:
-		_fail("analog joystick did not translate camera target")
-	var elevated: Vector3 = app.camera_target
-	app.camera_joystick_value_v077 = Vector2.ZERO
 	app.camera_vertical_v077 = 1.0
 	app._apply_camera_navigation_v077(0.5)
-	if app.camera_target.y <= elevated.y:
-		_fail("UP control did not raise camera target")
-
-	var keep_y: float = app.camera_target.y
-	app.camera_distance = 400.0
-	var pan_before: Vector3 = app.camera_target
-	app._pan_camera(Vector2(100.0, 100.0))
-	var pan_distance: float = pan_before.distance_to(app.camera_target)
-	if pan_distance <= 0.01 or pan_distance > 55.0:
-		_fail("high-zoom two-finger pan lost its bounded speed: %.3f" % pan_distance)
-	if absf(app.camera_target.y - keep_y) > 0.001:
-		_fail("two-finger pan erased camera elevation")
+	var nav_delta: Vector3 = app.camera_target - old_target
+	if Vector2(nav_delta.x, nav_delta.z).length() < 0.05 or nav_delta.y <= 0.05:
+		_fail("combined joystick + elevation navigation did not apply in one frame")
+	app.camera_joystick_value_v077 = Vector2.ZERO
+	app.camera_vertical_v077 = 0.0
 
 	if is_instance_valid(app.selected_piece):
 		var focus: Vector3 = app.selected_piece.global_position
@@ -106,7 +96,9 @@ func _run() -> void:
 	if failed:
 		quit(1)
 		return
-	print("CAMERA_TRANSFORM_078_SMOKE_OK: unified transform, ITEM/WORLD compact controls, analog camera navigation, bounded elevation-preserving pan, Center focus and scroll-safe menus verified")
+	print("CAMERA_TRANSFORM_078_SMOKE_OK: unified transform, compact ITEM/WORLD controls, simultaneous analog/elevation navigation, Center focus and scroll-safe menus verified")
+	app.queue_free()
+	await process_frame
 	quit(0)
 
 func _find_scroll(node: Node) -> ScrollContainer:

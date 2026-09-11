@@ -91,3 +91,4 @@ func _run() -> void:
 	print("EDITOR_UX_SMOKE_OK: no splash + WORLD move/TRANSFORM gizmo + rigid island move + disconnect + rotation fallback")
 	main.queue_free()
 	await process_frame
+	quit(0)

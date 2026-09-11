@@ -18,14 +18,13 @@ func _run() -> void:
 		return
 	app = packed.instantiate()
 	root.add_child(app)
-	# The scene-level topbar finalizer is intentionally deferred until the full
-	# inherited Main _ready() chain has built every toolbar node.
+	await process_frame
 	await process_frame
 	await process_frame
 	await process_frame
 
-	if app.get_script() == null or not str(app.get_script().resource_path).ends_with("main_v081.gd"):
-		_fail("final v0.5.22 runtime is not active")
+	if app.get_script() == null or not str(app.get_script().resource_path).ends_with("main_v082.gd"):
+		_fail("final v0.5.23 runtime is not active")
 	if app.rotate_button_v032 == null or "TRANSFORM" not in app.rotate_button_v032.text:
 		_fail("unified TRANSFORM mode is missing")
 	if app.move_mode_button_v042 == null or app.move_mode_button_v042.visible:
@@ -43,8 +42,8 @@ func _run() -> void:
 		_fail("ITEM/WORLD description still exists")
 	if app.transform_slide_minus_v077 != null or app.transform_slide_plus_v077 != null:
 		_fail("duplicate axle slide controls still exist")
-	if app.transform_close_button_v081 == null:
-		_fail("transform card has no X close button")
+	if app.transform_close_button_v081 != null:
+		_fail("Transform card is still hideable through an X button")
 	if app.transform_space_button_v078 == null or app.transform_space_button_v078.text not in ["ITEM", "WORLD"]:
 		_fail("compact ITEM/WORLD toggle is missing")
 
@@ -62,10 +61,9 @@ func _run() -> void:
 			_fail("camera joystick was not enlarged")
 		if app.camera_up_button_v077.size.x < 145.0 or app.camera_down_button_v077.size.x < 145.0:
 			_fail("UP/DOWN controls were not enlarged")
-		if app.camera_joystick_v077.get_global_rect().position.x < 225.0:
+		if app.camera_joystick_v077.get_global_rect().position.x < 260.0:
 			_fail("camera joystick was not moved far enough right")
 
-	# Horizontal and vertical movement must be additive in the same navigation tick.
 	var old_target: Vector3 = app.camera_target
 	app.camera_joystick_value_v077 = Vector2(0.72, -0.58)
 	app.camera_vertical_v077 = 1.0
@@ -79,7 +77,7 @@ func _run() -> void:
 	app.camera_vertical_v077 = 0.0
 
 	if app.status_label == null or app.status_label.visible:
-		_fail("top status bar was not removed")
+		_fail("top status text was not removed")
 	if app.top_delete_button_v081 == null or app.delete_button_v032 == null or app.delete_button_v032.visible:
 		_fail("Delete was not moved from left toolbar to top toolbar")
 	if app.disconnect_button_v042 == null or app.disconnect_button_v042.text != "Disconnect":
@@ -90,6 +88,15 @@ func _run() -> void:
 		_fail("redundant Deselect Point button is still visible")
 	if app.restart_confirm_v081 == null or app.delete_confirm_v081 == null:
 		_fail("Restart/Delete confirmation dialogs are missing")
+
+	if app.select_button_v020.get_theme_font_size("font_size") < 31:
+		_fail("top toolbar icons were not enlarged")
+	if bool(app.select_button_v020.get_meta("v082_active", true)):
+		_fail("Select is highlighted while inactive")
+	if bool(app.top_simulate_button.get_meta("v082_active", true)):
+		_fail("Simulate is highlighted while inactive")
+	if bool(app.top_delete_button_v081.get_meta("v082_active", true)):
+		_fail("Delete is highlighted blue")
 
 	if app.physics_button_v051 == null or app.physics_button_v051.text != "Physics":
 		_fail("Physics option was not renamed")
@@ -109,9 +116,11 @@ func _run() -> void:
 		_fail("bottom live part previews are missing")
 	if app.parts_button_v050 == null or app.parts_button_v050.text != "⚒":
 		_fail("Parts button was not converted to an icon")
+	if app.parts_button_v050.get_theme_font_size("font_size") < 31:
+		_fail("bottom Parts icon was not enlarged")
 
 	if failed:
 		quit(1)
 		return
-	print("CAMERA_TRANSFORM_078_SMOKE_OK: v0.5.22 touch concurrency, orbit-only multi-touch policy, compact transform card, icon toolbars, options hierarchy and live bottom previews verified")
+	print("CAMERA_TRANSFORM_078_SMOKE_OK: v0.5.23 touch concurrency, permanent compact transform card, neutral icon toolbar, shifted joystick and live bottom previews verified")
 	quit(0)

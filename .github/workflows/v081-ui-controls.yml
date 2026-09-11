@@ -1,0 +1,44 @@
+name: v0.5.22 UI Controls Validation
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ui-controls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Install Godot 4.6.3
+        shell: bash
+        run: |
+          set -euxo pipefail
+          curl -fL --retry 3 -o /tmp/godot.zip "https://github.com/godotengine/godot/releases/download/4.6.3-stable/Godot_v4.6.3-stable_linux.x86_64.zip"
+          mkdir -p /tmp/godot
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          GODOT_BIN="$(find /tmp/godot -maxdepth 1 -type f -name 'Godot*' | head -n 1)"
+          chmod +x "$GODOT_BIN"
+          sudo install -m 0755 "$GODOT_BIN" /usr/local/bin/godot
+      - name: Parse v0.5.22 runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'res://scripts/main_v081.gd' Main.tscn
+          grep -F 'const VERSION_081 := "0.5.22"' scripts/main_v081.gd
+          godot --headless --path . --editor --quit 2>&1 | tee /tmp/editor.log
+          if grep -Eq 'SCRIPT ERROR|Parse Error|Failed to load script' /tmp/editor.log; then exit 1; fi
+      - name: Run focused UI regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/camera_transform_ui_smoke_v078.gd 2>&1 | tee /tmp/camera.log
+          grep -F 'CAMERA_TRANSFORM_078_SMOKE_OK' /tmp/camera.log
+          if grep -Eq 'SCRIPT ERROR|Parse Error|CAMERA_TRANSFORM_078_SMOKE_FAIL' /tmp/camera.log; then exit 1; fi
+          godot --headless --path . --script res://tests/ui_controls_smoke_v081.gd 2>&1 | tee /tmp/ui.log
+          grep -F 'UI_CONTROLS_081_SMOKE_OK' /tmp/ui.log
+          if grep -Eq 'SCRIPT ERROR|Parse Error|UI_CONTROLS_081_SMOKE_FAIL' /tmp/ui.log; then exit 1; fi

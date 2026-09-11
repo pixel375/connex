@@ -34,8 +34,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -F 'res://scripts/main_v079.gd' Main.tscn
-          grep -F 'const VERSION_079 := "0.5.21"' scripts/main_v079.gd
+          grep -F 'res://scripts/main_v080.gd' Main.tscn
+          grep -F 'const VERSION_080 := "0.5.21"' scripts/main_v080.gd
           grep -F 'boot_splash/show_image=false' project.godot
           grep -F '3d/physics_engine="JoltPhysics3D"' project.godot
           grep -F 'export_path="build/Connex-v0.5.21.apk"' export_presets.cfg
@@ -85,7 +85,7 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p "$HOME/.android"
-          keytool -genkeypair -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Connex,C=CA"
+          keytool -genkeypair -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Connex,C=CA"
           mkdir -p "$HOME/.config/godot"
           cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
           [gd_resource type="EditorSettings" format=3]
@@ -133,7 +133,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed -Ei 's/main_v[0-9]+\.gd/main_v079.gd/g' \
+          sed -Ei 's/main_v[0-9]+\.gd/main_v080.gd/g' \
             tests/editor_chunk2_smoke_v050.gd \
             tests/editor_correctness_smoke_v051.gd \
             tests/o_ring_mixed_stability_smoke_v063.gd \
@@ -144,7 +144,7 @@ jobs:
             tests/cross_socket_midpoint_slide_smoke_v074.gd \
             tests/attach_pick_undo_spatial_cross_smoke_v075.gd \
             tests/attach_selection_oring_overlay_reconnect_smoke_v076.gd || true
-          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v079.gd")/g' \
+          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v080.gd")/g' \
             tests/editor_reliability_smoke_v052.gd \
             tests/editor_touch_attach_smoke_v053.gd \
             tests/editor_autoattach_selection_smoke_v054.gd \

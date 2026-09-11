@@ -1,4 +1,4 @@
-name: v0.5.20 Regression Smoke
+name: v0.5.21 Regression Smoke
 
 on:
   pull_request:
@@ -14,7 +14,7 @@ concurrency:
 jobs:
   reliability:
     runs-on: ubuntu-latest
-    timeout-minutes: 38
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -31,18 +31,11 @@ jobs:
           sudo install -m 0755 "$GODOT_BIN" /usr/local/bin/godot
           godot --version
 
-      - name: Parse project
+      - name: Prepare current-runtime smoke tests
         shell: bash
         run: |
           set -euo pipefail
-          godot --headless --path . --editor --quit 2>&1 | tee /tmp/godot-editor.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|Failed to load script" /tmp/godot-editor.log; then exit 1; fi
-
-      - name: Prepare descendant-runtime smoke tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v076.gd")/g' \
+          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v079.gd")/g' \
             tests/editor_reliability_smoke_v052.gd \
             tests/editor_touch_attach_smoke_v053.gd \
             tests/editor_autoattach_selection_smoke_v054.gd \
@@ -55,127 +48,51 @@ jobs:
             tests/strict_autoconnect_no_warp_smoke_v510.gd \
             tests/structure_rigidity_smoke_v061.gd \
             tests/rigidity_live_axle_smoke_v062.gd || true
-          sed -Ei 's/main_v[0-9]+\.gd/main_v076.gd/g' \
+          sed -Ei 's/main_v[0-9]+\.gd/main_v079.gd/g' \
             tests/o_ring_mixed_stability_smoke_v063.gd \
             tests/axle_o_ring_video_stability_smoke_v064.gd \
-            tests/editor_socket_workflows_smoke_v070.gd || true
+            tests/editor_socket_workflows_smoke_v070.gd \
+            tests/axle_cross_stop_roundtrip_smoke_v072.gd \
+            tests/legacy_axle_corrupt_save_repair_smoke_v074.gd \
+            tests/cross_socket_midpoint_slide_smoke_v074.gd \
+            tests/attach_pick_undo_spatial_cross_smoke_v075.gd \
+            tests/attach_selection_oring_overlay_reconnect_smoke_v076.gd || true
 
-      - name: Run v0.5.2 interaction reliability smoke
+      - name: Parse project
         shell: bash
         run: |
           set -euo pipefail
-          godot --headless --path . --script res://tests/editor_reliability_smoke_v052.gd 2>&1 | tee /tmp/editor-052-smoke.log
-          grep -F 'EDITOR_052_SMOKE_OK' /tmp/editor-052-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_052_SMOKE_FAIL" /tmp/editor-052-smoke.log; then exit 1; fi
+          godot --headless --path . --editor --quit 2>&1 | tee /tmp/godot-editor.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|Failed to load script" /tmp/godot-editor.log; then exit 1; fi
 
-      - name: Run v0.5.3 touch attachment smoke
+      - name: Run retained reliability and physics suite
         shell: bash
         run: |
           set -euo pipefail
-          godot --headless --path . --script res://tests/editor_touch_attach_smoke_v053.gd 2>&1 | tee /tmp/editor-053-smoke.log
-          grep -F 'EDITOR_053_SMOKE_OK' /tmp/editor-053-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_053_SMOKE_FAIL" /tmp/editor-053-smoke.log; then exit 1; fi
-
-      - name: Run v0.5.4 auto-attach selection smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/editor_autoattach_selection_smoke_v054.gd 2>&1 | tee /tmp/editor-054-smoke.log
-          grep -F 'EDITOR_054_SMOKE_OK' /tmp/editor-054-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_054_SMOKE_FAIL" /tmp/editor-054-smoke.log; then exit 1; fi
-
-      - name: Run superseded v0.5.5 geometry regression
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/editor_geometry_snap_smoke_v055.gd 2>&1 | tee /tmp/editor-055-smoke.log
-          grep -F 'EDITOR_055_SMOKE_OK' /tmp/editor-055-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_055_SMOKE_FAIL" /tmp/editor-055-smoke.log; then exit 1; fi
-
-      - name: Run v0.5.6 axle/camera compatibility smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/editor_autodock_camera_smoke_v056.gd 2>&1 | tee /tmp/editor-056-smoke.log
-          grep -F 'EDITOR_056_SMOKE_OK' /tmp/editor-056-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_056_SMOKE_FAIL" /tmp/editor-056-smoke.log; then exit 1; fi
-
-      - name: Run v0.5.7 immediate rod far-end auto-attach smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/rod_far_end_autoattach_smoke_v057.gd 2>&1 | tee /tmp/editor-057-smoke.log
-          grep -F 'EDITOR_057_SMOKE_OK' /tmp/editor-057-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_057_SMOKE_FAIL" /tmp/editor-057-smoke.log; then exit 1; fi
-
-      - name: Run v0.5.8 closed-loop socket simulation smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/socket_loop_simulation_smoke_v058.gd 2>&1 | tee /tmp/editor-058-smoke.log
-          grep -F 'EDITOR_058_SMOKE_OK' /tmp/editor-058-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_058_SMOKE_FAIL" /tmp/editor-058-smoke.log; then exit 1; fi
-
-      - name: Run v0.5.9 deterministic camera gesture smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/camera_gesture_smoke_v059.gd 2>&1 | tee /tmp/camera-059-smoke.log
-          grep -F 'CAMERA_059_SMOKE_OK' /tmp/camera-059-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|CAMERA_059_SMOKE_FAIL" /tmp/camera-059-smoke.log; then exit 1; fi
-
-      - name: Run v0.5.9 long physics stability smoke on current runtime
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/physics_stability_smoke_v059.gd 2>&1 | tee /tmp/physics-059-smoke.log
-          grep -F 'PHYSICS_059_SMOKE_OK' /tmp/physics-059-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|PHYSICS_059_SMOKE_FAIL" /tmp/physics-059-smoke.log; then exit 1; fi
-
-      - name: Run v0.5.10 strict auto-connect and no-warp smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/strict_autoconnect_no_warp_smoke_v510.gd 2>&1 | tee /tmp/strict-510-smoke.log
-          grep -F 'STRICT_510_SMOKE_OK' /tmp/strict-510-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|STRICT_510_SMOKE_FAIL" /tmp/strict-510-smoke.log; then exit 1; fi
-
-      - name: Run v0.5.11 structure rigidity smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/structure_rigidity_smoke_v061.gd 2>&1 | tee /tmp/rigidity-061-smoke.log
-          grep -F 'RIGIDITY_061_SMOKE_OK' /tmp/rigidity-061-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|RIGIDITY_061_SMOKE_FAIL" /tmp/rigidity-061-smoke.log; then exit 1; fi
-
-      - name: Run v0.5.12 live rigidity and axle gravity smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/rigidity_live_axle_smoke_v062.gd 2>&1 | tee /tmp/rigidity-axle-062-smoke.log
-          grep -F 'RIGIDITY_AXLE_062_SMOKE_OK' /tmp/rigidity-axle-062-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|RIGIDITY_AXLE_062_SMOKE_FAIL" /tmp/rigidity-axle-062-smoke.log; then exit 1; fi
-
-      - name: Run mixed-build O-Ring compatibility smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/o_ring_mixed_stability_smoke_v063.gd 2>&1 | tee /tmp/oring-stability-063-smoke.log
-          grep -F 'ORING_STABILITY_063_SMOKE_OK' /tmp/oring-stability-063-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|ORING_STABILITY_063_SMOKE_FAIL" /tmp/oring-stability-063-smoke.log; then exit 1; fi
-
-      - name: Run device-video axle O-Ring stability smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/axle_o_ring_video_stability_smoke_v064.gd 2>&1 | tee /tmp/axle-oring-video-064-smoke.log
-          grep -F 'AXLE_ORING_VIDEO_064_SMOKE_OK' /tmp/axle-oring-video-064-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|AXLE_ORING_VIDEO_064_SMOKE_FAIL" /tmp/axle-oring-video-064-smoke.log; then exit 1; fi
-
-      - name: Run v0.5.15 socket workflow smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --script res://tests/editor_socket_workflows_smoke_v070.gd 2>&1 | tee /tmp/editor-socket-070-smoke.log
-          grep -F 'EDITOR_SOCKET_070_SMOKE_OK' /tmp/editor-socket-070-smoke.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_SOCKET_070_SMOKE_FAIL" /tmp/editor-socket-070-smoke.log; then exit 1; fi
+          run_smoke() {
+            local script="$1" marker="$2" fail="$3" slug="$4"
+            godot --headless --path . --script "res://tests/${script}" 2>&1 | tee "/tmp/${slug}.log"
+            grep -F "$marker" "/tmp/${slug}.log"
+            if grep -Eq "SCRIPT ERROR|Parse Error|${fail}" "/tmp/${slug}.log"; then exit 1; fi
+          }
+          run_smoke editor_reliability_smoke_v052.gd EDITOR_052_SMOKE_OK EDITOR_052_SMOKE_FAIL editor-052
+          run_smoke editor_touch_attach_smoke_v053.gd EDITOR_053_SMOKE_OK EDITOR_053_SMOKE_FAIL editor-053
+          run_smoke editor_autoattach_selection_smoke_v054.gd EDITOR_054_SMOKE_OK EDITOR_054_SMOKE_FAIL editor-054
+          run_smoke editor_geometry_snap_smoke_v055.gd EDITOR_055_SMOKE_OK EDITOR_055_SMOKE_FAIL editor-055
+          run_smoke editor_autodock_camera_smoke_v056.gd EDITOR_056_SMOKE_OK EDITOR_056_SMOKE_FAIL editor-056
+          run_smoke rod_far_end_autoattach_smoke_v057.gd EDITOR_057_SMOKE_OK EDITOR_057_SMOKE_FAIL editor-057
+          run_smoke socket_loop_simulation_smoke_v058.gd EDITOR_058_SMOKE_OK EDITOR_058_SMOKE_FAIL socket-loop-058
+          run_smoke camera_gesture_smoke_v059.gd CAMERA_059_SMOKE_OK CAMERA_059_SMOKE_FAIL camera-059
+          run_smoke physics_stability_smoke_v059.gd PHYSICS_059_SMOKE_OK PHYSICS_059_SMOKE_FAIL physics-059
+          run_smoke strict_autoconnect_no_warp_smoke_v510.gd STRICT_510_SMOKE_OK STRICT_510_SMOKE_FAIL strict-510
+          run_smoke structure_rigidity_smoke_v061.gd RIGIDITY_061_SMOKE_OK RIGIDITY_061_SMOKE_FAIL rigidity-061
+          run_smoke rigidity_live_axle_smoke_v062.gd RIGIDITY_AXLE_062_SMOKE_OK RIGIDITY_AXLE_062_SMOKE_FAIL rigidity-axle-062
+          run_smoke o_ring_mixed_stability_smoke_v063.gd ORING_STABILITY_063_SMOKE_OK ORING_STABILITY_063_SMOKE_FAIL oring-063
+          run_smoke axle_o_ring_video_stability_smoke_v064.gd AXLE_ORING_VIDEO_064_SMOKE_OK AXLE_ORING_VIDEO_064_SMOKE_FAIL oring-064
+          run_smoke editor_socket_workflows_smoke_v070.gd EDITOR_SOCKET_070_SMOKE_OK EDITOR_SOCKET_070_SMOKE_FAIL socket-070
+          run_smoke axle_cross_stop_roundtrip_smoke_v072.gd AXLE_CROSS_ROUNDTRIP_072_SMOKE_OK AXLE_CROSS_ROUNDTRIP_072_SMOKE_FAIL axle-cross-072
+          run_smoke legacy_axle_corrupt_save_repair_smoke_v074.gd LEGACY_AXLE_REPAIR_074_SMOKE_OK LEGACY_AXLE_REPAIR_074_SMOKE_FAIL legacy-074
+          run_smoke cross_socket_midpoint_slide_smoke_v074.gd CROSS_SOCKET_SLIDE_074_SMOKE_OK CROSS_SOCKET_SLIDE_074_SMOKE_FAIL cross-074
+          run_smoke attach_pick_undo_spatial_cross_smoke_v075.gd ATTACH_UNDO_SPATIAL_CROSS_075_SMOKE_OK ATTACH_UNDO_SPATIAL_CROSS_075_SMOKE_FAIL attach-075
+          run_smoke attach_selection_oring_overlay_reconnect_smoke_v076.gd EDITOR_076_SMOKE_OK EDITOR_076_SMOKE_FAIL reconnect-076
+          run_smoke camera_transform_ui_smoke_v078.gd CAMERA_TRANSFORM_078_SMOKE_OK CAMERA_TRANSFORM_078_SMOKE_FAIL camera-transform-078

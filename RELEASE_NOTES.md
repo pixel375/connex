@@ -1,31 +1,28 @@
-# Connex Lab v0.5.18
+# Connex Lab v0.5.19
 
-This release follows real-device testing of an older build save and fixes a migration failure that v0.5.17 did not fully recover. It also adds the requested inverse CROSS workflow for putting a rod through a connector socket at the rod midpoint and sliding that rod in BUILD.
+This release follows Android device testing of v0.5.18 and fixes three editor issues around ATTACH selection, Undo/Redo overlays, and CROSS placement on the 11-point/14-point spatial connector sockets.
 
-### Repair already-corrupted legacy AXLE saves
-Some v0.5.16-and-earlier saves could lose the original AXLE identity before v0.5.17 ever saw them. In those files, an AXLE hub/shaft pair could already be stored or reconstructed as a fixed/socket relationship. That causes two visible symptoms: the AXLE does not slide in SIMULATE, and BUILD movement can be rejected with `a rod end would leave its exact socket` even though the rod is visibly passing through the connector hub as an AXLE.
+### Precise ATTACH selection in crowded builds
+Connector attachment points no longer use the oversized 72–108 px capture regions that could steal a tap from a nearby rod. ATTACH picking is now body-aware with a much tighter marker radius. In AXLE and CROSS modes, when the physical ray lands on a rod, that exact rod shaft wins over nearby connector markers and the tapped shaft position is used.
 
-v0.5.18 adds a legacy-only recovery path for saves that do not yet contain the modern stable-UID AXLE table. It recognizes the unambiguous AXLE geometry — connector hub centered on the rod axis, connector hub axis aligned with the rod, and matching rigid/joint context — removes the false direct fixed/socket joint, recreates one canonical AXLE, and recalculates occupancy and connection metadata. Modern v0.5.17+ saves with explicit AXLE identity are never guessed from geometry.
+This keeps connector sockets easy to select while allowing rods that run close to dense connector clusters to remain selectable.
 
-After a legacy save is healed, saving it again writes the recovered AXLE relationships into the explicit stable-UID AXLE table, so subsequent loads no longer depend on migration inference.
+### Attachment points follow Undo/Redo immediately
+Undo, Redo and snapshot restore now explicitly invalidate and rebuild both the attachment spatial index and the visible attachment-point overlay after transforms are restored. Green/orange ATTACH markers therefore move back with the construction immediately instead of remaining at the previous rotation until another click or editor action.
 
-### CROSS rods through connector sockets
-CROSS mode now works in both directions. The existing behavior of placing a connector crosswise onto a rod remains. In CREATE with CROSS selected, tapping a free connector socket now inserts the currently selected rod through that socket with the socket positioned at the rod midpoint.
+### Correct CROSS direction on 11/14-point top and bottom sockets
+CROSS orientation is now based on the plane of the specific socket. The ordinary flat ring still places a CROSS rod perpendicular to the connector face. The top and bottom half-ring sockets on the 11-point and 14-point 3D connectors instead use the half-ring's own plane, so their CROSS rods run horizontally through those spatial sockets rather than incorrectly standing vertical.
 
-This is stored as a real CROSS connection to the exact clicked socket, not as a rod-end SOCKET connection. The connector socket is marked occupied and the rod is selected immediately after placement.
+The same socket-plane rule is used for direct CROSS creation, ATTACH snapping, validation, automatic CROSS detection, and saved connection rest geometry.
 
-### Slide CROSS rods in MOVE
-A rod that is mounted through one CROSS socket can now be repositioned along its own shaft in BUILD. In MOVE, the ordinary XYZ gizmo is replaced for that rod by one `SLIDE` axis aligned with the rod and drawn beside it for easier dragging. Movement uses the existing 0.5-unit snap, moves only the rod while the connector stays fixed, keeps the socket on the usable rod length, and updates the CROSS joint anchor/host offset as the rod moves.
-
-The connection remains an ordinary fixed CROSS joint during SIMULATE; the sliding behavior is an editing convenience, matching how the user positions a physical rod through a connector before running the simulation. Save/load preserves both the CROSS topology and the adjusted rod position.
+### Existing v0.5.18 fixes retained
+Legacy AXLE save healing, midpoint CROSS rod insertion, BUILD-time CROSS rod sliding, physical O-Ring behavior, AXLE/CROSS stop collision behavior and save/load repair remain in place.
 
 ### Regression coverage
-The release gates now include a deliberately corrupted legacy-save regression that turns AXLE relationships into the same false fixed/socket state, verifies the bad exact-socket constraint is removed, verifies BUILD axle slide works again, and verifies the healed save persists explicit AXLE identity.
-
-A second regression verifies CROSS + socket creates a midpoint rod, MOVE exposes the rod-axis slide gizmo beside it, dragging moves only the rod and updates the CROSS host offset, and the result survives save/load. The existing four-post AXLE/CROSS-stop regression is also retained, along with the prior O-Ring, closed-loop, rigidity, editor, and long-running physics tests.
+A new v0.5.19 gate verifies that a physical rod tap wins over nearby connector markers, Undo immediately rebuilds attachment points at the restored pose, ordinary planar CROSS placement remains correct, and both 11-point top and 14-point bottom spatial sockets use the proper horizontal CROSS direction. The legacy AXLE repair, midpoint CROSS slide, socket workflow, four-post AXLE/CROSS stop, O-Ring, closed-loop, rigidity and long-running physics regressions remain enabled.
 
 ### Android / update compatibility
-- Android versionCode: 42
-- Android versionName: `0.5.18`
+- Android versionCode: 43
+- Android versionName: `0.5.19`
 - package ID: `com.pixel375.connex`
 - permanent Connex signing certificate retained for in-place update compatibility.

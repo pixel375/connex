@@ -1,6 +1,6 @@
 extends SceneTree
 
-const MAIN := preload("res://scripts/main_v079.gd")
+const MAIN := preload("res://scripts/main_v080.gd")
 
 var app: Node
 var failed := false
@@ -18,7 +18,7 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 
-	if app.get_script() == null or not str(app.get_script().resource_path).ends_with("main_v079.gd"):
+	if app.get_script() == null or not str(app.get_script().resource_path).ends_with("main_v080.gd"):
 		_fail("final v0.5.21 runtime is not active")
 	if app.rotate_button_v032 == null or "TRANSFORM" not in app.rotate_button_v032.text:
 		_fail("ROTATE button was not replaced by TRANSFORM")
@@ -73,7 +73,12 @@ func _run() -> void:
 		_fail("UP control did not raise camera target")
 
 	var keep_y: float = app.camera_target.y
-	app._pan_camera(Vector2(20.0, 12.0))
+	app.camera_distance = 400.0
+	var pan_before: Vector3 = app.camera_target
+	app._pan_camera(Vector2(100.0, 100.0))
+	var pan_distance: float = pan_before.distance_to(app.camera_target)
+	if pan_distance <= 0.01 or pan_distance > 55.0:
+		_fail("high-zoom two-finger pan lost its bounded speed: %.3f" % pan_distance)
 	if absf(app.camera_target.y - keep_y) > 0.001:
 		_fail("two-finger pan erased camera elevation")
 
@@ -101,7 +106,7 @@ func _run() -> void:
 	if failed:
 		quit(1)
 		return
-	print("CAMERA_TRANSFORM_078_SMOKE_OK: unified transform, ITEM/WORLD compact controls, analog camera navigation, Center focus and scroll-safe menus verified")
+	print("CAMERA_TRANSFORM_078_SMOKE_OK: unified transform, ITEM/WORLD compact controls, analog camera navigation, bounded elevation-preserving pan, Center focus and scroll-safe menus verified")
 	quit(0)
 
 func _find_scroll(node: Node) -> ScrollContainer:

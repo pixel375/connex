@@ -85,7 +85,7 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p "$HOME/.android"
-          keytool -genkeypair -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Connex,C=CA"
+          keytool -genkeypair -v -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Connex,C=CA"
           mkdir -p "$HOME/.config/godot"
           cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
           [gd_resource type="EditorSettings" format=3]
@@ -240,7 +240,7 @@ jobs:
           path: |
             build/${{ env.APK_NAME }}
             build/${{ env.APK_NAME }}.sha256
-            build/${{ env.APK_NAME }}.signing.txt
+            build/${{ env.APK_NAME}.signing.txt
           if-no-files-found: error
 
   release:

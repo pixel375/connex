@@ -1,35 +1,44 @@
-# Connex Lab v0.5.20
+# Connex Lab v0.5.21
 
-This release follows Android device testing of v0.5.19 and fixes four editor/workflow regressions around ATTACH selection, O-Ring palette behavior, attachment-marker tracking, and reconnecting multi-rod connectors.
+This release redesigns camera navigation and the transform editor for touch screens while keeping the existing connection and physics behavior intact.
 
-### Select pieces normally while ATTACH is active
-The top **Select** action now takes priority over attachment-point picking when ATTACH mode is active. Press Select, tap the connector/rod/O-Ring you actually want, and the one-shot piece selection completes normally. ATTACH point picking resumes immediately afterward.
+### Analog construction camera
+A translucent analog joystick now sits inside the lower-left of the usable 3D viewport. It moves the camera forward/back/left/right relative to the current view heading with full analog input rather than fixed camera steps.
 
-This fixes the case where ATTACH allowed green/orange points to be selected but prevented changing which physical connector was highlighted/selected.
+The camera's orbit target moves together with this translation, so subsequent look/orbit gestures keep working around the place you actually navigated to instead of circling an old point behind the camera.
 
-### O-Ring selection no longer blocks ordinary rod creation
-O-Ring Stop remains a special rod-mounted part, but selecting it in the connector palette no longer hijacks normal SOCKET creation. In CREATE + SOCKET, tapping a free connector socket still creates the currently selected rod exactly like it does when any ordinary connector is selected. Tapping an appropriate rod still follows the O-Ring placement path.
+Two holdable **UP / DOWN** controls on the right edge provide camera elevation. Existing empty-space one-finger look/orbit, pinch zoom and two-finger pan remain available. Two-finger pan no longer resets camera elevation.
 
-### ATTACH markers now track the real build pose
-The attachment overlay now watches authoritative piece transforms while ATTACH is visible. If a piece or restored structure moves, the overlay is rebuilt from the current transforms rather than waiting for a later click to dirty the cache.
+### CREATE / TRANSFORM / ATTACH
+The separate ROTATE and MOVE modes are now one **TRANSFORM** mode. Translation arrows and 45-degree rotation rings are shown together on the selected construction, removing a mode switch from normal editing.
 
-Old marker nodes are removed from the overlay immediately before rebuilding, so markers cannot remain visually suspended at a pre-Restore/pre-movement position for an extra frame. Restore and the return from SIMULATE also explicitly force a rebuild.
+The old MOVE mode remains internally compatible with older save/editor code and retained regressions, including the dedicated CROSS-rod SLIDE gizmo.
 
-### Multi-rod reconnect now restores the other aligned rods
-This fixes a recurring disconnect/reconnect bug. **Disconnect Selected** intentionally prevents every former connector/rod pair from immediately auto-fusing while the pieces are still touching. Previously, explicitly reconnecting one rod cleared that protection only for the one pair clicked. If the connector originally had two or more rods, the other rods stayed permanently excluded from auto-connect even after the connector had snapped back into the exact original position.
+### Cleaner transform UI
+The old right-side ROTATE and MOVE panels with duplicate X/Y/Z step buttons are retired. Those axes are already represented by the on-piece gizmos.
 
-A successful explicit SOCKET reconnect now releases the old detach quarantine for that connector only, then runs the existing commit-time auto-connect pass. Any other free rod ends that are still geometrically aligned with free sockets on that same connector reconnect in the same edit/Undo step. Unrelated intentional disconnects elsewhere in the construction remain blocked.
+A compact expandable **TRANSFORM** card keeps only the controls that still add something useful:
+- ITEM / WORLD transform-space toggle
+- mount-relative Roll − / Roll +
+- Reset Placement Rotation
+- axle Slide − / Slide +
+
+The left editor toolbar is also condensed to CREATE / TRANSFORM / ATTACH plus the existing contextual disconnect/delete/deselect actions.
+
+### Better Center behavior
+**Center** now focuses the currently selected piece. If nothing is selected, it frames the whole construction. Holding Center performs a full camera heading, pitch and distance reset.
+
+### Touch scrolling no longer activates items on release
+Scrollable menus now use a larger touch drag deadzone and allow their child cards/buttons to pass drag gestures to the parent ScrollContainer. Starting a menu scroll over a button/card and releasing after the scroll therefore no longer activates the item underneath the finger.
 
 ### Existing fixes retained
-The v0.5.19 precise crowded ATTACH picking and 11/14-point spatial CROSS orientation remain active, along with legacy AXLE save healing, midpoint CROSS rod insertion/sliding, simplified physical O-Rings, deterministic AXLE/CROSS stops, save/load repair, closed-loop handling, and the existing physics stability work.
+v0.5.20 multi-rod reconnect repair, ATTACH selection, O-Ring socket creation and live attachment markers remain active. The v0.5.19 crowded ATTACH picking and spatial 11/14-point CROSS orientation, legacy AXLE save healing, midpoint CROSS insertion/sliding, physical O-Rings, deterministic AXLE/CROSS stops and save/load repair are also retained.
 
 ### Regression coverage
-The v0.5.20 gate reproduces the four Android reports directly: changing selected pieces while ATTACH is active; creating a rod from a free SOCKET while O-Ring Stop is selected; moving a connector and verifying its ATTACH markers immediately leave the old coordinates and appear at the new coordinates; and the exact two-rods → Disconnect Selected → reconnect one rod → second rod auto-reconnect sequence.
-
-The v0.5.19 ATTACH/spatial-CROSS regression, legacy AXLE repair, midpoint CROSS slide, socket workflow, O-Ring stability and four-post AXLE/CROSS stop roundtrip regressions are retained.
+The v0.5.21 gate verifies the unified transform layout, simultaneous movement/rotation gizmos, ITEM/WORLD control, analog camera translation, elevation, Center focus, viewport-safe control placement and scroll-safe menu cards. It also reruns the v0.5.20 reconnect/ATTACH regression, v0.5.19 spatial CROSS regression, CROSS slide, legacy AXLE repair, socket workflow, both O-Ring stability cases and the four-post AXLE/CROSS save/load roundtrip.
 
 ### Android / update compatibility
-- Android versionCode: 44
-- Android versionName: `0.5.20`
+- Android versionCode: 45
+- Android versionName: `0.5.21`
 - package ID: `com.pixel375.connex`
 - permanent Connex signing certificate retained for in-place update compatibility.

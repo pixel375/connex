@@ -1,4 +1,4 @@
-name: v0.5.19 Editor Fix Validation
+name: v0.5.20 Editor Reconnect Validation
 
 on:
   pull_request:
@@ -8,9 +8,9 @@ permissions:
   contents: read
 
 jobs:
-  editor-fixes:
+  editor-reconnect:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 24
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -27,14 +27,19 @@ jobs:
           sudo install -m 0755 "$GODOT_BIN" /usr/local/bin/godot
           godot --version
 
-      - name: Activate v0.5.19 candidate runtime
+      - name: Activate v0.5.20 candidate runtime
         shell: bash
         run: |
           set -euo pipefail
-          sed -i 's#res://scripts/main_v074.gd#res://scripts/main_v075.gd#g' Main.tscn
-          sed -Ei 's/main_v074\.gd/main_v075.gd/g' tests/cross_socket_midpoint_slide_smoke_v074.gd tests/legacy_axle_corrupt_save_repair_smoke_v074.gd || true
-          sed -Ei 's/main_v072\.gd/main_v075.gd/g' tests/axle_cross_stop_roundtrip_smoke_v072.gd || true
-          sed -Ei 's/main_v[0-9]+\.gd/main_v075.gd/g' tests/editor_socket_workflows_smoke_v070.gd || true
+          sed -Ei 's#res://scripts/main_v[0-9]+\.gd#res://scripts/main_v076.gd#g' Main.tscn
+          sed -Ei 's/main_v[0-9]+\.gd/main_v076.gd/g' \
+            tests/attach_pick_undo_spatial_cross_smoke_v075.gd \
+            tests/cross_socket_midpoint_slide_smoke_v074.gd \
+            tests/legacy_axle_corrupt_save_repair_smoke_v074.gd \
+            tests/axle_cross_stop_roundtrip_smoke_v072.gd \
+            tests/editor_socket_workflows_smoke_v070.gd \
+            tests/o_ring_mixed_stability_smoke_v063.gd \
+            tests/axle_o_ring_video_stability_smoke_v064.gd || true
 
       - name: Parse project
         shell: bash
@@ -43,42 +48,61 @@ jobs:
           godot --headless --path . --editor --quit 2>&1 | tee /tmp/godot-editor.log
           if grep -Eq "SCRIPT ERROR|Parse Error|Failed to load script" /tmp/godot-editor.log; then exit 1; fi
 
-      - name: Verify precise ATTACH picking Undo refresh and spatial CROSS
+      - name: Verify ATTACH selection O-Ring create live markers and multi-rod reconnect
         shell: bash
         run: |
           set -euo pipefail
-          godot --headless --path . --script res://tests/attach_pick_undo_spatial_cross_smoke_v075.gd 2>&1 | tee /tmp/editor-fixes-075.log
-          grep -F 'ATTACH_UNDO_SPATIAL_CROSS_075_SMOKE_OK' /tmp/editor-fixes-075.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|ATTACH_UNDO_SPATIAL_CROSS_075_SMOKE_FAIL" /tmp/editor-fixes-075.log; then exit 1; fi
+          godot --headless --path . --script res://tests/attach_selection_oring_overlay_reconnect_smoke_v076.gd 2>&1 | tee /tmp/editor-076.log
+          grep -F 'EDITOR_076_SMOKE_OK' /tmp/editor-076.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_076_SMOKE_FAIL" /tmp/editor-076.log; then exit 1; fi
+
+      - name: Re-run v0.5.19 ATTACH and spatial CROSS regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/attach_pick_undo_spatial_cross_smoke_v075.gd 2>&1 | tee /tmp/editor-fixes-075-on-076.log
+          grep -F 'ATTACH_UNDO_SPATIAL_CROSS_075_SMOKE_OK' /tmp/editor-fixes-075-on-076.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|ATTACH_UNDO_SPATIAL_CROSS_075_SMOKE_FAIL" /tmp/editor-fixes-075-on-076.log; then exit 1; fi
 
       - name: Re-run legacy AXLE repair
         shell: bash
         run: |
           set -euo pipefail
-          godot --headless --path . --script res://tests/legacy_axle_corrupt_save_repair_smoke_v074.gd 2>&1 | tee /tmp/legacy-axle-074-on-075.log
-          grep -F 'LEGACY_AXLE_REPAIR_074_SMOKE_OK' /tmp/legacy-axle-074-on-075.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|LEGACY_AXLE_REPAIR_074_SMOKE_FAIL" /tmp/legacy-axle-074-on-075.log; then exit 1; fi
+          godot --headless --path . --script res://tests/legacy_axle_corrupt_save_repair_smoke_v074.gd 2>&1 | tee /tmp/legacy-axle-074-on-076.log
+          grep -F 'LEGACY_AXLE_REPAIR_074_SMOKE_OK' /tmp/legacy-axle-074-on-076.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|LEGACY_AXLE_REPAIR_074_SMOKE_FAIL" /tmp/legacy-axle-074-on-076.log; then exit 1; fi
 
       - name: Re-run CROSS midpoint slide regression
         shell: bash
         run: |
           set -euo pipefail
-          godot --headless --path . --script res://tests/cross_socket_midpoint_slide_smoke_v074.gd 2>&1 | tee /tmp/cross-slide-074-on-075.log
-          grep -F 'CROSS_SOCKET_SLIDE_074_SMOKE_OK' /tmp/cross-slide-074-on-075.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|CROSS_SOCKET_SLIDE_074_SMOKE_FAIL" /tmp/cross-slide-074-on-075.log; then exit 1; fi
+          godot --headless --path . --script res://tests/cross_socket_midpoint_slide_smoke_v074.gd 2>&1 | tee /tmp/cross-slide-074-on-076.log
+          grep -F 'CROSS_SOCKET_SLIDE_074_SMOKE_OK' /tmp/cross-slide-074-on-076.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|CROSS_SOCKET_SLIDE_074_SMOKE_FAIL" /tmp/cross-slide-074-on-076.log; then exit 1; fi
 
       - name: Re-run socket workflow regression
         shell: bash
         run: |
           set -euo pipefail
-          godot --headless --path . --script res://tests/editor_socket_workflows_smoke_v070.gd 2>&1 | tee /tmp/socket-workflow-070-on-075.log
-          grep -F 'EDITOR_SOCKET_070_SMOKE_OK' /tmp/socket-workflow-070-on-075.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_SOCKET_070_SMOKE_FAIL" /tmp/socket-workflow-070-on-075.log; then exit 1; fi
+          godot --headless --path . --script res://tests/editor_socket_workflows_smoke_v070.gd 2>&1 | tee /tmp/socket-workflow-070-on-076.log
+          grep -F 'EDITOR_SOCKET_070_SMOKE_OK' /tmp/socket-workflow-070-on-076.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|EDITOR_SOCKET_070_SMOKE_FAIL" /tmp/socket-workflow-070-on-076.log; then exit 1; fi
+
+      - name: Re-run O-Ring compatibility regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . --script res://tests/o_ring_mixed_stability_smoke_v063.gd 2>&1 | tee /tmp/oring-063-on-076.log
+          grep -F 'ORING_STABILITY_063_SMOKE_OK' /tmp/oring-063-on-076.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|ORING_STABILITY_063_SMOKE_FAIL" /tmp/oring-063-on-076.log; then exit 1; fi
+          godot --headless --path . --script res://tests/axle_o_ring_video_stability_smoke_v064.gd 2>&1 | tee /tmp/oring-video-064-on-076.log
+          grep -F 'AXLE_ORING_VIDEO_064_SMOKE_OK' /tmp/oring-video-064-on-076.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|AXLE_ORING_VIDEO_064_SMOKE_FAIL" /tmp/oring-video-064-on-076.log; then exit 1; fi
 
       - name: Re-run four-post AXLE CROSS stop roundtrip
         shell: bash
         run: |
           set -euo pipefail
-          godot --headless --path . --script res://tests/axle_cross_stop_roundtrip_smoke_v072.gd 2>&1 | tee /tmp/axle-cross-072-on-075.log
-          grep -F 'AXLE_CROSS_ROUNDTRIP_072_SMOKE_OK' /tmp/axle-cross-072-on-075.log
-          if grep -Eq "SCRIPT ERROR|Parse Error|AXLE_CROSS_ROUNDTRIP_072_SMOKE_FAIL" /tmp/axle-cross-072-on-075.log; then exit 1; fi
+          godot --headless --path . --script res://tests/axle_cross_stop_roundtrip_smoke_v072.gd 2>&1 | tee /tmp/axle-cross-072-on-076.log
+          grep -F 'AXLE_CROSS_ROUNDTRIP_072_SMOKE_OK' /tmp/axle-cross-072-on-076.log
+          if grep -Eq "SCRIPT ERROR|Parse Error|AXLE_CROSS_ROUNDTRIP_072_SMOKE_FAIL" /tmp/axle-cross-072-on-076.log; then exit 1; fi

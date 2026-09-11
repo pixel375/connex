@@ -1,45 +1,38 @@
-# Connex Lab v0.5.22
+# Connex Lab v0.5.23
 
-This release is a touch-control and interface pass on top of v0.5.21. The existing SOCKET, AXLE, CROSS, O-Ring, save/load and simulation mechanics are retained.
+This is a focused UI and ATTACH-selection correction pass on top of v0.5.22. SOCKET, AXLE, CROSS, O-Ring, save/load and simulation mechanics are unchanged.
 
-### Camera controls
-- The movement joystick and UP/DOWN elevation controls now own separate touch IDs, so horizontal movement and elevation work at the same time with two fingers.
-- The joystick is slightly larger and moved farther right so it no longer crowds the left editor toolbar.
-- UP/DOWN are enlarged to roughly 2.4× their previous width/height for easier phone use.
-- Touch pinch zoom and two-finger camera pan are disabled. One-finger viewport orbit remains the camera touch gesture.
-- Desktop mouse camera controls remain available for testing.
+### Menu close buttons
+- Options, Help, Parts, Save & Load and Physics now use compact square X controls fixed to the upper-right corner of the menu frame.
+- The X controls live outside scrollable menu content, so they no longer move when the menu is scrolled.
+- The old long blue inline X rows are retired.
 
-### Transform controls
-- The right TRANSFORM card is smaller and no longer collapses.
-- Its TRANSFORM header, long ITEM/WORLD description, MOUNT ROLL title and duplicate Axle Slide row are removed.
-- The compact ITEM/WORLD toggle remains available, followed directly by Roll − / Roll + and Reset Rotation.
-- The card has an X close button and reopens when TRANSFORM is pressed again.
-- Move arrows are 65% larger than the rotation rings, including their hit area, so moving and rotating are visually distinct.
+### Top toolbar cleanup
+- The obsolete status text remains hidden and its leftover frame/background is removed.
+- Select and Simulate now use the same neutral grey button style as the rest of the toolbar while inactive.
+- Select turns blue only while one-shot Select is armed.
+- Simulate turns blue only while simulation is active.
+- Delete remains neutral grey and never uses the active blue state.
+- Top toolbar glyphs are slightly larger for easier touch use.
 
-### Left and top toolbars
-- Left utility actions are now simply **Disconnect** and **Deselect**; the redundant Deselect Point control is removed because Deselect already clears an ATTACH point.
-- Delete moved from the left toolbar to the top bar.
-- The status strip was removed from the top bar and the bar was enlarged.
-- Exact top layout: **Select, Center | Undo, Redo | Simulate, Restore | Restart, Delete | Options**.
-- The top actions use square icon-style buttons; Select and Simulate highlight only while active.
-- Restart and Delete now show confirmation dialogs with Cancel.
-- Help moved from the top-level `?` into Options.
+### Transform panel
+- The compact right Transform card no longer has an X button.
+- It cannot be hidden while Transform mode is active.
+- ITEM/WORLD, Roll − / Roll + and Reset Rotation remain available.
 
-### Options and menus
-- The first three Options entries are now **Physics / Save & Load / Help**.
-- Structure Rigidity moved from general Options to the top of Physics without creating a duplicate setting.
-- Reset Physics continues to reset Structure Rigidity to its Connex default (92%) together with the other physics controls.
-- Options, Help, Parts, Save & Load, Physics and the compact Transform card all have an X close button.
+### Deselect / ATTACH behavior
+- The left utility area remains only **Disconnect** and **Deselect**.
+- The inherited **Deselect Point** button is force-retired so it cannot reappear during attachment-marker refreshes.
+- **Deselect** is now context-aware: when an ATTACH point is selected it clears that point first; otherwise it clears the selected piece.
+- Deselect stays enabled for an active ATTACH point even when no piece is currently selected.
+- Tapping empty background while an ATTACH point is selected now clears that point without clearing the piece selection.
 
-### Bottom parts bar
-- The Parts/Mode title is removed and the bottom bar is slightly larger.
-- Parts is represented by a tool icon.
-- Rod and connector previous/next controls are plain left/right arrows.
-- The selected rod and connector are shown as live procedural 3D renderings instead of text names, using the same geometry path as the Parts browser.
-- SOCKET / AXLE / CROSS remain centered text inside the connection-mode control for clarity.
+### Camera / icon polish
+- The movement joystick is shifted farther right again to provide more clearance from the left editor menu.
+- Bottom Parts and previous/next icon glyphs are slightly larger.
 
 ### Android / update compatibility
-- Android versionCode: 46
-- Android versionName: `0.5.22`
+- Android versionCode: 47
+- Android versionName: `0.5.23`
 - package ID: `com.pixel375.connex`
 - permanent Connex signing certificate retained for in-place update compatibility.

@@ -34,10 +34,10 @@ This update focuses on touch usability, clearer editing feedback, attachment wor
 
 ### BUILD-mode performance
 - Removed expensive connection/rotation validity calculations that were still running for retired hidden rotation controls after ordinary UI refreshes.
-- Removed six unnecessary whole-construction trial rotations that were previously performed simply to color the visible X/Y/Z rotation gizmo. Rotation remains fully validated when the user actually drags it.
+- Removed unnecessary whole-construction trial rotations that were previously performed simply to color or update retired/hidden rotation controls. Rotation remains fully validated when the user actually drags it.
 - Normal auto-connect processing now focuses on pieces that actually changed instead of repeatedly scanning every rod against every connector after each edit.
 - A complete whole-build connection pass is still retained before SIMULATE and after removals, preserving connection correctness while avoiding the expensive repeated BUILD-mode scans.
-- ATTACH marker pose fallback polling is throttled instead of allocating and comparing every piece transform every rendered frame; explicit edits continue to invalidate markers immediately.
+- Immediate live ATTACH marker tracking is preserved; the performance work deliberately targets the expensive graph/rotation scans rather than delaying marker updates.
 - Parts-browser card refreshes remove old controls immediately rather than keeping duplicate queued card trees alive until the end of the frame.
 
 ### Physics and compatibility

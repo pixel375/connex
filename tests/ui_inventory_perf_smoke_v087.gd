@@ -90,11 +90,19 @@ func _run() -> void:
 	if app.roll_minus_v035 != null or app.roll_plus_v035 != null or app.reset_rotation_v035 != null:
 		_fail("retired legacy rotation controls are still attached to the hot UI path")
 
-	# ATTACH pose polling is intentionally throttled; explicit edits still dirty the
-	# overlay immediately, but a second passive check inside the throttle window is skipped.
-	app.next_attach_pose_check_ms_v086 = Time.get_ticks_msec() + 10000
-	if app._sync_attach_overlay_pose_v076(false):
-		_fail("ATTACH pose polling ignored the v0.5.24 throttle")
+	# Direct/uncommitted body movement must still invalidate ATTACH markers
+	# immediately; the performance pass must not trade away editor correctness.
+	app._set_editor_mode_v032(2, false)
+	app.attach_mode = 0
+	var overlay_host := app._make_connector(6, Transform3D(Basis.IDENTITY, Vector3(26.0, 7.0, 20.0))) as RigidBody3D
+	if not is_instance_valid(overlay_host):
+		_fail("could not create ATTACH marker test connector")
+	else:
+		app._sync_attach_overlay_pose_v076(true)
+		overlay_host.global_position += Vector3(1.5, 0.4, -0.8)
+		overlay_host.set_meta("build_transform", overlay_host.global_transform)
+		if not app._sync_attach_overlay_pose_v076(false):
+			_fail("direct body movement did not immediately dirty the ATTACH overlay")
 
 	app._snapshot_autofuse_bodies_v086()
 	var change_info: Dictionary = app._changed_autofuse_bodies_v086()
@@ -104,5 +112,5 @@ func _run() -> void:
 	if failed:
 		quit(1)
 		return
-	print("UI_PERF_087_SMOKE_OK: save confirmation, live Parts inventory, Undo deselection and optimized build-mode paths verified")
+	print("UI_PERF_087_SMOKE_OK: save confirmation, live Parts inventory, Undo deselection, immediate ATTACH sync and optimized build-mode paths verified")
 	quit(0)

@@ -52,3 +52,25 @@ func _update_rotation_fallback_buttons_v042(enabled: bool) -> void:
 		var button := button_value as Button
 		if button != null:
 			button.disabled = not enabled
+
+
+# Preserve immediate ATTACH marker tracking. v0.5.24's performance work targets
+# the expensive graph/rotation scans instead; direct body edits must move their
+# attachment markers in the same update, matching the established v0.5.20 behavior.
+func _sync_attach_overlay_pose_v076(force_refresh: bool = false) -> bool:
+	var current: Dictionary = _attach_pose_snapshot_v076()
+	var changed: bool = force_refresh or current.size() != attach_pose_cache_v076.size()
+	if not changed:
+		for id_value in current.keys():
+			if not attach_pose_cache_v076.has(id_value):
+				changed = true
+				break
+			var now_tf: Transform3D = current[id_value] as Transform3D
+			var old_tf: Transform3D = attach_pose_cache_v076[id_value] as Transform3D
+			if not now_tf.is_equal_approx(old_tf):
+				changed = true
+				break
+	attach_pose_cache_v076 = current
+	if changed:
+		_invalidate_attach_overlay_v075()
+	return changed

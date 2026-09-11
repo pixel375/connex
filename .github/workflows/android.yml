@@ -16,10 +16,10 @@ concurrency:
 env:
   GODOT_VERSION: 4.6.3
   GODOT_TAG: 4.6.3-stable
-  APP_VERSION: 0.5.22
-  APP_VERSION_CODE: 46
-  APK_NAME: Connex-v0.5.22.apk
-  ARTIFACT_NAME: Connex-Android-v0.5.22
+  APP_VERSION: 0.5.23
+  APP_VERSION_CODE: 47
+  APK_NAME: Connex-v0.5.23.apk
+  ARTIFACT_NAME: Connex-Android-v0.5.23
   EXPECTED_RELEASE_CERT_SHA256: BF:CD:2B:59:70:91:E4:AA:FE:4F:27:93:FD:14:A7:9A:2A:D4:94:0D:D1:06:9D:18:74:9C:E7:A9:99:50:D4:22
 
 jobs:
@@ -34,13 +34,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -F 'res://scripts/main_v081.gd' Main.tscn
-          grep -F 'const VERSION_081 := "0.5.22"' scripts/main_v081.gd
+          grep -F 'res://scripts/main_v082.gd' Main.tscn
+          grep -F 'const VERSION_082 := "0.5.23"' scripts/main_v082.gd
           grep -F 'boot_splash/show_image=false' project.godot
           grep -F '3d/physics_engine="JoltPhysics3D"' project.godot
-          grep -F 'export_path="build/Connex-v0.5.22.apk"' export_presets.cfg
-          grep -F 'version/code=46' export_presets.cfg
-          grep -F 'version/name="0.5.22"' export_presets.cfg
+          grep -F 'export_path="build/Connex-v0.5.23.apk"' export_presets.cfg
+          grep -F 'version/code=47' export_presets.cfg
+          grep -F 'version/name="0.5.23"' export_presets.cfg
           grep -F 'package/unique_name="com.pixel375.connex"' export_presets.cfg
           grep -F "\`$EXPECTED_RELEASE_CERT_SHA256\`" SIGNING.md
 
@@ -133,7 +133,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed -Ei 's/main_v[0-9]+\.gd/main_v081.gd/g' \
+          sed -Ei 's/main_v[0-9]+\.gd/main_v082.gd/g' \
             tests/editor_chunk2_smoke_v050.gd \
             tests/editor_correctness_smoke_v051.gd \
             tests/o_ring_mixed_stability_smoke_v063.gd \
@@ -144,7 +144,7 @@ jobs:
             tests/cross_socket_midpoint_slide_smoke_v074.gd \
             tests/attach_pick_undo_spatial_cross_smoke_v075.gd \
             tests/attach_selection_oring_overlay_reconnect_smoke_v076.gd || true
-          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v081.gd")/g' \
+          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v082.gd")/g' \
             tests/editor_reliability_smoke_v052.gd \
             tests/editor_touch_attach_smoke_v053.gd \
             tests/editor_autoattach_selection_smoke_v054.gd \
@@ -157,7 +157,7 @@ jobs:
             tests/strict_autoconnect_no_warp_smoke_v510.gd \
             tests/structure_rigidity_smoke_v061.gd \
             tests/rigidity_live_axle_smoke_v062.gd || true
-          # v0.5.22 keeps the legacy XYZ panels retired. Keep the historical
+          # v0.5.23 keeps the legacy XYZ panels retired. Keep the historical
           # reliability test for everything else, but adapt those old assertions.
           sed -i 's/if not rotation_panel.visible or move_panel.visible:/if rotation_panel.visible or move_panel.visible:/' tests/editor_reliability_smoke_v052.gd
           sed -i 's/if rotation_panel.visible or not move_panel.visible:/if rotation_panel.visible or move_panel.visible:/' tests/editor_reliability_smoke_v052.gd
@@ -171,7 +171,7 @@ jobs:
           godot --headless --path . --quit-after 2 2>&1 | tee /tmp/godot-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|Failed to load script" /tmp/godot-smoke.log; then exit 1; fi
 
-      - name: Run complete regression suite through v0.5.22
+      - name: Run complete regression suite through v0.5.23
         shell: bash
         run: |
           set -euo pipefail
@@ -212,6 +212,7 @@ jobs:
           run_smoke attach_pick_undo_spatial_cross_smoke_v075.gd ATTACH_UNDO_SPATIAL_CROSS_075_SMOKE_OK ATTACH_UNDO_SPATIAL_CROSS_075_SMOKE_FAIL editor-fixes-075
           run_smoke attach_selection_oring_overlay_reconnect_smoke_v076.gd EDITOR_076_SMOKE_OK EDITOR_076_SMOKE_FAIL editor-reconnect-076
           run_smoke camera_transform_ui_smoke_v078.gd CAMERA_TRANSFORM_078_SMOKE_OK CAMERA_TRANSFORM_078_SMOKE_FAIL camera-transform-078
+          run_smoke ui_polish_smoke_v082.gd UI_POLISH_082_SMOKE_OK UI_POLISH_082_SMOKE_FAIL ui-polish-082
 
       - name: Export Android APK
         shell: bash
@@ -259,11 +260,11 @@ jobs:
           name: ${{ env.ARTIFACT_NAME }}
           path: build
 
-      - name: Publish GitHub Release v0.5.22
+      - name: Publish GitHub Release v0.5.23
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.5.22
-          name: Connex Lab v0.5.22
+          tag_name: v0.5.23
+          name: Connex Lab v0.5.23
           body_path: RELEASE_NOTES.md
           make_latest: true
           files: |

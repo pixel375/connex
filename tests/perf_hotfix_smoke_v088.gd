@@ -81,11 +81,11 @@ func _run() -> void:
 				var elapsed: int = Time.get_ticks_usec() - started
 				total_usec += elapsed
 				max_usec = maxi(max_usec, elapsed)
+				print("PERF_088_TIMING_MS placement_%d=%.2f" % [i + 1, float(elapsed) / 1000.0])
 				await process_frame
 				if main.bodies.size() != before_count + 1:
 					_fail("connected placement did not create exactly one rod")
 					break
-			print("PERF_088_TIMING_MS placement_%d=%.2f" % [i + 1, float(elapsed) / 1000.0])
 			print("PERF_088_TIMING_MS total=%.2f max=%.2f" % [float(total_usec) / 1000.0, float(max_usec) / 1000.0])
 			if max_usec > 750000:
 				_fail("a small-build placement exceeded 750 ms in headless CI")

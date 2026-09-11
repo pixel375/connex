@@ -1,38 +1,48 @@
-# Connex Lab v0.5.23
+# Connex Lab v0.5.24
 
-This is a focused UI and ATTACH-selection correction pass on top of v0.5.22. SOCKET, AXLE, CROSS, O-Ring, save/load and simulation mechanics are unchanged.
+This update focuses on touch usability, clearer editing feedback, attachment workflow improvements, build inventory visibility, and a substantial BUILD-mode performance pass for larger constructions.
 
-### Menu close buttons
-- Options, Help, Parts, Save & Load and Physics now use compact square X controls fixed to the upper-right corner of the menu frame.
-- The X controls live outside scrollable menu content, so they no longer move when the menu is scrolled.
-- The old long blue inline X rows are retired.
+### Selection and editing
+- **Deselect** is now the single context-aware deselection control for both selected pieces and selected ATTACH points.
+- Deselect remains enabled when only an ATTACH point is selected.
+- Undo now automatically clears the current piece selection, ATTACH-point selection, highlights and active editor gizmos so the bottom part arrows return to choosing the next part instead of unintentionally editing the item restored by Undo.
+- ATTACH can explicitly reconnect/move a selected connection from its current piece to a compatible point on a different tapped piece while preserving the existing same-piece socket reseat workflow and Undo behavior.
 
-### Top toolbar cleanup
-- The obsolete status text remains hidden and its leftover frame/background is removed.
-- Select and Simulate now use the same neutral grey button style as the rest of the toolbar while inactive.
-- Select turns blue only while one-shot Select is armed.
-- Simulate turns blue only while simulation is active.
-- Delete remains neutral grey and never uses the active blue state.
-- Top toolbar glyphs are slightly larger for easier touch use.
+### Larger touch controls
+- The Select icon is larger.
+- Bottom rod/connector previous-next arrows are larger.
+- CREATE / TRANSFORM / ATTACH buttons are taller.
+- New Rod and New Connector are now full-width stacked buttons rather than sharing one narrow row.
+- Disconnect and Deselect are larger touch targets.
 
-### Transform panel
-- The compact right Transform card no longer has an X button.
-- It cannot be hidden while Transform mode is active.
-- ITEM/WORLD, Roll − / Roll + and Reset Rotation remain available.
+### Rotation feedback
+- Holding and dragging a rotation gizmo now shows a circular progress indicator around the selected construction.
+- The indicator is axis-colored and includes 45-degree tick marks.
+- A colored arc shows the currently snapped rotation angle.
+- A white marker moves continuously between snap points so rotationally/symmetrically similar parts are easier to orient.
+- The live label shows the active axis and exact snapped angle, and blocked previews are clearly indicated.
 
-### Deselect / ATTACH behavior
-- The left utility area remains only **Disconnect** and **Deselect**.
-- The inherited **Deselect Point** button is force-retired so it cannot reappear during attachment-marker refreshes.
-- **Deselect** is now context-aware: when an ATTACH point is selected it clears that point first; otherwise it clears the selected piece.
-- Deselect stays enabled for an active ATTACH point even when no piece is currently selected.
-- Tapping empty background while an ATTACH point is selected now clears that point without clearing the piece selection.
+### Save confirmation
+- A successful manual save now displays a confirmation dialog: **Build has been saved.**
+- The dialog includes a clear **Close** button.
 
-### Camera / icon polish
-- The movement joystick is shifted farther right again to provide more clearance from the left editor menu.
-- Bottom Parts and previous/next icon glyphs are slightly larger.
+### Parts usage inventory
+- Every card in the Parts menu now shows how many pieces of that exact type are currently used in the build.
+- The Parts header also shows the total number of pieces in the construction.
+- Counts are derived from the authoritative live construction, so Delete, Undo, Redo, Restart and loaded saves cannot leave stale totals.
+- O-Ring Stops are included in the inventory.
 
-### Android / update compatibility
-- Android versionCode: 47
-- Android versionName: `0.5.23`
+### BUILD-mode performance
+- Removed expensive connection/rotation validity calculations that were still running for retired hidden rotation controls after ordinary UI refreshes.
+- Removed six unnecessary whole-construction trial rotations that were previously performed simply to color the visible X/Y/Z rotation gizmo. Rotation remains fully validated when the user actually drags it.
+- Normal auto-connect processing now focuses on pieces that actually changed instead of repeatedly scanning every rod against every connector after each edit.
+- A complete whole-build connection pass is still retained before SIMULATE and after removals, preserving connection correctness while avoiding the expensive repeated BUILD-mode scans.
+- ATTACH marker pose fallback polling is throttled instead of allocating and comparing every piece transform every rendered frame; explicit edits continue to invalidate markers immediately.
+- Parts-browser card refreshes remove old controls immediately rather than keeping duplicate queued card trees alive until the end of the frame.
+
+### Physics and compatibility
+- Existing SOCKET, AXLE, CROSS and O-Ring physics behavior is intentionally preserved; this performance pass does not alter the corrected O-Ring stop mechanics.
+- Android versionCode: 48
+- Android versionName: `0.5.24`
 - package ID: `com.pixel375.connex`
-- permanent Connex signing certificate retained for in-place update compatibility.
+- Permanent Connex signing certificate retained for in-place update compatibility.

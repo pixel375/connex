@@ -1,12 +1,9 @@
 [gd_scene load_steps=3 format=3]
 
-; v0.5.21 analog camera navigation, unified TRANSFORM and bounded pan runtime: res://scripts/main_v080.gd
-; v0.5.20 ATTACH selection, O-Ring rod creation, live marker and reconnect runtime: res://scripts/main_v076.gd
-; v0.5.19 precise ATTACH picking, Undo marker refresh and spatial CROSS orientation: res://scripts/main_v075.gd
-; v0.5.18 legacy AXLE healing and inverse CROSS rod slide runtime: res://scripts/main_v074.gd
-; v0.5.17 deterministic AXLE/CROSS stop and save-load runtime: res://scripts/main_v073.gd
-; v0.5.16 simplified physical O-Ring runtime: res://scripts/main_v071.gd
-[ext_resource type="Script" path="res://scripts/main_v080.gd" id="1_main"]
+; v0.5.22 runtime keeps the v0.5.21 unified transform/camera foundation and adds
+; the touch/UI refresh in main_v081.gd. Physics slider compatibility stays as a
+; separate tiny scene helper so older save/settings behavior remains untouched.
+[ext_resource type="Script" path="res://scripts/main_v081.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/physics_slider_fix_v052.gd" id="2_physics_fix"]
 
 [node name="Main" type="Node3D"]

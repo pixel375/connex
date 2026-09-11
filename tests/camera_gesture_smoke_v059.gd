@@ -35,29 +35,28 @@ func _run() -> void:
 	root.add_child(main)
 	await process_frame
 
-	if not str(main.get_script().resource_path).ends_with("main_v064.gd"):
-		_fail("Main is not using v0.5.9 runtime")
+	if not str(main.get_script().resource_path).ends_with("main_v081.gd"):
+		_fail("Main is not using v0.5.22 runtime")
 		return
 
-	# One finger has exactly one job: orbit. It must not pan or zoom.
+	# One finger remains the one touch-camera gesture: orbit only.
 	var yaw0: float = float(main.get("camera_yaw"))
 	var target0: Vector3 = main.get("camera_target") as Vector3
 	var distance0: float = float(main.get("camera_distance"))
 	main.call("_unhandled_input", _touch(0, true, Vector2(420, 320)))
 	main.call("_unhandled_input", _drag(0, Vector2(540, 320), Vector2(120, 0)))
-	var yaw1: float = float(main.get("camera_yaw"))
-	if absf(yaw1 - yaw0) < 0.03:
+	if absf(float(main.get("camera_yaw")) - yaw0) < 0.03:
 		_fail("one-finger drag did not orbit")
 		return
 	if (main.get("camera_target") as Vector3).distance_to(target0) > 0.001:
-		_fail("one-finger orbit changed camera target/pan")
+		_fail("one-finger orbit changed camera target")
 		return
 	if absf(float(main.get("camera_distance")) - distance0) > 0.001:
 		_fail("one-finger orbit changed zoom")
 		return
 	main.call("_unhandled_input", _touch(0, false, Vector2(540, 320)))
 
-	# Two fingers have exactly two camera jobs: pan and zoom. They must not orbit.
+	# v0.5.22 policy: two viewport fingers are inert. They may not pan, zoom or orbit.
 	main.call("_unhandled_input", _touch(0, true, Vector2(320, 320)))
 	main.call("_unhandled_input", _touch(1, true, Vector2(520, 320)))
 	var multi_yaw: float = float(main.get("camera_yaw"))
@@ -66,30 +65,29 @@ func _run() -> void:
 	main.call("_unhandled_input", _drag(0, Vector2(280, 345), Vector2(-40, 25)))
 	main.call("_unhandled_input", _drag(1, Vector2(570, 345), Vector2(50, 25)))
 	if absf(float(main.get("camera_yaw")) - multi_yaw) > 0.0001:
-		_fail("two-finger gesture changed orbit yaw")
+		_fail("two-finger touch changed orbit yaw")
 		return
-	if (main.get("camera_target") as Vector3).distance_to(multi_target) < 0.01:
-		_fail("two-finger drag did not pan")
+	if (main.get("camera_target") as Vector3).distance_to(multi_target) > 0.0001:
+		_fail("two-finger touch panned the camera")
 		return
-	if absf(float(main.get("camera_distance")) - multi_distance) < 0.05:
-		_fail("two-finger spread did not zoom")
+	if absf(float(main.get("camera_distance")) - multi_distance) > 0.0001:
+		_fail("two-finger touch zoomed the camera")
 		return
 
-	# The critical Android hand-off regression: after one finger of a pinch lifts,
-	# the remaining finger is inert until it also lifts. No surprise orbit/tap.
+	# After one finger lifts, the remaining finger stays inert until all are up.
 	main.call("_unhandled_input", _touch(1, false, Vector2(570, 345)))
 	var handoff_yaw: float = float(main.get("camera_yaw"))
 	var handoff_target: Vector3 = main.get("camera_target") as Vector3
 	main.call("_unhandled_input", _drag(0, Vector2(500, 500), Vector2(220, 155)))
 	if absf(float(main.get("camera_yaw")) - handoff_yaw) > 0.0001:
-		_fail("remaining finger after pinch unexpectedly started orbiting")
+		_fail("remaining finger after second touch unexpectedly orbited")
 		return
 	if (main.get("camera_target") as Vector3).distance_to(handoff_target) > 0.0001:
-		_fail("remaining finger after pinch unexpectedly kept panning")
+		_fail("remaining finger after second touch unexpectedly panned")
 		return
 	main.call("_unhandled_input", _touch(0, false, Vector2(500, 500)))
 
-	# Once all fingers are clear, a fresh one-finger gesture works immediately.
+	# Fresh single-finger orbit works immediately after both fingers lift.
 	var fresh_yaw: float = float(main.get("camera_yaw"))
 	main.call("_unhandled_input", _touch(0, true, Vector2(440, 340)))
 	main.call("_unhandled_input", _drag(0, Vector2(500, 340), Vector2(60, 0)))
@@ -98,7 +96,7 @@ func _run() -> void:
 		return
 	main.call("_unhandled_input", _touch(0, false, Vector2(500, 340)))
 
-	print("CAMERA_059_SMOKE_OK: deterministic one-finger orbit + two-finger pan/zoom + no 2->1 handoff jump")
+	print("CAMERA_059_SMOKE_OK: one-finger orbit retained; two-finger touch pan/zoom disabled; clean 2->1 handoff verified")
 	main.queue_free()
 	await process_frame
 	quit(0)

@@ -28,3 +28,17 @@ func _begin_move_drag_v042(screen_pos: Vector2) -> bool:
 	var result: bool = super._begin_move_drag_v042(screen_pos)
 	editor_mode_v032 = keep_mode
 	return result
+
+
+# Exact-step movement is no longer exposed as six XYZ buttons in v0.5.21, but
+# retained workflows and any older code paths may still call the helper. Keep it
+# mechanically equivalent to the old MOVE mode while TRANSFORM is active rather
+# than making the helper silently do nothing after the mode consolidation.
+func _apply_world_move_step_v042(axis: Vector3, steps: int) -> void:
+	if editor_mode_v032 != EDITOR_ROTATE_032:
+		super._apply_world_move_step_v042(axis, steps)
+		return
+	var keep_mode: int = editor_mode_v032
+	editor_mode_v032 = EDITOR_MOVE_042
+	super._apply_world_move_step_v042(axis, steps)
+	editor_mode_v032 = keep_mode

@@ -2,9 +2,10 @@
 
 ; v0.5.24 staging extends the v0.5.23 UI/touch foundation with unified
 ; piece/point Deselect state, larger touch controls, explicit cross-piece
-; ATTACH retargeting, and a live rotation-progress ring while dragging the
-; rotate gizmo. This staging branch is intentionally not built/released.
-[ext_resource type="Script" path="res://scripts/main_v084.gd" id="1_main"]
+; ATTACH retargeting, a live rotation-progress ring while dragging the rotate
+; gizmo, and automatic deselection after Undo. This staging branch is
+; intentionally not built/released.
+[ext_resource type="Script" path="res://scripts/main_v085.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/physics_slider_fix_v052.gd" id="2_physics_fix"]
 [ext_resource type="Script" path="res://scripts/ui_topbar_fix_v082.gd" id="3_topbar_fix"]
 

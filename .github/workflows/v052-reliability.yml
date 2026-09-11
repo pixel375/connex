@@ -57,6 +57,11 @@ jobs:
             tests/cross_socket_midpoint_slide_smoke_v074.gd \
             tests/attach_pick_undo_spatial_cross_smoke_v075.gd \
             tests/attach_selection_oring_overlay_reconnect_smoke_v076.gd || true
+          # v0.5.21 intentionally removes both legacy XYZ side panels. Preserve
+          # the rest of the historical v0.5.2 reliability test while updating
+          # only its now-obsolete panel-ownership assertions.
+          sed -i 's/if not rotation_panel.visible or move_panel.visible:/if rotation_panel.visible or move_panel.visible:/' tests/editor_reliability_smoke_v052.gd
+          sed -i 's/if rotation_panel.visible or not move_panel.visible:/if rotation_panel.visible or move_panel.visible:/' tests/editor_reliability_smoke_v052.gd
 
       - name: Parse project
         shell: bash

@@ -32,7 +32,7 @@ func _has_marker_near(root_node: Node3D, point: Vector3, tolerance: float = 0.08
 		return false
 	for child_value in root_node.get_children():
 		var child := child_value as Node3D
-		if child != null and child.global_position.distance_to(point) <= tolerance:
+		if child != null and not child.is_queued_for_deletion() and child.visible and child.global_position.distance_to(point) <= tolerance:
 			return true
 	return false
 

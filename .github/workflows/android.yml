@@ -157,6 +157,11 @@ jobs:
             tests/strict_autoconnect_no_warp_smoke_v510.gd \
             tests/structure_rigidity_smoke_v061.gd \
             tests/rigidity_live_axle_smoke_v062.gd || true
+          # v0.5.21 deliberately retires both old XYZ side panels. Keep the
+          # historical reliability test for everything else, but adapt only the
+          # two assertions that required the superseded panel layout.
+          sed -i 's/if not rotation_panel.visible or move_panel.visible:/if rotation_panel.visible or move_panel.visible:/' tests/editor_reliability_smoke_v052.gd
+          sed -i 's/if rotation_panel.visible or not move_panel.visible:/if rotation_panel.visible or move_panel.visible:/' tests/editor_reliability_smoke_v052.gd
 
       - name: Parse project and smoke-test main scene
         shell: bash

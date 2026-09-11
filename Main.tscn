@@ -1,13 +1,17 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 ; v0.5.22 runtime keeps the v0.5.21 unified transform/camera foundation and adds
-; the touch/UI refresh in main_v081.gd. Physics slider compatibility stays as a
-; separate tiny scene helper so older save/settings behavior remains untouched.
+; the touch/UI refresh in main_v081.gd. Scene helpers preserve legacy physics
+; slider behavior and finalize the icon top bar after the inherited UI is ready.
 [ext_resource type="Script" path="res://scripts/main_v081.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/physics_slider_fix_v052.gd" id="2_physics_fix"]
+[ext_resource type="Script" path="res://scripts/ui_topbar_fix_v081.gd" id="3_topbar_fix"]
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
 
 [node name="PhysicsSliderFixV052" type="Node" parent="."]
 script = ExtResource("2_physics_fix")
+
+[node name="TopBarFixV081" type="Node" parent="."]
+script = ExtResource("3_topbar_fix")

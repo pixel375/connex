@@ -1,7 +1,5 @@
 extends SceneTree
 
-const MAIN := preload("res://scripts/main_v081.gd")
-
 var app: Node
 var failed := false
 
@@ -13,8 +11,16 @@ func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
-	app = MAIN.new()
+	var packed := load("res://Main.tscn") as PackedScene
+	if packed == null:
+		_fail("Main.tscn did not load")
+		quit(1)
+		return
+	app = packed.instantiate()
 	root.add_child(app)
+	# The scene-level topbar finalizer is intentionally deferred until the full
+	# inherited Main _ready() chain has built every toolbar node.
+	await process_frame
 	await process_frame
 	await process_frame
 

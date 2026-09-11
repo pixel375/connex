@@ -84,7 +84,9 @@ func _run() -> void:
 		return
 
 	# Build a detached rod + connector and prove the second-step SOCKET picker can
-	# resolve a tap on the physical connector body to a free socket.
+	# resolve an intentional tap on an actual free socket. v0.5.19 deliberately no
+	# longer lets the whole connector body act as a giant socket hit target, because
+	# that made nearby rods impossible to select in crowded constructions.
 	main.call("_set_editor_mode_v032", 2, false)
 	main.set("attach_mode", 0)
 	var free_rod: RigidBody3D = main.call("_make_rod", 2, Vector3(-2.75, 7.0, 0.0), Vector3(2.75, 7.0, 0.0)) as RigidBody3D
@@ -98,15 +100,18 @@ func _run() -> void:
 	var source: Dictionary = {"type": "rod_end", "body": free_rod, "sign": 1, "point": source_point}
 	var eligible: Array = main.call("_eligible_discrete_targets_v040", source) as Array
 	var target_candidates: int = 0
+	var intended_socket: Dictionary = {}
 	for candidate_value in eligible:
 		var candidate: Dictionary = candidate_value as Dictionary
 		if candidate.get("body") == target_connector:
 			target_candidates += 1
+			if intended_socket.is_empty():
+				intended_socket = candidate
 			var record: Dictionary = main.call("_connection_record_for_point_v032", candidate) as Dictionary
 			if not record.is_empty():
 				_fail("eligible target list included an occupied socket")
 				return
-	if target_candidates < 1:
+	if target_candidates < 1 or intended_socket.is_empty():
 		_fail("free connector supplied no eligible socket targets")
 		return
 
@@ -115,10 +120,11 @@ func _run() -> void:
 		_fail("camera missing")
 		return
 	var camera: Camera3D = camera_value as Camera3D
-	var target_screen: Vector2 = camera.unproject_position(target_connector.global_position)
+	var intended_point: Vector3 = intended_socket.get("point", target_connector.global_position) as Vector3
+	var target_screen: Vector2 = camera.unproject_position(intended_point)
 	var picked: Dictionary = main.call("_pick_attach_target_v035", target_screen, source) as Dictionary
 	if picked.is_empty() or picked.get("body") != target_connector or str(picked.get("type", "")) != "socket":
-		_fail("tap on connector body did not resolve to a free socket")
+		_fail("intentional tap on a free socket did not resolve to that connector")
 		return
 	if not bool(main.call("_connect_points_v035", source, picked)):
 		_fail("resolved free SOCKET target did not connect")
@@ -129,7 +135,7 @@ func _run() -> void:
 		_fail("successful SOCKET attach did not create a connection record")
 		return
 
-	print("INTERACTION_SMOKE_OK: O-Ring any rod + protected selection + forgiving attach target")
+	print("INTERACTION_SMOKE_OK: O-Ring any rod + protected selection + precise attach target")
 	main.queue_free()
 	await process_frame
 	quit(0)

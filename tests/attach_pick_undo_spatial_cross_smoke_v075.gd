@@ -117,8 +117,8 @@ func _run() -> void:
 		return
 
 	# 3) Undo overlay refresh: make a dedicated connector, commit pose A, rotate and
-	# commit pose B, build ATTACH markers in B, then Undo. Markers must immediately
-	# return to pose A without requiring another click/UI action.
+	# commit pose B, build ATTACH markers in B, then Undo. Use an asymmetric angle so
+	# an 8-way connector's other sockets cannot coincide with the old slot position.
 	main.call("_set_editor_mode_v032", 0, false)
 	var undo_connector := main.call("_make_connector", 6, Transform3D(Basis.IDENTITY, Vector3(-12.0, 9.0, -4.0))) as RigidBody3D
 	undo_connector.set_meta("build_transform", undo_connector.global_transform)
@@ -126,7 +126,7 @@ func _run() -> void:
 	main.call("_commit_state")
 	var before_socket := (main.call("_socket_world_v020", undo_connector, 0) as Dictionary).get("point", undo_connector.global_position) as Vector3
 	var rotated := undo_connector.global_transform
-	rotated.basis = (Basis(Vector3.UP, PI * 0.5) * rotated.basis).orthonormalized()
+	rotated.basis = (Basis(Vector3.UP, PI * 0.37) * rotated.basis).orthonormalized()
 	undo_connector.global_transform = rotated
 	undo_connector.set_meta("build_transform", rotated)
 	main.call("_commit_state")

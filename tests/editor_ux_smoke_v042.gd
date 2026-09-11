@@ -45,9 +45,12 @@ func _run() -> void:
 	main.call("_set_selected", seed)
 	var seed_start: Vector3 = seed.global_position
 	var rod_start: Vector3 = rod.global_position
+	# Legacy MOVE is mode 3. v0.5.21 deliberately folds MOVE into TRANSFORM and
+	# remaps that old request to mode 1, while older runtimes still report 3.
 	main.call("_set_editor_mode_v032", 3, false)
-	if int(main.get("editor_mode_v032")) != 3:
-		_fail("MOVE editor mode did not activate")
+	var active_transform_mode: int = int(main.get("editor_mode_v032"))
+	if active_transform_mode not in [1, 3]:
+		_fail("MOVE/TRANSFORM editor mode did not activate")
 		return
 	main.call("_apply_world_move_step_v042", Vector3.RIGHT, 1)
 	await process_frame
@@ -85,7 +88,7 @@ func _run() -> void:
 		_fail("exact-step world rotation fallback did not rotate selected piece")
 		return
 
-	print("EDITOR_UX_SMOKE_OK: no splash + explicit WORLD move gizmo + rigid island move + disconnect + rotation fallback")
+	print("EDITOR_UX_SMOKE_OK: no splash + WORLD move/TRANSFORM gizmo + rigid island move + disconnect + rotation fallback")
 	main.queue_free()
 	await process_frame
 	quit(0)

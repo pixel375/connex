@@ -25,7 +25,7 @@ func _run() -> void:
 		await process_frame
 
 	var runtime_path: String = str(main.get_script().resource_path) if main.get_script() != null else ""
-	if not (runtime_path.ends_with("main_v090.gd") or runtime_path.ends_with("main_v091.gd")):
+	if not (runtime_path.ends_with("main_v090.gd") or runtime_path.ends_with("main_v091.gd") or runtime_path.ends_with("main_v092.gd")):
 		_fail("v0.5.27+ runtime is not active")
 		quit(1)
 		return
@@ -70,14 +70,13 @@ func _run() -> void:
 	# v0.5.27 was synchronous; v0.5.28+ deliberately finishes history after the
 	# first visible frame. Give descendants their deferred turn before checking the
 	# v0.1.7 bypass and authoritative connection graph.
-	if runtime_path.ends_with("main_v091.gd"):
+	if runtime_path.ends_with("main_v091.gd") or runtime_path.ends_with("main_v092.gd"):
 		for _i in range(3):
 			await process_frame
 	var bypass_after: int = int(main.legacy_commit_autofuse_bypasses_v090)
 	if bypass_after <= bypass_before:
 		_fail("v0.1.7 duplicate whole-build auto-fuse was not bypassed during commit")
-	# v0.5.27's original ceiling remains as a regression floor. Visible-first
-	# descendants should be substantially faster than this.
+	# v0.5.27's original ceiling remains as a compatibility regression floor.
 	if elapsed > 650000:
 		_fail("large-build create click exceeded 650 ms in headless CI")
 

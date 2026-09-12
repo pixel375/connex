@@ -16,10 +16,10 @@ concurrency:
 env:
   GODOT_VERSION: 4.6.3
   GODOT_TAG: 4.6.3-stable
-  APP_VERSION: 0.5.27
-  APP_VERSION_CODE: 51
-  APK_NAME: Connex-v0.5.27.apk
-  ARTIFACT_NAME: Connex-Android-v0.5.27
+  APP_VERSION: 0.5.28
+  APP_VERSION_CODE: 52
+  APK_NAME: Connex-v0.5.28.apk
+  ARTIFACT_NAME: Connex-Android-v0.5.28
   EXPECTED_RELEASE_CERT_SHA256: BF:CD:2B:59:70:91:E4:AA:FE:4F:27:93:FD:14:A7:9A:2A:D4:94:0D:D1:06:9D:18:74:9C:E7:A9:99:50:D4:22
 
 jobs:
@@ -34,13 +34,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -F 'res://scripts/main_v090.gd' Main.tscn
-          grep -F 'const VERSION_090 := "0.5.27"' scripts/main_v090.gd
+          grep -F 'res://scripts/main_v091.gd' Main.tscn
+          grep -F 'const VERSION_091 := "0.5.28"' scripts/main_v091.gd
           grep -F 'boot_splash/show_image=false' project.godot
           grep -F '3d/physics_engine="JoltPhysics3D"' project.godot
-          grep -F 'export_path="build/Connex-v0.5.27.apk"' export_presets.cfg
-          grep -F 'version/code=51' export_presets.cfg
-          grep -F 'version/name="0.5.27"' export_presets.cfg
+          grep -F 'export_path="build/Connex-v0.5.28.apk"' export_presets.cfg
+          grep -F 'version/code=52' export_presets.cfg
+          grep -F 'version/name="0.5.28"' export_presets.cfg
           grep -F 'package/unique_name="com.pixel375.connex"' export_presets.cfg
           grep -F "\`$EXPECTED_RELEASE_CERT_SHA256\`" SIGNING.md
 
@@ -123,14 +123,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed -Ei 's/main_v[0-9]+\.gd/main_v090.gd/g' \
+          sed -Ei 's/main_v[0-9]+\.gd/main_v091.gd/g' \
             tests/editor_chunk2_smoke_v050.gd tests/editor_correctness_smoke_v051.gd \
             tests/o_ring_mixed_stability_smoke_v063.gd tests/axle_o_ring_video_stability_smoke_v064.gd \
             tests/editor_socket_workflows_smoke_v070.gd tests/axle_cross_stop_roundtrip_smoke_v072.gd \
             tests/legacy_axle_corrupt_save_repair_smoke_v074.gd tests/cross_socket_midpoint_slide_smoke_v074.gd \
             tests/attach_pick_undo_spatial_cross_smoke_v075.gd tests/attach_selection_oring_overlay_reconnect_smoke_v076.gd \
             tests/camera_transform_ui_smoke_v078.gd tests/ui_polish_smoke_v082.gd tests/ui_inventory_perf_smoke_v087.gd || true
-          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v090.gd")/g' \
+          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v091.gd")/g' \
             tests/editor_reliability_smoke_v052.gd tests/editor_touch_attach_smoke_v053.gd \
             tests/editor_autoattach_selection_smoke_v054.gd tests/editor_geometry_snap_smoke_v055.gd \
             tests/editor_autodock_camera_smoke_v056.gd tests/rod_far_end_autoattach_smoke_v057.gd \
@@ -150,7 +150,7 @@ jobs:
           godot --headless --path . --quit-after 2 2>&1 | tee /tmp/godot-smoke.log
           if grep -Eq "SCRIPT ERROR|Parse Error|Failed to load script" /tmp/godot-smoke.log; then exit 1; fi
 
-      - name: Run complete regression suite through v0.5.27
+      - name: Run complete regression suite through v0.5.28
         shell: bash
         run: |
           set -euo pipefail
@@ -188,6 +188,7 @@ jobs:
           run_smoke perf_hotfix_smoke_v088.gd PERF_HOTFIX_088_SMOKE_OK PERF_HOTFIX_088_SMOKE_FAIL perf-hotfix-088
           run_smoke corrective_smoke_v089.gd CORRECTIVE_089_SMOKE_OK CORRECTIVE_089_SMOKE_FAIL corrective-089
           run_smoke latency_scaling_smoke_v090.gd LATENCY_090_SMOKE_OK LATENCY_090_SMOKE_FAIL latency-090
+          run_smoke instant_placement_smoke_v091.gd INSTANT_091_SMOKE_OK INSTANT_091_SMOKE_FAIL instant-091
 
       - name: Export Android APK
         shell: bash
@@ -226,11 +227,11 @@ jobs:
         with:
           name: ${{ env.ARTIFACT_NAME }}
           path: build
-      - name: Publish GitHub Release v0.5.27
+      - name: Publish GitHub Release v0.5.28
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.5.27
-          name: Connex Lab v0.5.27
+          tag_name: v0.5.28
+          name: Connex Lab v0.5.28
           body_path: RELEASE_NOTES.md
           make_latest: true
           files: |

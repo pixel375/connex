@@ -24,8 +24,9 @@ func _run() -> void:
 	for _i in range(4):
 		await process_frame
 
-	if main.get_script() == null or not str(main.get_script().resource_path).ends_with("main_v090.gd"):
-		_fail("v0.5.27 runtime is not active")
+	var runtime_path: String = str(main.get_script().resource_path) if main.get_script() != null else ""
+	if not (runtime_path.ends_with("main_v090.gd") or runtime_path.ends_with("main_v091.gd")):
+		_fail("v0.5.27+ runtime is not active")
 		quit(1)
 		return
 
@@ -48,6 +49,7 @@ func _run() -> void:
 	var connector_index: int = mini(6, main.connector_defs.size() - 1)
 	var anchor := main.call("_make_connector", connector_index, Transform3D(Basis.IDENTITY, Vector3(0.0, 8.0, 0.0))) as RigidBody3D
 	main.call("_set_selected", anchor)
+	main.call("_rebuild_connection_graph_v020")
 	main.call("_snapshot_autofuse_bodies_v086")
 
 	var slots: Array = (main.connector_defs[connector_index] as Dictionary).get("slots", []) as Array
@@ -61,20 +63,24 @@ func _run() -> void:
 	var started: int = Time.get_ticks_usec()
 	main.call("_extend_socket", anchor, int(slots[0]))
 	var elapsed: int = Time.get_ticks_usec() - started
-	var bypass_after: int = int(main.legacy_commit_autofuse_bypasses_v090)
-	print("LATENCY_090_LARGE_BUILD_MS=%.2f bodies=%d" % [float(elapsed) / 1000.0, before_bodies])
+	print("LATENCY_090_VISIBLE_MS=%.2f bodies=%d" % [float(elapsed) / 1000.0, before_bodies])
 
 	if main.bodies.size() != before_bodies + 1:
 		_fail("large-build create click did not create exactly one rod")
+	# v0.5.27 was synchronous; v0.5.28+ deliberately finishes history after the
+	# first visible frame. Give descendants their deferred turn before checking the
+	# v0.1.7 bypass and authoritative connection graph.
+	if runtime_path.ends_with("main_v091.gd"):
+		for _i in range(3):
+			await process_frame
+	var bypass_after: int = int(main.legacy_commit_autofuse_bypasses_v090)
 	if bypass_after <= bypass_before:
 		_fail("v0.1.7 duplicate whole-build auto-fuse was not bypassed during commit")
-	# Generous shared-runner ceiling; this specifically prevents a return to the
-	# multi-second behavior reported on Android while allowing noisy CI hosts.
+	# v0.5.27's original ceiling remains as a regression floor. Visible-first
+	# descendants should be substantially faster than this.
 	if elapsed > 650000:
 		_fail("large-build create click exceeded 650 ms in headless CI")
 
-	# Modern connection correctness must remain intact: the new rod is connected
-	# through the authoritative v0.2+ graph despite the legacy matcher being gone.
 	main.call("_rebuild_connection_graph_v020")
 	var newest := main.bodies.back() as RigidBody3D
 	if not is_instance_valid(newest) or str(newest.get_meta("kind", "")) != "rod":
@@ -87,5 +93,5 @@ func _run() -> void:
 	if failed:
 		quit(1)
 		return
-	print("LATENCY_090_SMOKE_OK: obsolete v0.1.7 whole-build commit scan retired; large-build create path remains connected")
+	print("LATENCY_090_SMOKE_OK: obsolete v0.1.7 whole-build commit scan remains retired on synchronous and visible-first descendants")
 	quit(0)

@@ -24,8 +24,8 @@ func _run() -> void:
 	for _i in range(4):
 		await process_frame
 
-	if main.get_script() == null or not str(main.get_script().resource_path).ends_with("main_v092.gd"):
-		_fail("final v0.5.28 visible-first runtime is not active")
+	if main.get_script() == null or not str(main.get_script().resource_path).ends_with("main_v094.gd"):
+		_fail("final v0.5.28+ visible-first runtime is not active")
 		quit(1)
 		return
 

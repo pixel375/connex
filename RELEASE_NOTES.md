@@ -1,34 +1,39 @@
-# Connex Lab v0.5.25
+# Connex Lab v0.5.26
 
-This is a focused hotfix for the two regressions reported after v0.5.24: the left editor controls became too large, and BUILD interaction latency became worse even on small constructions.
+This corrective release addresses the save-list, updater, ATTACH-selection and Android latency issues reported after v0.5.25.
 
-### Left toolbar
-- Restored CREATE / TRANSFORM / ATTACH controls to their normal pre-v0.5.24 height.
-- Restored Disconnect and Deselect to their normal compact height.
-- Restored New Rod and New Connector to their normal button height while keeping the useful full-width stacked layout.
-- Reduced the left panel footprint accordingly.
+### Saves & autosaves
+- Saves are now sorted by their actual saved timestamp, newest first.
+- Touch-drag scrolling is handled directly by the Saves ItemList, so the list can be scrolled normally on Android.
+- Autosave is now idle-debounced instead of firing 350 ms after every edit.
+- Snapshot serialization and file flushing run on a worker thread instead of blocking the Android UI thread.
+- The fixed crash-recovery autosave remains available.
+- Five rolling automatic save points are kept; older automatic/recovery saves are pruned automatically.
+- Named saves continue to be unlimited and are never included in the five-autosave cap.
 
-### BUILD-mode performance hotfix
-- Removed the v0.5.24 whole-body change-discovery pass from ordinary commits. It previously allocated and compared per-body state for the entire build before deciding what to auto-connect.
-- Replaced the v0.5.24 fixed 32-pass local auto-connect loop with bounded edit-local matching.
-- Normal CREATE / ATTACH / palette edits now start from the currently edited piece instead of first scanning every body for changes.
-- TRANSFORM checks only the selected fixed component, and only members whose transforms actually moved are considered for new automatic connections.
-- Connection-graph rebuilds now occur only after an actual successful automatic match rather than through repeated empty passes.
-- The auto-connect snapshot cache now stores only one Transform3D per body instead of nested state dictionaries.
-- When the Parts browser is already open, live usage counts update existing cards in place instead of destroying and recreating the complete card grid after every commit.
-- Full whole-build auto-connect remains in place before SIMULATE and after removals, so correctness is retained where a global pass is actually required.
+### Updater
+- Fixed the update checker comparing the latest GitHub release against an inherited v0.5.0 constant.
+- The updater now compares against the actual running v0.5.26 version and clears any stale install state when the installed version is current.
+- Rechecking while already on the latest release now shows Up to date instead of offering the same APK again.
 
-### Preserved from v0.5.24
-- Save confirmation dialog.
-- Live per-part usage counts.
-- Undo automatically deselects the restored item.
-- Unified Deselect behavior.
-- Cross-piece ATTACH retargeting.
-- Rotation progress indicator.
-- Existing SOCKET, AXLE, CROSS and corrected O-Ring physics behavior is unchanged.
+### ATTACH / selection
+- Deselect now dirties and rebuilds the ATTACH overlay before clearing a selected point, so both the underlying selection and highlighted marker disappear together.
+- The visible unified Deselect button is rebound to the latest point-aware callback after UI setup.
+- Occupied connector sockets no longer expose a competing ATTACH marker.
+- When a rod end is connected into a socket, the rod-end ATTACH point owns that location, making reconnect/move selection unambiguous.
+
+### Android edit-latency work
+- Collapsed multiple inherited full UI refreshes during one history commit into one final visible refresh.
+- Removed synchronous autosave text serialization and file flushing from the interactive editor path.
+- Autosave now waits for an idle window and writes in the background, while pause/close still forces a safe final recovery write.
+- Existing v0.5.25 targeted auto-connect remains in place.
+
+### Preserved behavior
+- SOCKET, AXLE, CROSS and corrected O-Ring physics behavior is unchanged.
+- Save/load topology, Undo/Redo, cross-piece ATTACH retargeting, rotation progress and Parts usage counts remain intact.
 
 ### Android
-- versionCode: 49
-- versionName: `0.5.25`
+- versionCode: 50
+- versionName: `0.5.26`
 - package ID: `com.pixel375.connex`
 - Permanent Connex signing certificate retained for in-place update compatibility.

@@ -24,8 +24,8 @@ func _run() -> void:
 	for _i in range(4):
 		await process_frame
 
-	if main.get_script() == null or not str(main.get_script().resource_path).ends_with("main_v091.gd"):
-		_fail("v0.5.28 runtime is not active")
+	if main.get_script() == null or not str(main.get_script().resource_path).ends_with("main_v092.gd"):
+		_fail("final v0.5.28 visible-first runtime is not active")
 		quit(1)
 		return
 
@@ -70,11 +70,11 @@ func _run() -> void:
 		_fail("placement history/finalize was not deferred past the visible mutation")
 	if int(main.state_index) != before_state_index:
 		_fail("history advanced before the visible-first function returned")
-	# Shared runners are noisy; the important regression is that this no longer
-	# scales with the 160-piece fixture. 120 ms is deliberately strict enough to
-	# catch a returned whole-build scan but loose enough for hosted CI variance.
-	if dispatch_usec > 120000:
-		_fail("tap-to-real-piece path exceeded 120 ms on a 162-body construction")
+	# 60 ms on a noisy hosted runner gives roughly a single rendered-frame budget
+	# while still catching selection UI, history, graph or whole-build work leaking
+	# back into the tap path. The construction already contains 161 existing bodies.
+	if dispatch_usec > 60000:
+		_fail("tap-to-real-piece path exceeded 60 ms on a 162-body construction")
 
 	# Headless flushes on the next deferred turn; Android waits for frame_post_draw.
 	for _i in range(3):
@@ -108,5 +108,5 @@ func _run() -> void:
 	if failed:
 		quit(1)
 		return
-	print("INSTANT_091_SMOKE_OK: 160-piece construction creates the real part before deferred history/auto-connect bookkeeping")
+	print("INSTANT_091_SMOKE_OK: 160-piece construction creates the real part inside one frame budget before deferred bookkeeping")
 	quit(0)

@@ -1,9 +1,8 @@
 [gd_scene load_steps=4 format=3]
 
-; v0.5.27 keeps the corrected v0.5.26 save/updater/ATTACH behavior while
-; removing the obsolete v0.1.7 whole-build auto-fuse pass that was still
-; running after the modern targeted matcher on every edit.
-[ext_resource type="Script" path="res://scripts/main_v090.gd" id="1_main"]
+; v0.5.28 keeps the corrected connection/physics behavior while making CREATE
+; visible-first and removing redundant graph work from the placement hot path.
+[ext_resource type="Script" path="res://scripts/main_v091.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/physics_slider_fix_v052.gd" id="2_physics_fix"]
 [ext_resource type="Script" path="res://scripts/ui_topbar_fix_v082.gd" id="3_topbar_fix"]
 

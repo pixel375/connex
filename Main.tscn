@@ -1,8 +1,8 @@
 [gd_scene load_steps=4 format=3]
 
-; v0.5.28 keeps corrected connection/physics behavior while making CREATE
-; visible-first and deferring selection UI work until after the first draw.
-[ext_resource type="Script" path="res://scripts/main_v092.gd" id="1_main"]
+; v0.5.29 retains v0.5.28 visible-first CREATE while diffing adjacent
+; Undo/Redo states so unchanged construction bodies are not rebuilt.
+[ext_resource type="Script" path="res://scripts/main_v093.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/physics_slider_fix_v052.gd" id="2_physics_fix"]
 [ext_resource type="Script" path="res://scripts/ui_topbar_fix_v082.gd" id="3_topbar_fix"]
 

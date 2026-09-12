@@ -34,8 +34,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -F 'res://scripts/main_v093.gd' Main.tscn
-          grep -F 'const VERSION_093 := "0.5.29"' scripts/main_v093.gd
+          grep -F 'res://scripts/main_v094.gd' Main.tscn
+          grep -F 'const VERSION_094 := "0.5.29"' scripts/main_v094.gd
           grep -F 'boot_splash/show_image=false' project.godot
           grep -F '3d/physics_engine="JoltPhysics3D"' project.godot
           grep -F 'export_path="build/Connex-v0.5.29.apk"' export_presets.cfg
@@ -123,21 +123,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sed -Ei 's/main_v[0-9]+\.gd/main_v093.gd/g' \
+          sed -Ei 's/main_v[0-9]+\.gd/main_v094.gd/g' \
             tests/editor_chunk2_smoke_v050.gd tests/editor_correctness_smoke_v051.gd \
             tests/o_ring_mixed_stability_smoke_v063.gd tests/axle_o_ring_video_stability_smoke_v064.gd \
             tests/editor_socket_workflows_smoke_v070.gd tests/axle_cross_stop_roundtrip_smoke_v072.gd \
             tests/legacy_axle_corrupt_save_repair_smoke_v074.gd tests/cross_socket_midpoint_slide_smoke_v074.gd \
             tests/attach_pick_undo_spatial_cross_smoke_v075.gd tests/attach_selection_oring_overlay_reconnect_smoke_v076.gd \
             tests/camera_transform_ui_smoke_v078.gd tests/ui_polish_smoke_v082.gd tests/ui_inventory_perf_smoke_v087.gd || true
-          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v093.gd")/g' \
+          sed -Ei 's/ends_with\("main_v[0-9]+\.gd"\)/ends_with("main_v094.gd")/g' \
             tests/editor_reliability_smoke_v052.gd tests/editor_touch_attach_smoke_v053.gd \
             tests/editor_autoattach_selection_smoke_v054.gd tests/editor_geometry_snap_smoke_v055.gd \
             tests/editor_autodock_camera_smoke_v056.gd tests/rod_far_end_autoattach_smoke_v057.gd \
             tests/socket_loop_simulation_smoke_v058.gd tests/camera_gesture_smoke_v059.gd \
             tests/physics_stability_smoke_v059.gd tests/strict_autoconnect_no_warp_smoke_v510.gd \
             tests/structure_rigidity_smoke_v061.gd tests/rigidity_live_axle_smoke_v062.gd \
-            tests/perf_hotfix_smoke_v088.gd || true
+            tests/perf_hotfix_smoke_v088.gd tests/history_latency_smoke_v093.gd || true
           sed -i 's/if not rotation_panel.visible or move_panel.visible:/if rotation_panel.visible or move_panel.visible:/' tests/editor_reliability_smoke_v052.gd
           sed -i 's/if rotation_panel.visible or not move_panel.visible:/if rotation_panel.visible or move_panel.visible:/' tests/editor_reliability_smoke_v052.gd
 

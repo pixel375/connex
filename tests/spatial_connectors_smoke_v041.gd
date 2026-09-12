@@ -110,22 +110,43 @@ func _run() -> void:
 		_fail("rod from bottom arc socket does not extend straight down")
 		return
 
-	# SOCKET ATTACH overlay must advertise all of the new ports.
+	# ATTACH shows every FREE spatial socket. Once a rod occupies a socket, that
+	# connector marker must disappear and the attached rod end takes ownership of
+	# the same point so reconnecting selects the rod rather than its host socket.
 	main.set("attach_mode", 0)
 	main.call("_set_editor_mode_v032", 2, false)
 	var points: Array = main.call("_all_attach_points_v032") as Array
 	var count_11: int = 0
 	var count_14: int = 0
+	var occupied_top_visible: bool = false
+	var occupied_bottom_visible: bool = false
+	var top_rod_end_visible: bool = false
+	var bottom_rod_end_visible: bool = false
 	for point_value in points:
 		var point: Dictionary = point_value as Dictionary
-		if str(point.get("type", "")) != "socket":
-			continue
-		if point.get("body") == connector_11:
-			count_11 += 1
-		elif point.get("body") == connector_14:
-			count_14 += 1
-	if count_11 != 11 or count_14 != 14:
-		_fail("ATTACH overlay does not expose every spatial socket")
+		var point_type: String = str(point.get("type", ""))
+		if point_type == "socket":
+			if point.get("body") == connector_11:
+				count_11 += 1
+				if int(point.get("slot", -1)) == 1002:
+					occupied_top_visible = true
+			elif point.get("body") == connector_14:
+				count_14 += 1
+				if int(point.get("slot", -1)) == 2002:
+					occupied_bottom_visible = true
+		elif point_type == "rod_end":
+			if point.get("body") == top_rod:
+				top_rod_end_visible = true
+			elif point.get("body") == bottom_rod:
+				bottom_rod_end_visible = true
+	if count_11 != 10 or count_14 != 13:
+		_fail("ATTACH overlay does not expose every free spatial socket")
+		return
+	if occupied_top_visible or occupied_bottom_visible:
+		_fail("occupied spatial socket still exposes a competing ATTACH point")
+		return
+	if not top_rod_end_visible or not bottom_rod_end_visible:
+		_fail("attached rod end did not take over occupied spatial socket selection")
 		return
 
 	# Rebuilding to a normal flat connector must remove nested spatial visuals.

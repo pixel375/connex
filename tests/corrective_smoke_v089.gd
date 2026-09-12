@@ -24,8 +24,8 @@ func _run() -> void:
 	for _i in range(5):
 		await process_frame
 
-	if main.get_script() == null or not str(main.get_script().resource_path).ends_with("main_v089.gd"):
-		_fail("v0.5.26 runtime is not active")
+	if main.get_script() == null or not str(main.get_script().resource_path).ends_with("main_v090.gd"):
+		_fail("v0.5.26 corrective behavior is not running through the v0.5.27 descendant runtime")
 
 	# Updater must compare against the current descendant version, not old v0.5.0.
 	main.update_available_version_v021 = "0.5.26"

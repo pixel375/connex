@@ -7,11 +7,18 @@ func _ready() -> void:
 	super._ready()
 	if update_status_v021 != null:
 		_set_update_status_v021("Current version: v%s" % VERSION_094)
-	_status("v0.5.29 ready — instant placement retained; fast Undo/Redo restores BUILD collision policy.")
+	_status("v0.5.29 ready — instant placement retained; fast Undo/Redo preserves BUILD policy and palette state.")
 
 
 func _try_fast_history_restore_v093(source: Dictionary, target: Dictionary) -> bool:
+	# The bottom palette chooses the NEXT part and is transient UI state, not
+	# construction history. The inherited v093 diff restores snapshot fields as
+	# part of geometry state, so preserve the live palette explicitly around it.
+	var rod_palette: int = selected_rod_type
+	var connector_palette: int = selected_connector_type
 	var restored: bool = super._try_fast_history_restore_v093(source, target)
+	selected_rod_type = rod_palette
+	selected_connector_type = connector_palette
 	if restored:
 		_restore_build_collision_policy_v094()
 	return restored

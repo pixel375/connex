@@ -24,7 +24,7 @@ func _run() -> void:
 	for _i in range(5):
 		await process_frame
 
-	if main.get_script() == null or not str(main.get_script().resource_path).ends_with("main_v092.gd"):
+	if main.get_script() == null or not str(main.get_script().resource_path).ends_with("main_v094.gd"):
 		_fail("v0.5.26 corrective behavior is not running through the current descendant runtime")
 
 	# Updater must compare against the current descendant version, not old v0.5.0.
